@@ -298,6 +298,10 @@ if 'username' not in st.session_state:
     st.session_state.username = None
 if 'current_tab' not in st.session_state:
     st.session_state.current_tab = 'unread'  # 'unread' or 'archived'
+if 'confirm_action' not in st.session_state:
+    st.session_state.confirm_action = None  # {'action': 'archive'/'restore', 'paper_path': '...', 'paper_name': '...'}
+if 'show_confirm_dialog' not in st.session_state:
+    st.session_state.show_confirm_dialog = False
 
 
 def render_login_page():
@@ -418,6 +422,141 @@ def get_paper_files(paper_path):
                 files['md_en'] = str(file)
 
     return files
+
+
+@st.dialog("논문 아카이브 확인")
+def confirm_archive_dialog():
+    """Confirmation dialog for archiving a paper"""
+    if st.session_state.confirm_action is None:
+        st.error("오류: 확인할 작업이 없습니다.")
+        return
+
+    action_info = st.session_state.confirm_action
+    paper_name = action_info['paper_name']
+
+    st.markdown(f"### 📄 {paper_name}")
+    st.markdown("---")
+    st.warning("이 논문을 **읽은 논문**으로 이동하시겠습니까?")
+    st.info("💡 이동된 논문은 '✅ 읽은 논문' 탭에서 확인하고 복원할 수 있습니다.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ 확인", use_container_width=True, type="primary"):
+            success, message = archive_paper(action_info['paper_path'])
+            if success:
+                st.success(message)
+                st.session_state.confirm_action = None
+                st.session_state.show_confirm_dialog = False
+                st.rerun()
+            else:
+                st.error(message)
+    with col2:
+        if st.button("❌ 취소", use_container_width=True):
+            st.session_state.confirm_action = None
+            st.session_state.show_confirm_dialog = False
+            st.rerun()
+
+
+@st.dialog("논문 복원 확인")
+def confirm_restore_dialog():
+    """Confirmation dialog for restoring a paper"""
+    if st.session_state.confirm_action is None:
+        st.error("오류: 확인할 작업이 없습니다.")
+        return
+
+    action_info = st.session_state.confirm_action
+    paper_name = action_info['paper_name']
+
+    st.markdown(f"### 📄 {paper_name}")
+    st.markdown("---")
+    st.info("이 논문을 **읽을 논문**으로 복원하시겠습니까?")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("↩️ 복원", use_container_width=True, type="primary"):
+            success, message = restore_paper(action_info['paper_path'])
+            if success:
+                st.success(message)
+                st.session_state.confirm_action = None
+                st.session_state.show_confirm_dialog = False
+                st.rerun()
+            else:
+                st.error(message)
+    with col2:
+        if st.button("❌ 취소", use_container_width=True):
+            st.session_state.confirm_action = None
+            st.session_state.show_confirm_dialog = False
+            st.rerun()
+
+
+@st.dialog("논문 아카이브 확인")
+def confirm_archive_detail_dialog():
+    """Confirmation dialog for archiving from detail view"""
+    if st.session_state.confirm_action is None:
+        st.error("오류: 확인할 작업이 없습니다.")
+        return
+
+    action_info = st.session_state.confirm_action
+    paper_name = action_info['paper_name']
+
+    st.markdown(f"### 📄 {paper_name}")
+    st.markdown("---")
+    st.warning("이 논문을 **읽은 논문**으로 이동하시겠습니까?")
+    st.info("💡 이동 후 목록 화면으로 돌아갑니다.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ 확인", use_container_width=True, type="primary"):
+            success, message = archive_paper(action_info['paper_path'])
+            if success:
+                st.success(message)
+                # Return to list view
+                st.session_state.view = 'list'
+                st.session_state.selected_paper = None
+                st.session_state.confirm_action = None
+                st.session_state.show_confirm_dialog = False
+                st.rerun()
+            else:
+                st.error(message)
+    with col2:
+        if st.button("❌ 취소", use_container_width=True):
+            st.session_state.confirm_action = None
+            st.session_state.show_confirm_dialog = False
+            st.rerun()
+
+
+@st.dialog("논문 복원 확인")
+def confirm_restore_detail_dialog():
+    """Confirmation dialog for restoring from detail view"""
+    if st.session_state.confirm_action is None:
+        st.error("오류: 확인할 작업이 없습니다.")
+        return
+
+    action_info = st.session_state.confirm_action
+    paper_name = action_info['paper_name']
+
+    st.markdown(f"### 📄 {paper_name}")
+    st.markdown("---")
+    st.info("이 논문을 **읽을 논문**으로 복원하시겠습니까?")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("↩️ 복원", use_container_width=True, type="primary"):
+            success, message = restore_paper(action_info['paper_path'])
+            if success:
+                st.success(message)
+                # Update selected paper path to new location
+                st.session_state.selected_paper = str(Path("outputs") / paper_name)
+                st.session_state.confirm_action = None
+                st.session_state.show_confirm_dialog = False
+                st.rerun()
+            else:
+                st.error(message)
+    with col2:
+        if st.button("❌ 취소", use_container_width=True):
+            st.session_state.confirm_action = None
+            st.session_state.show_confirm_dialog = False
+            st.rerun()
 
 
 def archive_paper(paper_path):
@@ -799,12 +938,14 @@ def render_paper_list():
                                     st.rerun()
                             with btn_col2:
                                 if st.button("✅ 완료", key=f"archive_{idx}", use_container_width=True):
-                                    success, message = archive_paper(paper_path)
-                                    if success:
-                                        st.success(message)
-                                        st.rerun()
-                                    else:
-                                        st.error(message)
+                                    # Set confirmation dialog state
+                                    st.session_state.confirm_action = {
+                                        'action': 'archive',
+                                        'paper_path': paper_path,
+                                        'paper_name': paper_name
+                                    }
+                                    st.session_state.show_confirm_dialog = True
+                                    st.rerun()
 
     # Archived papers tab
     with tab2:
@@ -854,12 +995,22 @@ def render_paper_list():
                                     st.rerun()
                             with btn_col2:
                                 if st.button("↩️ 복원", key=f"restore_{idx}", use_container_width=True):
-                                    success, message = restore_paper(paper_path)
-                                    if success:
-                                        st.success(message)
-                                        st.rerun()
-                                    else:
-                                        st.error(message)
+                                    # Set confirmation dialog state
+                                    st.session_state.confirm_action = {
+                                        'action': 'restore',
+                                        'paper_path': paper_path,
+                                        'paper_name': paper_name
+                                    }
+                                    st.session_state.show_confirm_dialog = True
+                                    st.rerun()
+
+    # Show confirmation dialogs if needed
+    if st.session_state.show_confirm_dialog and st.session_state.confirm_action:
+        action = st.session_state.confirm_action.get('action')
+        if action == 'archive':
+            confirm_archive_dialog()
+        elif action == 'restore':
+            confirm_restore_dialog()
 
 
 def render_paper_detail():
@@ -984,26 +1135,25 @@ def render_paper_detail():
         if is_archived:
             # Show restore button for archived papers
             if st.button("↩️ 읽을 논문으로 복원", use_container_width=True, key="restore_detail"):
-                success, message = restore_paper(paper_path)
-                if success:
-                    st.success(message)
-                    # Update selected paper path to new location
-                    st.session_state.selected_paper = str(Path("outputs") / paper_name)
-                    st.rerun()
-                else:
-                    st.error(message)
+                # Set confirmation dialog state
+                st.session_state.confirm_action = {
+                    'action': 'restore_detail',
+                    'paper_path': paper_path,
+                    'paper_name': paper_name
+                }
+                st.session_state.show_confirm_dialog = True
+                st.rerun()
         else:
             # Show archive button for unread papers
             if st.button("✅ 읽음으로 표시", use_container_width=True, key="archive_detail"):
-                success, message = archive_paper(paper_path)
-                if success:
-                    st.success(message)
-                    # Return to list view after archiving
-                    st.session_state.view = 'list'
-                    st.session_state.selected_paper = None
-                    st.rerun()
-                else:
-                    st.error(message)
+                # Set confirmation dialog state
+                st.session_state.confirm_action = {
+                    'action': 'archive_detail',
+                    'paper_path': paper_path,
+                    'paper_name': paper_name
+                }
+                st.session_state.show_confirm_dialog = True
+                st.rerun()
 
     # Main content area - display selected format directly without header
     # Check if "분할 보기" mode is selected
@@ -1030,6 +1180,13 @@ def render_paper_detail():
         elif file_type == 'md_en':
             display_markdown(file_path)
 
+    # Show confirmation dialogs if needed
+    if st.session_state.show_confirm_dialog and st.session_state.confirm_action:
+        action = st.session_state.confirm_action.get('action')
+        if action == 'archive_detail':
+            confirm_archive_detail_dialog()
+        elif action == 'restore_detail':
+            confirm_restore_detail_dialog()
 
 
 def main():
