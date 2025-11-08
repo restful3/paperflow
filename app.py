@@ -444,19 +444,28 @@ def display_html(html_path, font_size=100, dual_view=False):
                 margin-top: 0 !important;
                 padding-top: 0 !important;
             }}
-            /* Adjust content to full width with minimal padding */
+            /* Adjust content to full width with minimal padding and center alignment */
             body, #quarto-content, .content, #quarto-document-content, main, .main {{
                 max-width: 100% !important;
-                margin-left: 0 !important;
-                margin-right: 0 !important;
-                padding-left: 0.5em !important;
-                padding-right: 0.5em !important;
+                width: 100% !important;
+                margin: 0 auto !important;
+                padding-left: 1em !important;
+                padding-right: 1em !important;
+                box-sizing: border-box !important;
             }}
-            /* Container full width */
+            /* Container full width with center alignment */
             .container, .container-fluid, article {{
                 max-width: 100% !important;
-                padding-left: 0.5em !important;
-                padding-right: 0.5em !important;
+                width: 100% !important;
+                margin: 0 auto !important;
+                padding-left: 1em !important;
+                padding-right: 1em !important;
+                box-sizing: border-box !important;
+            }}
+            /* Force all main content blocks to be centered */
+            #quarto-content > * {{
+                margin-left: auto !important;
+                margin-right: auto !important;
             }}
             /* Remove any top margin from first element */
             body > *:first-child, main > *:first-child {{

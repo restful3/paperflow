@@ -76,30 +76,36 @@ echo ""
 # Main watch loop
 processing_pid=""
 while true; do
-    # Count PDF files in newones
-    pdf_count=$(find "$NEWONES_DIR" -maxdepth 1 -name "*.pdf" -type f 2>/dev/null | wc -l)
+    # Find all PDF files in newones
+    pdf_files=$(find "$NEWONES_DIR" -maxdepth 1 -name "*.pdf" -type f 2>/dev/null)
+    pdf_count=$(echo "$pdf_files" | grep -c "\.pdf$" 2>/dev/null || echo "0")
 
     if [ $pdf_count -gt 0 ]; then
-        # PDF files found - start processing
+        # PDF files found - process each one separately in new Python process
         log_success "Found $pdf_count PDF file(s) - starting processing"
         echo ""
 
-        # Run processing
-        .venv/bin/python main_terminal.py &
-        processing_pid=$!
+        # Process each PDF in a separate Python process to avoid CUDA context pollution
+        echo "$pdf_files" | while read -r pdf_file; do
+            if [ -n "$pdf_file" ] && [ -f "$pdf_file" ]; then
+                pdf_name=$(basename "$pdf_file")
+                log_info "Processing: $pdf_name (in new Python process)"
 
-        # Wait for processing to complete
-        wait $processing_pid
-        processing_status=$?
-        processing_pid=""
+                # Run processing for single PDF in new process
+                .venv/bin/python main_terminal.py
+                processing_status=$?
+
+                if [ $processing_status -eq 0 ]; then
+                    log_success "Completed: $pdf_name"
+                else
+                    log_error "Failed: $pdf_name (exit code: $processing_status)"
+                fi
+                echo ""
+            fi
+        done
 
         echo ""
-        if [ $processing_status -eq 0 ]; then
-            log_success "Processing completed successfully"
-        else
-            log_error "Processing failed with exit code: $processing_status"
-        fi
-        echo ""
+        log_success "All PDFs processed"
         log_info "Returning to watch mode..."
         echo ""
     fi

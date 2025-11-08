@@ -189,10 +189,28 @@ def convert_pdf_to_md(pdf_path, output_dir):
             print_error("CUDA is not available. GPU is required for this application.")
             raise RuntimeError("GPU (CUDA) is required but not available. Please check your PyTorch installation and GPU drivers.")
 
-        # Check GPU memory
-        gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)  # GB
-        gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)  # GB
-        print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
+        # Check GPU memory with error recovery
+        try:
+            gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)  # GB
+            gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)  # GB
+            print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
+        except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+            # CUDA context is corrupted, try to reset
+            print_warning(f"GPU memory check failed: {e}")
+            print_info("Attempting to reset CUDA context...")
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                torch.cuda.reset_peak_memory_stats()
+                # Try again after reset
+                gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)
+                gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)
+                print_success("CUDA context reset successful")
+                print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
+            except Exception as reset_error:
+                print_error(f"CUDA reset failed: {reset_error}")
+                print_error("GPU is in corrupted state. Please restart Python process or reboot system.")
+                raise RuntimeError("CUDA context is corrupted and cannot be recovered")
 
         # Always use GPU
         device = "cuda"
@@ -807,11 +825,14 @@ def main():
 
     print_info(f"Found {len(pdf_files)} PDF file(s) to process")
 
-    # Process each PDF
+    # Process only the first PDF to avoid CUDA context pollution
+    # Watch mode script will call this program multiple times for multiple PDFs
     success_count = 0
     fail_count = 0
 
-    for pdf_path in pdf_files:
+    # Process first PDF only
+    if pdf_files:
+        pdf_path = pdf_files[0]
         if process_single_pdf(str(pdf_path), config, prompt):
             success_count += 1
         else:
