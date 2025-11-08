@@ -61,15 +61,19 @@ All processing runs in the main thread with colored output:
 
 #### 1. PDF → Markdown (`convert_pdf_to_md()` at [main_terminal.py:175](main_terminal.py#L175))
 - **Library-based**: Uses marker-pdf Python library directly (NOT API server)
-- **GPU Auto-detection**: Checks available GPU memory
-  - If GPU available with >4GB free: Uses CUDA with float16
-  - If GPU has <4GB free or unavailable: Automatically switches to CPU with float32
-- **Model Loading**: Creates model dictionary with `create_model_dict(device, dtype)`
-- **Conversion**: Calls `marker_single(pdf_path, output_dir, model_dict, metadata=metadata)`
+- **GPU-only mode**: Requires CUDA GPU (will fail if GPU not available)
+- **GPU Memory Check**: Displays available GPU memory before loading models
+- **Model Loading**: Creates model dictionary with `create_model_dict(device="cuda", dtype=torch.float16)`
+- **Conversion**: Uses `PdfConverter` with loaded models to convert PDF to markdown
 - **Image Extraction**: Handles both single Image objects and lists from `rendered.images` dict
   - Fixes filename generation to avoid duplication
   - Saves images as JPEG to output directory
 - **Metadata**: Makes all metadata JSON-serializable with recursive `make_serializable()` function
+- **VRAM Management**: Explicitly releases GPU memory after conversion to enable batch processing
+  - Deletes model_dict, converter, rendered objects
+  - Calls `gc.collect()` to force garbage collection
+  - Calls `torch.cuda.empty_cache()` and `torch.cuda.synchronize()` to free VRAM
+  - Reports memory freed and available for next PDF
 - Outputs: markdown file, extracted images, metadata JSON
 
 #### 2. Markdown Chunking ([main_terminal.py:385](main_terminal.py#L385))
@@ -78,12 +82,17 @@ All processing runs in the main thread with colored output:
 - Preserves markdown formatting including headers, code blocks, math equations
 - Configurable chunk size (default: 5, recommended: 3-5)
 
-#### 3. Korean Translation (`translate_md_to_korean()` at [main_terminal.py:377](main_terminal.py#L377))
+#### 3. Korean Translation (`translate_md_to_korean()` at [main_terminal.py:517](main_terminal.py#L517))
 - Translates each chunk via Ollama API
 - Shows progress bar with percentage completion
 - Writes chunks incrementally to `*_ko.md` as they complete
 - Retry logic with configurable timeout/retries/delay
 - Prepends `header.yaml` content to translated file for Quarto
+- **Ollama Memory Management**: Unloads model after translation ([main_terminal.py:572-588](main_terminal.py#L572-L588))
+  - Sends `keep_alive: 0` to Ollama API to unload model immediately
+  - Frees ~22GB GPU memory used by Ollama during translation
+  - Critical for batch processing to prevent CUDA OOM on subsequent PDFs
+  - Also attempts unload on translation errors
 
 #### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:567](main_terminal.py#L567))
 - Uses Quarto CLI to render Korean markdown to HTML
@@ -157,25 +166,65 @@ The HTML file is self-contained with embedded images and CSS (configured via `em
 The [run_batch_venv.sh](run_batch_venv.sh) script:
 1. Activates `.venv` virtual environment
 2. Checks for PDF files in `newones/` directory
-3. Runs [main_terminal.py](main_terminal.py) to process all PDFs
+3. Runs [main_terminal.py](main_terminal.py) to process all PDFs sequentially
 4. Terminal UI shows colored progress indicators during processing
 5. Logs saved to `logs/` directory with timestamp
 
+**Multiple PDF Processing** ([main_terminal.py:776-784](main_terminal.py#L776-L784)):
+- Processes all PDFs in `newones/` directory in a `for` loop
+- Each PDF goes through complete pipeline: PDF→MD→Translation→HTML→Cleanup
+- **Dual GPU Memory Management**:
+  1. **After PDF→MD conversion**: Releases ~4-8GB VRAM from marker-pdf models
+  2. **After Translation**: Unloads Ollama model to release ~22GB VRAM
+- Safe for processing multiple large PDFs consecutively without CUDA OOM errors
+
 ### GPU Memory Management
 
-**Automatic Detection** ([main_terminal.py:186](main_terminal.py#L186)):
+**GPU-Only Mode** ([main_terminal.py:186-200](main_terminal.py#L186-L200)):
+- Application now **requires CUDA GPU** and will fail if not available
+- No automatic CPU fallback (GPU provides significantly better performance)
+- Checks and displays GPU memory before loading models
+
+**VRAM Release for Batch Processing** ([main_terminal.py:306-340](main_terminal.py#L306-L340)):
 ```python
-if torch.cuda.is_available():
-    gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)
-    if gpu_mem_free < 4.0:
-        device = "cpu"
-        dtype = torch.float32
-    else:
-        device = "cuda"
-        dtype = torch.float16
+# After PDF conversion completes
+del model_dict
+del converter
+del rendered
+gc.collect()
+torch.cuda.empty_cache()
+torch.cuda.synchronize()
 ```
 
-This prevents CUDA OOM errors by automatically falling back to CPU when GPU memory is insufficient.
+This **critical feature** enables processing multiple PDFs sequentially:
+- Frees ~4-8GB VRAM after each PDF conversion (marker-pdf models)
+- Combined with Ollama model unload, frees total ~26-30GB per PDF cycle
+- Prevents CUDA OOM errors when processing 2+ PDFs
+- Reports memory freed and available for monitoring
+- Also attempts cleanup on conversion errors
+
+**Ollama Model Unload** ([main_terminal.py:572-588](main_terminal.py#L572-L588)):
+```python
+# After translation completes
+requests.post(f"{ollama_url}/api/generate",
+              json={"model": model_name, "keep_alive": 0})
+```
+
+This unloads the Ollama LLM from VRAM:
+- Ollama keeps models in memory by default for fast subsequent calls
+- In batch processing, this causes CUDA OOM on 2nd PDF
+- `keep_alive: 0` forces immediate unload
+- Frees ~22GB VRAM used by qwen3-vl:30b model
+- Next PDF can then load marker-pdf models successfully
+
+**Monitoring GPU Usage**:
+```bash
+# Watch GPU memory in real-time during batch processing
+watch -n 1 nvidia-smi
+
+# Check memory release messages in logs
+grep "GPU memory" logs/paperflow_*.log
+```
 
 ### Image Extraction Handling
 
@@ -244,8 +293,11 @@ From testing, ranked by translation quality:
    - Check: `config.json` has correct URL
 
 2. **GPU Memory Issues**
-   - Application auto-switches to CPU if <4GB free
+   - Application now requires GPU (no CPU fallback)
+   - If GPU not available, install CUDA and PyTorch with CUDA support
+   - For batch processing: VRAM is automatically released between PDFs
    - Check other GPU processes with `nvidia-smi`
+   - Monitor memory usage during processing: `watch -n 1 nvidia-smi`
 
 3. **Quarto Not Found**
    - Install: `sudo apt install quarto` or from https://quarto.org/
@@ -264,13 +316,16 @@ From testing, ranked by translation quality:
 
 ```bash
 # View latest log
-tail -f logs/pdf2md_*.log
+tail -f logs/paperflow_*.log
 
 # Find errors
-grep "✗" logs/pdf2md_*.log
+grep "✗" logs/paperflow_*.log
 
 # Find warnings
-grep "⚠" logs/pdf2md_*.log
+grep "⚠" logs/paperflow_*.log
+
+# Monitor GPU memory operations
+grep "GPU memory" logs/paperflow_*.log
 ```
 
 ## Project Evolution Notes
@@ -280,13 +335,15 @@ grep "⚠" logs/pdf2md_*.log
 - API-based marker-pdf - switched to library-based approach
 - PDF output - switched to HTML output for better web compatibility
 - uv-based dependency management - switched to standard venv
+- CPU fallback mode - now requires GPU for performance (as of batch processing update)
 
 **Key Architectural Decisions**:
 1. **Library over API**: marker-pdf used as Python library for better control and offline capability
-2. **Auto GPU/CPU**: Prevents crashes from OOM errors
-3. **Batch Processing**: Optimized for processing multiple papers efficiently
-4. **HTML Output**: More accessible and easier to style than PDF
-5. **Auto-cleanup**: Keeps newones/ folder clean by moving processed files
+2. **GPU-Only Mode**: Requires CUDA GPU for optimal performance, no CPU fallback
+3. **Explicit VRAM Management**: Memory released after each PDF to enable batch processing
+4. **Batch Processing**: Optimized for processing multiple papers sequentially
+5. **HTML Output**: More accessible and easier to style than PDF
+6. **Auto-cleanup**: Keeps newones/ folder clean by moving processed files
 
 ## File Structure
 

@@ -34,8 +34,8 @@ fi
 echo "ℹ Found $pdf_count PDF file(s) to process"
 echo ""
 
-# Run the terminal version
-python main_terminal.py
+# Run the terminal version (use venv python directly)
+.venv/bin/python main_terminal.py
 
 echo ""
 echo "=================================================="

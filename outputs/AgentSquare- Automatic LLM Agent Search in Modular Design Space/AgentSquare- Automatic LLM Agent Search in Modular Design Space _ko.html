@@ -1,0 +1,2041 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ko" xml:lang="ko"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.4.550">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>agentsquare--automatic-llm-agent-search-in-modular-design-space-_ko</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/clipboard/clipboard.min.js"></script>
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/quarto.js"></script>
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/popper.min.js"></script>
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/anchor.min.js"></script>
+<link href="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<style>html{ scroll-behavior: smooth; }</style>
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  
+  <script>
+    (function () {
+      var script = document.createElement("script");
+      script.type = "text/javascript";
+      script.src  = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js";
+      document.getElementsByTagName("head")[0].appendChild(script);
+    })();
+  </script>
+
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">목차</h2>
+   
+  <ul>
+  <li><a href="#agentsquare-모듈러-설계-공간에서의-자동-llm-에이전트-검색" id="toc-agentsquare-모듈러-설계-공간에서의-자동-llm-에이전트-검색" class="nav-link active" data-scroll-target="#agentsquare-모듈러-설계-공간에서의-자동-llm-에이전트-검색">AGENTSQUARE: 모듈러 설계 공간에서의 자동 LLM 에이전트 검색</a></li>
+  <li><a href="#요약" id="toc-요약" class="nav-link" data-scroll-target="#요약">요약</a></li>
+  <li><a href="#도입" id="toc-도입" class="nav-link" data-scroll-target="#도입">1 도입</a></li>
+  <li><a href="#모듈러-설계-공간-llm-에이전트" id="toc-모듈러-설계-공간-llm-에이전트" class="nav-link" data-scroll-target="#모듈러-설계-공간-llm-에이전트">2 모듈러 설계 공간: LLM 에이전트</a></li>
+  <li><a href="#배경" id="toc-배경" class="nav-link" data-scroll-target="#배경">2.1 배경</a></li>
+  <li><a href="#워크플로우-개요" id="toc-워크플로우-개요" class="nav-link" data-scroll-target="#워크플로우-개요">2.2 워크플로우 개요</a></li>
+  <li><a href="#agentsquare-프레임워크" id="toc-agentsquare-프레임워크" class="nav-link" data-scroll-target="#agentsquare-프레임워크">3 AGENTSQUARE 프레임워크</a></li>
+  <li><a href="#molas의-문제-정식화" id="toc-molas의-문제-정식화" class="nav-link" data-scroll-target="#molas의-문제-정식화">3.1 MOLAS의 문제 정식화</a>
+  <ul class="collapse">
+  <li><a href="#agentsquare-검색-알고리즘" id="toc-agentsquare-검색-알고리즘" class="nav-link" data-scroll-target="#agentsquare-검색-알고리즘">3.2 AGENTSQUARE 검색 알고리즘</a></li>
+  <li><a href="#모듈-재조합" id="toc-모듈-재조합" class="nav-link" data-scroll-target="#모듈-재조합">3.4 모듈 재조합</a></li>
+  <li><a href="#실험" id="toc-실험" class="nav-link" data-scroll-target="#실험">4 실험</a></li>
+  </ul></li>
+  <li><a href="#실험-설정" id="toc-실험-설정" class="nav-link" data-scroll-target="#실험-설정">4.1 실험 설정</a></li>
+  <li><a href="#agentsquare의-제거-연구" id="toc-agentsquare의-제거-연구" class="nav-link" data-scroll-target="#agentsquare의-제거-연구"><span id="page-7-0"></span>4.3 AGENTSQUARE의 제거 연구</a></li>
+  <li><a href="#관련-연구" id="toc-관련-연구" class="nav-link" data-scroll-target="#관련-연구">5 관련 연구</a></li>
+  <li><a href="#llm-기반-자율-에이전트" id="toc-llm-기반-자율-에이전트" class="nav-link" data-scroll-target="#llm-기반-자율-에이전트">5.1 LLM 기반 자율 에이전트</a></li>
+  <li><a href="#결론" id="toc-결론" class="nav-link" data-scroll-target="#결론">6 결론</a></li>
+  <li><a href="#참고문헌" id="toc-참고문헌" class="nav-link" data-scroll-target="#참고문헌">참고문헌</a></li>
+  <li><a href="#부록-a" id="toc-부록-a" class="nav-link" data-scroll-target="#부록-a">부록 A</a></li>
+  <li><a href="#a.1-실험-설정" id="toc-a.1-실험-설정" class="nav-link" data-scroll-target="#a.1-실험-설정"><span id="page-14-0"></span>A.1 실험 설정</a>
+  <ul class="collapse">
+  <li><a href="#htss" id="toc-htss" class="nav-link" data-scroll-target="#htss">HTSS</a></li>
+  <li><a href="#th" id="toc-th" class="nav-link" data-scroll-target="#th">TH</a></li>
+  </ul></li>
+  <li><a href="#casrc" id="toc-casrc" class="nav-link" data-scroll-target="#casrc">CASRC</a>
+  <ul class="collapse">
+  <li><a href="#ir-작업" id="toc-ir-작업" class="nav-link" data-scroll-target="#ir-작업">IR 작업</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content"><div class="quarto-title-block"><div class="quarto-title-tools-only"><h1></h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source"><i class="bi"></i> 코드</button></div></div>
+
+
+
+
+<section id="agentsquare-모듈러-설계-공간에서의-자동-llm-에이전트-검색" class="level1">
+<h1>AGENTSQUARE: 모듈러 설계 공간에서의 자동 LLM 에이전트 검색</h1>
+<p>Shang Yu1<sup>∗</sup> Li Yu2<sup>∗</sup> Zhao Keyu<sup>1</sup> Ma Likai<sup>1</sup> Liu Jiahe<sup>1</sup> Xu Fengli1† Li Yong1†</p>
+<p><sup>1</sup>전자공학과, 칭화대학</p>
+</section>
+<section id="요약" class="level1">
+<h1>요약</h1>
+<p>최근 대형 언어 모델(Large Language Models, LLMs)의 발전으로 다양한 복잡한 작업을 처리할 수 있는 에이전트 시스템의 급속한 성장이 이루어졌다. 그러나 현재의 연구는 주로 수동적이고 작업별로 설계된 방식에 의존하여 새로운 작업에 대한 적응성을 제한하고 있다. 이 논문에서는 새로운 연구 문제인 모듈화된 LLM 에이전트 검색(Modularized LLM Agent Search, MoLAS)을 제안한다. 우리는 기존의 LLM 에이전트 설계를 네 가지 기본 모듈로 추상화하는 모듈화 설계 공간을 제안한다. 이 모듈들은 통일된 입출력 인터페이스를 가지며, <em>계획(Planning)</em>, <em>추론(Reasoning)</em>, <em>도구 사용(Tool Use)</em>, <em>메모리(Memory)</em>로 구성된다. 이 설계 공간을 기반으로, 우리는 두 가지 핵심 메커니즘, 즉 <em>모듈 진화(module evolution)</em> 및 <em>재조합(recombination)</em> 을 도입한 새로운 LLM 에이전트 검색 프레임워크인 AgentSquare를 제시한다. 이를 통해 효율적으로 최적화된 LLM 에이전트를 탐색할 수 있다. 또한, 성능 예측기(performance predictor)를 설계하여, 맥락 내 대체 모델을 사용하여 성과가 낮을 것으로 예상되는 에이전트 설계를 건너뛰는 방식으로 프로세스를 더욱 가속화한다. 웹, 신체적(embodied), 도구 사용 및 게임 응용 분야를 포함하는 여섯 가지 벤치마크에서 실시된 광범위한 실험 결과, AgentSquare는 수작업으로 설계된 에이전트보다 상당히 우수한 성능을 보였으며, 최고 수준의 인간 설계 대비 평균 17.2%의 성능 향상을 달성하였다. 또한, AgentSquare는 해석 가능한 설계 통찰을 생성하여 에이전트 아키텍처와 작업 성능에 미치는 영향에 대한 깊은 이해를 가능하게 한다. 우리는 모듈화 설계 공간과 AgentSquare 검색 프레임워크가 이전에 성공한 설계의 잠재력을 완전히 활용하고 연구 공동체의 집단적 노력을 통합할 수 있는 플랫폼을 제공할 수 있다고 믿는다. 코드 리포지토리는 https://github.com/tsinghua-fib-lab/AgentSquare에서 확인할 수 있다.</p>
+</section>
+<section id="도입" class="level1">
+<h1>1 도입</h1>
+<p>지난 몇 년간 대형 언어 모델(Large Language Models, LLMs)의 개발에서 놀라운 진전이 이루어졌으며 <a href="#page-10-0">(Achiam et al., 2023;</a> <a href="#page-11-0">Touvron et al., 2023)</a>, 이로 인해 다양한 에이전트 시스템이 급속히 확산되고 있다 <a href="#page-12-0">(Weng, 2023;</a> <a href="#page-11-1">Shen et al., 2024)</a>. 예를 들어, “사고의 사슬(chain-of-thought)” 프롬프팅은 LLM의 일반적인 추론 능력을 개방했으며 <a href="#page-12-1">(Wei et al., 2022)</a>, 메모리 메커니즘은 인간의 행동을 시뮬레이션하는 데 효과적임이 입증되었다 <a href="#page-11-2">(Park et al., 2023)</a>. 이러한 새로운 LLM 에이전트는 수학 문제 해결 <a href="#page-11-3">(Romera-Paredes et al., 2024)</a>, 웹 탐색 <a href="#page-11-4">(Nakano</a> <a href="#page-11-4">et al., 2021)</a>, 금융 조언 제공 <a href="#page-10-1">(Ding et al., 2024a)</a>, 의료 결정 지원 <a href="#page-10-2">(Li</a> <a href="#page-10-2">et al., 2024a)</a>에 이르기까지 다양한 작업을 변환하는 놀라운 능력을 보여주었다. 따라서 에이전트 시스템의 설계는 다양한 후속 응용을 위해 LLM의 힘을 활용하는 데 중요한 역할을 한다.</p>
+<p>그러나 현재의 연구는 주로 특정 작업에 맞춰 수동으로 설계된 에이전트 시스템에 의존하고 있으며, 이는 종종 전문가의 통찰력과 집중적인 인간 노동에 크게 의존한다. 또한 이러한 작업별 에이전트 설계는 새로운 작업에 적응하는 데 자주 어려움을 겪는다. 최근 몇몇 연구에서는 LLM을 사용하여 기존 에이전트의 프롬프트를 재작성하고 최적화하는 방식을 탐구하고 있다 <a href="#page-10-3">(Fernando et al.,</a></p>
+<p><sup>2</sup>칭화대학 국제대학원, 선전캠퍼스</p>
+<p><sup>*</sup>동등한 기여</p>
+<p><sup>†</sup>상응 저자, 연락처: fenglixu@tsinghua.edu.cn, liyong07@tsinghua.edu.cn</p>
+<p><img src="_page_1_Figure_1.jpeg" class="img-fluid"></p>
+<p>그림 1: AgentSquare는 LLM 에이전트를 설계하고 최적화하기 위한 모듈식 프레임워크입니다.</p>
+<p><a href="#page-10-3">2024;</a> <a href="#page-12-2">양 등, 2024</a>. 최근 연구에서는 LLM을 활용하여 코드 공간에서 정의된 전체 에이전트 시스템을 탐색하는 아이디어를 도입하였다 <a href="#page-10-4">후 등, 2024</a>, 이로써 더 유연한 프롬프트, 제어 흐름 등을 갖는 에이전트를 발견할 수 있게 되었다. 그러나 이전의 접근법들은 서로 다른 연구에서 발견된 에이전트 모듈의 강점을 명시적으로 재조합하고, 별도의 코드베이스에 위치한 모듈들을 통합하는 능력이 제한적이다. 또 다른 연구 방향은 다중 에이전트 시스템의 구성 설정을 최적화하는 데 초점을 맞추고 있다 <a href="#page-10-5">천 등, 2023;</a> <a href="#page-13-0">원 등, 2024;</a> <a href="#page-10-6">리 등, 2023;</a> <a href="#page-13-1">주거 등, 2024;</a> <a href="#page-12-3">왕 등, 2023b</a>. 이러한 노력들은 에이전트 모듈의 설계보다는 다수의 에이전트 간의 역할 수행과 상호작용 패턴에 초점을 두기 때문에, 단일 에이전트 시스템의 최적화와는 정사각형이다.</p>
+<p>이 논문은 새로운 연구 문제인 모듈화된 LLM 에이전트 탐색(MoLAS)을 다룬다. 목표는 출판되거나 평가된 모듈들의 경험을 활용하여 LLM 에이전트 설계를 자동으로 최적화하는 것이다. 따라서 본 연구의 핵심은 4개의 모듈 카테고리로 구성된 LLM 에이전트의 모듈화 설계 공간이다: <em>계획</em>, <em>추론</em>, <em>도구 사용</em>, <em>메모리</em>. 이 설계 공간은 기존 에이전트 시스템에 대한 철저한 문헌 검토에서 추출된 것이다(자세한 내용은 Section 2 참조). 중요한 점은, 우리의 목적이 가장 포괄적이고 일률적인 LLM 에이전트 설계 공간을 제안하는 것이 아니라, 모듈화 설계 공간이 연구자와 지능형 탐색 알고리즘들이 이전 성공적인 설계의 잠재력을 완전히 활용할 수 있도록 하는 것을 보여주는 데 있다는 점이다. MoLAS는 ADAS <a href="#page-10-4">(Hu et al., 2024)</a>에서 제안한 전체 코드 탐색의 하위 집합인 모듈화 설계 공간 내에서 유도되고 제약된 탐색 문제이다. 그러나 MoLAS는 에이전트 모듈에 대한 표준화된 IO 인터페이스를 제공하는 특징을 가지고 있어, 다양한 에이전트 시스템의 모듈을 쉽게 재조합할 수 있고, 따라서 새로운 에이전트를 효율적으로 탐색할 수 있다. 또한, 본 설계 공간은 매우 확장 가능하여 새로운 에이전트 시스템을 플러그인 모듈로 통합할 수 있다. 따라서 이는 LLM 에이전트 분야의 연구 공동체의 집단적 노력을 통합할 수 있는 플랫폼을 제공한다. 본 연구의 개요는 그림 <a href="#page-1-0">1.</a>에 설명되어 있다.</p>
+<p>이 모듈러 설계 공간을 기반으로, 우리는 AgentSquare라는 새로운 LLM 에이전트 검색 프레임워크를 제안한다. 특히, AgentSquare는 <em>모듈 진화</em>와 <em>재조합</em> 메커니즘을 통해 LLM 에이전트를 최적화한다. <em>모듈 진화</em> 메커니즘은 진화적 메타프롬프트를 활용하여 프롬프트 수준 최적화를 통해 새로운 모듈을 탐색하며, 이는 작업 설명, 기존 모듈, 그리고 평가된 모듈의 성능을 함께 모델링한다. 또한, <em>모듈 재조합</em> 메커니즘은 LLM의 추론 능력을 활용하여 유망한 모듈 조합을 전략적으로 탐색함으로써 모듈 수준 최적화를 수행한다. LLM 에이전트의 비용이 많이 드는 평가 비용을 줄이기 위해, 우리는 성능 예측기를 도입하여 새로 제안된 LLM 에이전트에 대한 인컨텍스트 대체 모델을 구현함으로써, 성과가 낮은 후보를 건너뛰고 검색 과정을 크게 가속화할 수 있도록 한다.</p>
+<p>우리는 웹, embodiment, 도구 사용 및 게임 시나리오에 걸쳐 다양한 사용 사례를 포함하는 여섯 가지 널리 채택된 벤치마크에서 포괄적인 평가를 수행합니다. 우리의 실험 결과에 따르면, AgentSqaure는 모든 여섯 가지 벤치마크에서 수작업으로 설계된 에이전트를 능가하는 새로운 LLM 에이전트를 발견할 수 있으며, 최고의 인간 설계 대비 평균 성능 향상률이 17.2%에 달합니다. 또한, AgentSqaure는 더 가파른 최적화 경로를 가지는 점에서 다른 탐색 알고리즘보다도 우수합니다. 더욱 중요한 것은, 사례 연구를 통해 AgentSquare가 새로 발견된 성능이 우수한 에이전트에 대해 인간이 이해할 수 있는 설계 통찰을 제공할 수 있다는 점입니다.</p>
+<p>이 작업의 주요 기여점은 다음과 같습니다:</p>
+<p><img src="_page_2_Figure_1.jpeg" class="img-fluid"></p>
+<p>그림 2: 모듈형 에이전트 설계 공간과 에이전트 워크플로우(왼쪽) 및 네 가지 유형의 모듈의 표준화된 IO 인터페이스(오른쪽)의 도식도</p>
+<p>우리는 LLM 에이전트를 위한 새로운 모듈형 설계 공간을 제안하며, 이는 연구자들이 이전의 성공적인 설계를 기반으로 쉽게 개발하고 공동체 차원에서 새로운 발견을 축적할 수 있도록 한다.</p>
+<p>우리는 모듈 진화, 모듈 재조합, 성능 예측기라는 새로운 메커니즘을 통해 새로운 그리고 우수한 성능을 보이는 LLM 에이전트를 효율적으로 탐색하는 AgentSquare 프레임워크를 설계합니다.</p>
+<p>여섯 가지 다양한 작업에서의 실험 결과, 우리의 방법은 기존 인간 설계보다 우수한 새로운 LLM 에이전트를 발견함을 보여준다. 또한, AgentSqaure는 이러한 새로운 에이전트에 대한 인간이 이해할 수 있는 설계 통찰을 생성할 수 있다.</p>
+</section>
+<section id="모듈러-설계-공간-llm-에이전트" class="level1">
+<h1>2 모듈러 설계 공간: LLM 에이전트</h1>
+</section>
+<section id="배경" class="level1">
+<h1>2.1 배경</h1>
+<p>LLM을 사용한 자동 최적화는 코드 생성 <a href="#page-10-7">(Lehman et al., 2023;</a> <a href="#page-11-3">Romera-Paredes et al., 2024)</a> 및 신경망 아키텍처 검색 <a href="#page-11-5">(Nasir et al., 2024;</a> <a href="#page-10-8">Chen et al., 2024a)</a>와 같은 분야에서 널리 연구된 주제이다. 최근 몇몇 연구에서는 LLM에 프롬프트를 제공하여 LLM 에이전트 시스템을 설계하는 문제를 탐구하고 있다. OPRO <a href="#page-12-2">(Yang et al., 2024)</a>과 Promptbreeder <a href="#page-10-3">(Fernando et al., 2024)</a>은 LLM의 추론 능력을 활용하여 LLM 에이전트의 프롬프트를 개선하는 방식으로 볼 수 있다. 더욱 중요한 것은, ADAS가 코드 공간에서 정의된 전체 에이전트 시스템을 탐색하는 아이디어를 도입하고, 최신 인간 설계를 능가하는 LLM 에이전트를 발견하는 메타 에이전트 검색 알고리즘을 제안했다는 점이다 <a href="#page-10-4">(Hu et al., 2024)</a>. 우리의 주요 차이점과 기여는 LLM 에이전트를 위한 모듈러 설계 공간을 도입한 데에 있다. 이는 기존에 성공한 에이전트 구성 요소의 편리한 재사용과 풍부한 혁신적 에이전트 모듈 발견을 지원하는 표준적인 프레임워크를 제공할 수 있다.</p>
+<p>모듈화된 설계 공간은 LLM 에이전트의 이전 성공적인 설계 재사용을 촉진하고 새로운 아키텍처 탐색을 지원한다. 이러한 모듈화의 핵심은 입력-출력 인터페이스의 표준화로, 확장성과 기존 설계와의 원활한 통합을 보장한다. 분야의 많은 전문가들은 엔지니어링 <a href="#page-12-0">(Weng, 2023)</a>과 인지적 관점 <a href="#page-11-6">(Sumers et al., 2023)</a>에서 핵심 모듈 구성 요소를 활용하여 LLM 에이전트 시스템을 구축할 것을 제안했다. 그러나 이러한 제안들은 대부분 개념적 수준에 머물러 있으며, 기존 LLM 에이전트를 통합할 수 있는 구현 가능한 솔루션을 부족하다. 또한 현재의 LLM 워크플로우 프로그래밍 프레임워크(<em>예: LangChain 및 Auto-GPT</em>)는 작업 수준의 구성 요소만 제공하며, 이전 성공적인 설계의 잠재력을 최대한 활용할 수 있는 모듈 수준의 탐색을 지원하지 못한다.</p>
+<p>문제를 해결하기 위해 최근 3년간 NeurIPS, ICML, ICLR에서 출판된 논문에 대한 포괄적인 문헌 검토를 수행합니다. 검토는 제목에 “LLM”, “Agent”, 또는 “Large Language Model”라는 키워드가 포함된 논문에 초점을 맞추며, 다중 에이전트 시스템 또는 추가 학습이 필요한 에이전트와 관련된 연구는 제외합니다. 우리의 목적은 가장 포괄적이고 일률적인 LLM 에이전트 설계 공간을 제안하는 것이 아니라, 기존 에이전트의 재조합을 가능하게 하고 새로운 에이전트 발견을 촉진하는 표준화된 프레임워크를 제공하는 것입니다. 결과적으로, 16개의 인기 있는 LLM 에이전트를 선별하고 1050개의 가능한 조합을 포함하는 모듈화된 설계 공간을 추출하였으며, 새로운 모듈이 발견될 때 쉽게 확장할 수 있습니다. 아래에서는 에이전트 워크플로우와 설계 공간 내 네 가지 모듈의 기능을 설명합니다.</p>
+</section>
+<section id="워크플로우-개요" class="level1">
+<h1>2.2 워크플로우 개요</h1>
+<p>제안된 에이전트 워크플로우는 위의 네 가지 모듈 간의 상호 연결을 통해 반복적인 프로세스를 수행하며, 그 과정은 그림 <a href="#page-2-0">2.</a>에 나타나 있다. 태스크 d를 받은 후, 에이전트는 <em>계획(Planning)</em> 모듈을 시작하여 이를 n개의 하위 태스크 {s1, s2, …, sn}로 분해한다. 다음으로, 이 하위 태스크들은 순차적으로 <em>이해(Reasoning)</em> 모듈에 전달된다. 하위 태스크 s<sup>i</sup>의 설명을 입력으로 받아, <em>이해</em> 모듈은 LLM(대규모 언어 모델)에 프롬프트를 탐색하여 결과를 도출한다. 이해 과정에서 LLM의 내부 지식에 한계가 발생할 경우, <em>도구 사용(Tool Use)</em> 모듈이 활성화되어 미리 정의된 도구 풀 τ에서 적절한 도구를 선택하여 문제 해결을 지원한다. 또한, 이해 과정은 메모리 데이터베이스 mem에서 필요한 관찰과 경험을 읽고 쓰는 <em>메모리(Memory)</em> 모듈에 접근하여 이해를 돕는다. 각 하위 태스크의 이해 결과는 행동으로 변환되어 에이전트가 외부 환경과 상호작용하도록 유도한다. 모든 하위 태스크가 완료되거나 이해 과정이 정체될 경우, 에이전트는 받은 피드백을 바탕으로 <em>계획(Planning)</em> 모듈을 활성화하여 계획을 조정한다. 에이전트는 이 시도와 오류의 반복 루프를 태스크 d가 완료되거나 설정된 최대 시도 횟수에 도달할 때까지 수행한다.</p>
+<p>계획. 계획 모듈은 목표 작업을 더 작은 하위 작업으로 분해하는 역할을 한다. 작업 설명 d와 선택적 피드백 정보 f를 받고, 계획 모듈 P는 목표 작업을 하위 작업 시퀀스 {s1, s2, . . . , sn} = P(d, f)로 전략적으로 분해한다. 이러한 분해는 특히 MineCraft <a href="#page-11-7">(Wang et al., 2024a;</a><a href="#page-12-4">c)</a>와 같은 개방형 환경에서의 에이전트에게 긴 기간 특성을 가진 매우 복잡한 작업을 처리하는 데 매우 중요하다.</p>
+<p>이유. 대규모 언어 모델(LLM)은 CoT <a href="#page-12-1">(Wei et al., 2022)</a>, ToT <a href="#page-12-5">(Yao et al., 2024)</a>, 그리고 SoT <a href="#page-11-8">(Shang et al., 2024)</a>와 같은 고급 프롬프팅 접근 방식을 통해 놀라운 추론 능력을 보여주었으며, 이는 LLM 에이전트의 지능 기반을 형성하고 있다. 추론 모듈 R은 계획 후 각 하위 작업 s<sup>i</sup>와 선택적 피드백 정보 f<sup>i</sup>를 입력으로 받아 순차적으로 하위 작업을 해결하며, 해답 r<sup>i</sup> = R(s<sup>i</sup>, f<sup>i</sup>)을 출력한다.</p>
+<p>도구 사용. 외부 도구를 사용하는 능력은 <a href="#page-11-1">Shen et al., 2024;</a> <a href="#page-11-9">Schick et al., 2024</a> reasoning 과정 중 LLM의 내부 지식 한계를 극복한다. 공식적으로, 하위 작업 s<sup>i</sup>의 추론 과정에서 유도된 문제 pij 와 사전 정의된 도구 풀 τ 가 주어졌을 때, 도구 사용 모듈 T는 문제를 해결하기 위해 가장 적합한 도구 tij 를 선택하며, 이를 tij = T(pij , τ )로 나타낸다. 여기서 tij ∈ τ 이다.</p>
+<p>메모리. 메모리는 에이전트의 과거 사고, 행동 및 관찰을 저장하는 데 중요한 역할을 한다 <a href="#page-11-2">(Park et al., 2023;</a> <a href="#page-11-10">Shinn et al., 2024)</a>. 추론 과정에서 이 내부 로그는 메모리 모듈 M에 의해 제어되는 메모리 데이터베이스 mem에 동적으로 쓰여지고 검색된다. 쓰기 과정은 mem = Mwrite(o, mem)으로 표현할 수 있으며, 여기서 o는 현재 관찰을 나타낸다. 검색 과정은 m = Mretrieve(o, mem)으로 표현되며, 여기서 m은 현재 상황과 관련된 검색된 지식을 나타낸다.</p>
+</section>
+<section id="agentsquare-프레임워크" class="level1">
+<h1>3 AGENTSQUARE 프레임워크</h1>
+</section>
+<section id="molas의-문제-정식화" class="level1">
+<h1>3.1 MOLAS의 문제 정식화</h1>
+<p>제안된 모듈형 설계 공간에서, LLM 에이전트 A는 계획 모듈 P, 추론 모듈 R, 도구 사용 모듈 T 및 기억 모듈 M의 조합으로 인스턴스화될 수 있으며, 이를 A = (P, R, T, M)로 표기한다. 작업 설명 d와 표준화된 IO 인터페이스를 갖는 모든 가능한 모듈 집합 {P, R, T, M}이 주어졌을 때, 우리는 모듈형 설계 공간 내에서 LLM 에이전트 아키텍처를 탐색하기 위한 최적화 문제를 정식화한다. 목표는 네 가지 설계 차원의 카르테시안 곱으로 정의된 해 공간에서 에이전트 성능을 최대화하는 최적의 모듈 조합을 식별하는 것이다. 작업의 성능 평가 함수를 Evald(·)로 정의하며, 구체적인 지표는 각각의 작업에서 다루는 바와 같이 부록 <a href="#page-14-0">A.1.</a>에서 논의된다. 최적화</p>
+<p><img src="_page_4_Figure_1.jpeg" class="img-fluid"></p>
+<p>그림 3: AgentSquare 검색 프레임워크 개요. AgentSquare는 모듈 진화와 재조합 메커니즘을 통해 LLM 에이전트를 최적화한다. 또한 새로운 에이전트를 효율적으로 평가하기 위해 맥락 내 서브모델을 구현하는 성능 예측기를 도입한다.</p>
+<p>MoLAS의 문제는 다음과 같이 정의된다:</p>
+<p><span class="math display">\[
+\underset{P \in \mathbb{P}, R \in \mathbb{R}, T \in \mathbb{T}, M \in \mathbb{M}}{\arg \max} Eval_d(P, R, T, M). \tag{1}
+\]</span></p>
+<section id="agentsquare-검색-알고리즘" class="level2">
+<h2 class="anchored" data-anchor-id="agentsquare-검색-알고리즘">3.2 AGENTSQUARE 검색 알고리즘</h2>
+<p>모 LAS의 최적화 문제를 해결하는 데 세 가지 핵심 과제가 있다: (1) 네 개의 직교 모듈의 카르테시안 곱으로 정의된 탐색 공간이 방대하여 탐색하기 어렵다; (2) 모듈 세트는 표준 IO 인터페이스를 갖는 모든 코드를 포함하므로 모듈 선택이 개방형 문제이다; (3) 탐색 과정 중 에이전트 평가의 높은 비용으로 인해 전체 탐색 규모가 제한된다. 이러한 문제를 해결하기 위해, 우리는 모듈 설계 공간 내에서 LLM 에이전트를 최적화하기 위한 자동 탐색 프레임워크인 AgentSquare를 소개한다. MoLAS의 방대한 탐색 공간에 직면하여, 우리는 LLM을 활용한 <em>모듈 재조합</em> 연산을 제안하여 더 유망한 모듈 조합을 전략적으로 식별할 수 있도록 한다. 이 연산은 자식 샘플의 커버리지를 확대하여, 제한된 공간만 탐색하는 프롬프트 재작성 방법의 한계를 극복한다. 그러나 기존 모듈 조합 내에서만 탐색하는 것은 탐색 공간을 좁히므로, 우리는 코드 수준 최적화를 통해 새로운 모듈을 탐색하기 위한 진화적 메타프롬프트를 사용하는 모듈 진화 연산을 제안한다. 이 연산은 모듈 재조합과 함께 결합되어 개방형 솔루션 공간에서 어떤 모듈 조합이든 탐색할 수 있게 한다. 마지막으로, 탐색된 에이전트의 빈번한 평가 비용을 완화하기 위해, 우리는 탐색된 에이전트를 평가하기 위한 맥락 내 대체 모델로 성능 예측기를 설계하여 탐색 과정을 크게 가속화하고 실제 비용을 줄인다.</p>
+<p>AgentSquare의 전체 프레임워크는 그림 3에 도식화되어 있으며, 알고리즘은 알고리즘 1에 제시되어 있다. 다음으로 AgentSquare 탐색 과정의 핵심 구성 요소를 상세히 설명한다.</p>
+<section id="초기화" class="level4">
+<h4 class="anchored" data-anchor-id="초기화">3.3 초기화</h4>
+<p>기존 AutoML 연구의 통찰에 따르면, 적절한 초기화는 웜업을 향상시키고 비생산적인 집단을 피함으로써 탐색 효율성을 향상시킨다(So et al., 2019; Yuan et al., 2024). AgentSquare는 초기화를 통해 전역 경험 풀 <span class="math inline">\(\mathbb{E}=\{(P,R,T,M,v)|P_0\in\mathbb{P},R_0\in\mathbb{R},T_0\in\mathbb{T},M_0\in\mathbb{M}\}\)</span> 을 생성하여, 2절에서 언급한 바와 같이 잘 설계된 에이전트와 그들의 실수값 성능 v를 시드로 설정한다. 모듈 풀 <span class="math inline">\(\{\mathbb{P},\mathbb{R},\mathbb{T},\mathbb{M}\}\)</span> 은 이 시드 에이전트에서 추출된 표준화된 모듈로 설정된다.</p>
+</section>
+</section>
+<section id="모듈-재조합" class="level2">
+<h2 class="anchored" data-anchor-id="모듈-재조합">3.4 모듈 재조합</h2>
+<p>모LAS의 방대한 솔루션 공간을 고려할 때, 프롬프트 재작성에만 의존하면 초기 상태의 이웃에 국한된 제한된 탐색에 그치게 된다. 탐색 공간을 확장하기 위해, 우리는 LLM을 <em>자기적응형 제안자</em>로 활용할 것을 제안한다. 이는 반복적으로 추론하여 초기 에이전트 구성보다 더 넓은 경험을 바탕으로 유망한 모듈 조합을 식별한다. 재조합 단계의 초기 에이전트를 <span class="math inline">\(A_r^0 = (P_0, R_0, T_0, M_0)\)</span> 로 표기하며, 여기서 <span class="math inline">\(P_0 \in \mathbb{P}, R_0 \in \mathbb{R}, T_0 \in \mathbb{T}, M_0 \in \mathbb{M}\)</span> 이다. 모듈 조합 제안자 LLM <span class="math inline">\(\pi_\theta\)</span> 는 타겟팅된 작업 설명 d, 기존 모듈 풀 <span class="math inline">\(\{\mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}\}\)</span> 및 탐색된 모듈 조합의 성능 경험 <span class="math inline">\(\mathbb{E}\)</span> 를 포함하여 유망한 새로운 에이전트 <span class="math inline">\(A_r\)</span> 를 제안한다.</p>
+<p><span class="math display">\[A_r = \pi_\theta((P_0, R_0, T_0, M_0), d, N, \mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}, \mathbb{E}). \tag{2}\]</span></p>
+<p>초기 에이전트 구성 <span class="math inline">\(A_r^0\)</span>를 기반으로, LLM은 모듈 풀에서 선택한 대체 모듈로 <span class="math inline">\(A_r^0\)</span>의 특정 모듈을 교체하여 N개의 자식 에이전트 <span class="math inline">\(\{A_r^1, A_r^2, ..., A_r^N\}\)</span>를 제안합니다. 예를 들어, 가능한 해결책은 <span class="math inline">\((P_0, R', T_0, M_0)\)</span>일 수 있으며, 여기서 <span class="math inline">\(R' \in \mathbb{R}\)</span>는 모듈 풀에서 선택된 다른 추론 모듈입니다. 그런 다음 생성된 N개의 새로운 에이전트는 성능 예측기 <span class="math inline">\(\pi_p\)</span> (세션 3.6 참조)를 통해 평가되며, 가장 좋은 에이전트가 다음 에피소드의 초기화로 사용됩니다.</p>
+<section id="모듈-진화" class="level4">
+<h4 class="anchored" data-anchor-id="모듈-진화">3.5 모듈 진화</h4>
+<p>위에서 언급했듯이, 각 모듈 유형의 솔루션 공간은 표준화된 I/O 인터페이스를 가진 모든 코드를 허용하므로 개방형이다. 결과적으로 모듈 재조합만을 통해 탐색하면 솔루션 공간이 좁아지고 에이전트 성능의 상한이 제한된다. 이 문제를 해결하기 위해, 우리는 프로그램 수준 최적화를 통해 새로운 모듈을 탐색하기 위해 진화적 메타프롬프트를 사용하는 모듈 진화 연산을 설계한다. 이 설계는 FunSearch(Romera-Paredes et al., 2024)의 반복적 파이프라인에서 영감을 받았으며, 이는 기존 솔루션의 목표 문제와 성능 피드백을 기반으로 LLM에 새로운 솔루션을 제안하도록 유도한다. 이 개념을 바탕으로, 우리는 작업 설명, 기존 모듈, 그리고 이전에 평가된 모듈의 성능을 함께 모델링하여 모듈형 설계 공간에서 에이전트 탐색을 수행하는 모듈 프로그래밍 LLM <span class="math inline">\(\pi_{\mathcal{E}}\)</span>를 도입한다. 참고로, 최적화 절차를 구현하기 위해 ADAS(Hu et al., 2024)의 일부 오픈소스 코드를 재사용한다. LLM을 사용하여 모듈형 에이전트 설계 공간에서 탐색하는 것은 여러 가지 매력적인 장점이 있다. LLM 에이전트의 제한 없는 설계 공간과 비교했을 때, 기능 모듈을 탐색하면 더 집중적이고 생산적인 탐색 공간을 생성할 수 있다. 또한, 기존에 성공한 모듈 설계를 표준 I/O로 인-컨텍스트 예시로 통합하면, LLM의 반성적 추론 능력을 더 잘 유도하여 이전의 핵심 설계를 식별하고 혁신적인 설계를 제안하는 데 도움을 줄 수 있다. 모듈 진화 단계의 초기 에이전트를 <span class="math inline">\(A_e^0 = (P_0^{'}, R_0^{'}, T_0^{'}, M_0^{'})\)</span>로 표기하면, 모듈 프로그래밍 LLM은 <span class="math inline">\(A_e^0\)</span>의 현재 모듈을 진화시켜 자식 에이전트의 집단을 생성한다. 공식적으로 모듈 진화 연산은 다음과 같이 표기된다:</p>
+<p><span class="math display">\[A_{e} = \pi_{\xi}((P_{0}^{'}, R_{0}^{'}, T_{0}^{'}, M_{0}^{'}), d, N, \mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}, \mathbb{E}). \tag{3}\]</span></p>
+<p>새로 생성된 모듈들은 표준화된 모듈 풀 <span class="math inline">\(\{\mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}\}\)</span> 에 추가되며, 각 모듈은 초기 에이전트를 개별적으로 변이시켜 N개의 자식 에이전트 <span class="math inline">\(\{A_e^1, A_e^2, ..., A_e^N\}\)</span> 를 생성합니다. 예를 들어, <span class="math inline">\((P^*, R_0, T_0, M_0)\)</span> 는 계획 모듈이 새로운 변형 <span class="math inline">\(P^*\)</span> 로 변이된 해를 나타냅니다. 이 자식 에이전트들은 실시간 테스트를 거쳐 역사적 경험 풀 <span class="math inline">\(\mathbb{E}\)</span> 에 업데이트됩니다. 최고 성능을 보인 에이전트가 후속 재조합 단계의 초기 에이전트로 선택됩니다.</p>
+</section>
+<section id="성능-예측기" class="level4">
+<h4 class="anchored" data-anchor-id="성능-예측기"><span id="page-5-0"></span>3.6 성능 예측기</h4>
+<p>최종적인 자동 에이전트 검색의 과제는 각 후보 에이전트 평가 과정에서 발생하는 높은 API 비용이다. 많은 에이전트 작업은 다중 단계를 필요로 하며, 상당한 입력 및 출력 토큰을 포함하므로 평가 비용이 막대해진다. 예를 들어, GPT-40 기반의 단순한 CoT 에이전트를 ALFWorld(Shridhar 등, 2021)에서 평가하는 데 약 60달러가 소요되며, 이는 대규모로 에이전트 검색을 경제적으로 지속 가능하지 않게 만든다. 이 문제를 해결하기 위해, 우리는 성능 예측자로 추가적인 LLM <span class="math inline">\(\pi_p\)</span>를 도입하여 새로운 에이전트 평가를 위한 맥락 내 대체 모델로 활용하는 방안을 제안한다. 이를 통해 비성공적인 후보를 제외하고 검색 과정을 크게 가속화할 수 있다. 실제 환경 평가에 비해, 이러한 맥락 내 대체 모델은 훨씬 적은 토큰을 필요로 하므로 비용 효율적이며, 더 대규모의 검색을 가능하게 한다. 비슷한 접근법은 신경망 구조 검색(NAS)에서 효과적으로 적용된 바 있으며, LLM이</p>
+<table class="table">
+<colgroup>
+<col style="width: 21%">
+<col style="width: 19%">
+<col style="width: 9%">
+<col style="width: 10%">
+<col style="width: 10%">
+<col style="width: 8%">
+<col style="width: 8%">
+<col style="width: 13%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th></th>
+<th>웹</th>
+<th>엠보</th>
+<th>데드</th>
+<th>투</th>
+<th>올</th>
+<th>게임</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>베이스라인 유형</td>
+<td>방법</td>
+<td>웹숍</td>
+<td>ALF월드</td>
+<td>사이언스월드</td>
+<td>M3툴</td>
+<td>트래블</td>
+<td><b>PDDL</b></td>
+</tr>
+<tr class="even">
+<td></td>
+<td>CoT</td>
+<td>0.485</td>
+<td>0.405</td>
+<td>0.697</td>
+<td>0.448</td>
+<td>0.487</td>
+<td>0.542</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>Cot-SC</td>
+<td>0.512</td>
+<td>0.426</td>
+<td>0.656</td>
+<td>0.461</td>
+<td>0.413</td>
+<td>0.495</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>셀프리파인드</td>
+<td>0.461</td>
+<td>0.567</td>
+<td>0.654</td>
+<td>0.442</td>
+<td>0.000</td>
+<td>0.514</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>ToT</td>
+<td>0.501</td>
+<td>0.437</td>
+<td>0.741</td>
+<td>0.453</td>
+<td>0.380</td>
+<td>0.476</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>스텝백</td>
+<td>0.468</td>
+<td>0.279</td>
+<td>0.220</td>
+<td>0.434</td>
+<td>0.000</td>
+<td>0.486</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>TP</td>
+<td>0.398</td>
+<td>0.404</td>
+<td>0.576</td>
+<td>0.387</td>
+<td>0.430</td>
+<td>0.518</td>
+</tr>
+<tr class="even">
+<td>수동으로 작성된 에이전트</td>
+<td>허깅지피티</td>
+<td>0.519</td>
+<td>0.481</td>
+<td>0.680</td>
+<td>0.354</td>
+<td>0.510</td>
+<td>0.584</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>보이저</td>
+<td>0.366</td>
+<td>0.425</td>
+<td>0.776</td>
+<td>0.247</td>
+<td>0.523</td>
+<td>0.412</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>생성형 에이전트</td>
+<td>0.499</td>
+<td>0.477</td>
+<td>0.663</td>
+<td>0.402</td>
+<td>0.480</td>
+<td>0.553</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>DEPS</td>
+<td>0.481</td>
+<td>0.459</td>
+<td>0.740</td>
+<td>0.278</td>
+<td>0.540</td>
+<td>0.591</td>
+</tr>
+<tr class="even">
+<td></td>
+<td><b>OPENAGI</b></td>
+<td>0.506</td>
+<td>0.510</td>
+<td>0.718</td>
+<td>0.322</td>
+<td>0.533</td>
+<td>0.616</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>딜루</td>
+<td>0.451</td>
+<td>0.433</td>
+<td>0.682</td>
+<td>0.475</td>
+<td>0.360</td>
+<td>0.463</td>
+</tr>
+<tr class="even">
+<td>모듈 검색</td>
+<td>랜덤</td>
+<td>0.533</td>
+<td>0.620</td>
+<td>0.704</td>
+<td>0.438</td>
+<td>0.563</td>
+<td>0.660</td>
+</tr>
+<tr class="odd">
+<td>모듈 검색</td>
+<td>베이지안</td>
+<td>0.549</td>
+<td>0.634</td>
+<td>0.749</td>
+<td>0.502</td>
+<td>0.537</td>
+<td>0.650</td>
+</tr>
+<tr class="even">
+<td>프롬프트 검색</td>
+<td>OPRO</td>
+<td>0.505</td>
+<td>0.380</td>
+<td>0.569</td>
+<td>0.309</td>
+<td>0.523</td>
+<td>0.589</td>
+</tr>
+<tr class="odd">
+<td>에이전트 검색</td>
+<td>ADAS</td>
+<td>0.521</td>
+<td>0.543</td>
+<td>0.754</td>
+<td>0.475</td>
+<td>0.373</td>
+<td>0.568</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>에이전트스퀘어</td>
+<td>0.607</td>
+<td>0.695</td>
+<td>0.781</td>
+<td>0.524</td>
+<td>0.583</td>
+<td>0.669</td>
+</tr>
+</tbody>
+</table>
+<p>표 1: AgentSquare에서 검색한 에이전트와 (1) 기존 인간 설계 에이전트, (2) 모듈 검색 기반, (3) 프롬프트 검색 기반, (4) GPT-40 기반 에이전트 검색 기반의 여섯 가지 작업에서 다양한 도메인에 걸쳐 성능 비교</p>
+<p>성능을 평가하는 데 활용되었다(자와르 등, 2023; 첸 등, 2024a).</p>
+<p>검색 과정에서 모듈 진화를 통해 새로 생성된 에이전트는 경험 풀에 등장하지 않기 때문에 실제 작업 환경에서 여전히 테스트됩니다. 또한 성능 예측기(preference predictor)를 사용하여 예측하는 것은 부적절합니다. 모듈 재조합 작업 중에 새로 제안된 에이전트는 성능 예측기 <span class="math inline">\(\pi_p\)</span>에 의해 평가되며, 이는 과거 에이전트 조합의 성능 예시를 기반으로 한 인-컨텍스트 추론(in-context reasoning)을 활용하여 효율적인 성능 예측을 제공합니다. 여기서 새로 검색된 에이전트 A’가 주어졌을 때, 성능 예측기는 태스크 설명 d, 모듈 프로파일, 그리고 이전에 테스트된 에이전트들의 인-컨텍스트 성능 예시 <span class="math inline">\(\mathbb E\)</span>를 종합적으로 고려하여 새로운 에이전트에 점수를 부여합니다.</p>
+<p><span class="math display">\[v' = \pi_p(A', d, \mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}, \mathbb{E}), \tag{4}\]</span></p>
+<p>여기서 v’은 평가된 에이전트의 예측 성능을 나타낸다. 실험 결과는 에이전트의 예측 성능이 실제 성능과 밀접하게 일치함을 보여주며, 이는 제안된 성능 예측기의 유효성을 검증하는 것이다. 이에 대한 자세한 내용은 4.3절에서 다룬다.</p>
+</section>
+</section>
+<section id="실험" class="level2">
+<h2 class="anchored" data-anchor-id="실험">4 실험</h2>
+</section>
+</section>
+<section id="실험-설정" class="level1">
+<h1>4.1 실험 설정</h1>
+<p><strong>작업 설정.</strong> 우리는 기존 LLM 에이전트 벤치마크에서 널리 채택된 네 가지 도메인: embodiment( embodiment), 게임, 웹 및 도구 응용 분야를 포함하는 여섯 가지 대표적인 작업에서 실험을 수행한다 (Ma 등, 2024; Xi 등, 2024). 자세한 내용은 부록 A.1에 제시되어 있다.</p>
+<p><strong>베이스라인.</strong> AgentSquare은 수작업으로 제작된 에이전트, 모듈 수준 검색, 프롬프트 수준 검색 및 에이전트 검색 방법을 포함한 네 가지 유형의 베이스라인과 비교한다. 자세한 내용은 부록 A.1을 참조하라.</p>
+<p><strong>AgentSquare 설정.</strong> 우리는 AgentSquare를 구현하고 GPT-3.5-turbo-0125 및 GPT-40(Achiam 등, 2023)을 사용하여 실험을 수행한다. 공정한 비교를 위해 모든 방법에서 동일한 수의 소량 샘플 예제를 사용한다. 초기 에이전트는 무작위 모듈 조합으로 설정되며, 성능 향상이 5회 연속으로 발생하지 않으면 검색 과정이 종료된다.</p>
+<p><img src="_page_7_Figure_1.jpeg" class="img-fluid"></p>
+<p>그림 4: AgentSquare의 Alfworld 및 Webshop에서의 탐색 경로</p>
+<section id="실험-결과" class="level4">
+<h4 class="anchored" data-anchor-id="실험-결과">4.2 실험 결과</h4>
+<p><strong>주요 결과.</strong> 우리는 6개의 작업에서 세 가지 유형의 베이스라인과 비교하기 위해 광범위한 실험을 수행하며, Table 1에 GPT-40 기반 결과를, Table A.3에 GPT-3.5 기반 결과를 제시한다. 또한 에이전트의 API 비용을 평가하고 Figure A.7부터 Figure A.12까지의 성능-비용 비교를 제공한다. 이 결과를 통해 다음과 같은 관찰을 얻었다:</p>
+<p>AgentSquare는 인간이 설계한 에이전트보다 더 나은 에이전트를 효과적으로 발견할 수 있다. 여섯 가지 대표적인 에이전트 작업에서 AgentSquare가 검색한 최고의 에이전트는 성능 측면에서 인간이 설계한 에이전트보다 일관되게 우수하다. 구체적으로 Table 1과 Table A.3에 보여진 바와 같이, 최고의 인간 설계 에이전트와 비교했을 때, AgentSquare는 Webshop에서 평균 14.1%의 성능 향상, ALFWorld에서 26.1%의 향상, SciWorld에서 20.5%의 향상, M3Tool에서 30.6%의 향상, Travelplanner에서 6.0%의 향상, PDDL에서 6.0%의 향상을 달성한다. 동시에 AgentSquare의 최고 에이전트는 일반적으로 비용 효율적이며, Figure A.7~Figure A.12에서 볼 수 있듯이 비교 대상 모든 에이전트 중 최고의 성능-비용 거래를 달성한다. 검색 비용은 일회성 지출이므로 위 분석에는 포함되지 않으며, Table A.6에 별도로 나열되어 있다.</p>
+<p>AgentSquare는 LLM 에이전트 최적화를 위한 더 효율적인 검색 방식을 제공합니다. AgentSquare의 검색 효과를 더욱 명확히 보이기 위해, 모듈 검색, 프롬프트 검색, 에이전트 검색의 세 가지 검색 방법을 비교합니다. 이 검색 방법들 중 최고의 에이전트와 비교했을 때, AgentSquare는 Webshop에서 평균 8.4%의 성능 향상을, ALFWorld에서 8.1%의 향상을, SciWorld에서 11.0%의 향상을, M3Tool에서 12.8%의 향상을, Travelplanner에서 2.5%의 향상을, PDDL에서 1.4%의 향상을 달성합니다. 검색 기반 방법의 비교는 공정성을 확보하기 위해 고정된 LLM 토큰 예산을 기준으로 수행되며, 동일한 검색 반복 횟수를 유지합니다. 원칙적으로 ADAS는 전체 코드 공간에서 검색함으로써 더 정교한 에이전트를 발견할 가능성을 지니지만, 이를 달성하기 위해 더 많은 반복(즉, 더 높은 LLM 토큰 사용량)이 필요할 수 있습니다.</p>
+<p>AgentSquare에서의 탐색 경로. Figure 4는 GPT-40 기반 AgentSquare과 ALFWorld 및 Webhop 작업에서의 다른 탐색 방법을 사용한 15회 반복 하에서의 탐색 경로를 보여준다. 다른 작업에 대한 결과는 Figure A.13과 A.14에 제시되어 있다. AgentSquare는 지속적인 수렴 경로를 보여주며, 더 고급화된 에이전트들이 탐색 과정에서 지속적으로 등장한다. 반면, 무작위 및 베이지안 탐색을 포함한 모듈 수준 탐색 방법들은 명확하고 통찰력 있는 탐색 방향을 갖지 못한다. OPRO와 같은 프롬프트 수준 탐색 방법들은 제한된 수정 공간에 제약을 받아 성능 향상이 미미하다. 결과적으로, 이들은 탐색 과정에서 성능 병목 현상을 겪으며, 최적의 에이전트 구조를 도출하지 못한다. 또한, 무작위 재조합과 같은 간단한 모듈 수준 탐색 방법이 프롬프트 수준 탐색보다 훨씬 뛰어난 성능을 보여주며, 모듈 설계 공간에서의 탐색의 중요성을 시사한다.</p>
+</section>
+</section>
+<section id="agentsquare의-제거-연구" class="level1">
+<h1><span id="page-7-0"></span>4.3 AGENTSQUARE의 제거 연구</h1>
+<p>모듈 진화와 재조합의 효과성. AgentSquare의 검색 프레임워크에는 두 가지 핵심 작업이 있다: 모듈 진화(modul evolution)는 새로운 모듈을 생성하고, 모듈 재조합(modul recombination)은 기존 모듈을 조합하여 새로운 모듈을 만드는 것이다.</p>
+<table class="table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 10%">
+<col style="width: 11%">
+<col style="width: 11%">
+<col style="width: 9%">
+<col style="width: 17%">
+<col style="width: 8%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>방법</th>
+<th>웹숍</th>
+<th>ALF월드</th>
+<th>사이언스월드</th>
+<th>M3툴</th>
+<th>여행플래너</th>
+<th>PDDL</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>AgentSquare (전체)</td>
+<td>0.607</td>
+<td>0.695</td>
+<td>0.781</td>
+<td>0.524</td>
+<td>0.583</td>
+<td>0.669</td>
+</tr>
+<tr class="even">
+<td>모듈 진화 없음</td>
+<td>0.564</td>
+<td>0.649</td>
+<td>0.736</td>
+<td>0.502</td>
+<td>0.577</td>
+<td>0.614</td>
+</tr>
+<tr class="odd">
+<td>모듈 재조합 없음</td>
+<td>0.560</td>
+<td>0.616</td>
+<td>0.710</td>
+<td>0.481</td>
+<td>0.280</td>
+<td>0.669</td>
+</tr>
+</tbody>
+</table>
+<p>표 2: 다양한 도메인의 여섯 가지 작업에서 AgentSquare의 GPT-40에 대한 제거 연구</p>
+<p><img src="_page_8_Figure_3.jpeg" class="img-fluid"></p>
+<p>그림 5: 각 작업에서 성능 예측기의 유효성 검증(실제 성능과 예측 성능 간의 상관관계)</p>
+<p>조합을 전략적으로 재조합하는 방식입니다. 각 설계의 효과를 확인하기 위해 세 가지 변형을 테스트했습니다: 전체 모델, 모듈 진화가 없는 버전, 그리고 모듈 재조합이 없는 버전입니다. 결과는 각각 GPT-40과 GPT-3.5를 기반으로 Table 2와 Table A.5에 제시되어 있습니다. 각 설계를 제거하면 성능이 뚜렷하게 하락하는 것을 볼 수 있으며, 모듈 재조합이 더 큰 영향을 미칩니다. 모듈 재조합은 검색 공간을 크게 확장하여 국소 최적값에 빠질 위험을 줄입니다. 한편, 모듈 진화는 특정 작업에 맞춰 더 고급 모듈을 발견하는 데 도움을 줍니다. 이 두 작업은 잘 협력하여 AgentSquare의 검색 과정의 효과를 보장합니다.</p>
+<p><strong>성능 예측기의 효과성.</strong> 이 부분에서는 이 설계의 효과성을 경험적으로 검증한다. 그림 5는 GPT-3.5와 GPT-40을 모두 사용하여 모든 여섯 작업에서 주어진 에이전트의 예측 성능과 실제 테스트 성능을 보여준다. 테스트된 에이전트는 기존 모듈을 무작위로 조합하여 무작위 샘플링을 통해 생성되었다. 예측 성능이 실제 성능과 밀접하게 일치하는 것을 확인할 수 있으며, 이는 성능 예측기의 효과성을 입증한다. 예를 들어, 예측기의 평가 비용은 ALFWorld에서 GPT-40 기반의 전체 평가 비용의 약 0.025%에 불과하여 놀라운 비용 효율성을 보여준다. 동적으로 검색된 에이전트의 성능 예측에 대한 추가 실험 결과는 부록의 그림 A.15에서 제공된다.</p>
+<section id="agentsquare에서-발견된-최고의-에이전트" class="level4">
+<h4 class="anchored" data-anchor-id="agentsquare에서-발견된-최고의-에이전트">4.4 AGENTSQUARE에서 발견된 최고의 에이전트</h4>
+<p>이 섹션에서는 검색된 최고의 에이전트 예시를 제공하며, 특히 발견된 유망한 모듈들을 소개합니다. 표 A.4는 AgentSquare에서 검색한 최고의 에이전트와 모든 작업에서 최고의 수작업 에이전트를 요약합니다. AgentSquare가 주어진 작업에 맞춰 기존 모듈과 새로 프로그래밍된 모듈을 적응적으로 식별할 수 있음을 관찰할 수 있습니다. 예를 들어, ALFWorld의 발견된 최고 에이전트는 <em>Generative Agents</em>에서 기존에 잘 설계된 메모리 모듈과 새로 생성된 계획 모듈(<em>TD</em>라고 명명됨) 및 추론 모듈(<em>SF-ToT</em>라고 명명됨)을 결합합니다. 반면, 최고의 수작업 에이전트인 <em>Self-refine</em>은 추론 모듈 설계에만 집중하면서 다른 기능 모듈을 간과하여 최적의 성능을 달성하지 못합니다. 또한, Figure 6에서는 ALFWorld에서 발견된 두 가지 새로운 모듈과 인간이 이해할 수 있는 설계 통찰을 보여줍니다. 더 많은 예시는 Figure A.16부터 Figure A.21까지 나열되어 있습니다.</p>
+</section>
+</section>
+<section id="관련-연구" class="level1">
+<h1>5 관련 연구</h1>
+</section>
+<section id="llm-기반-자율-에이전트" class="level1">
+<h1>5.1 LLM 기반 자율 에이전트</h1>
+<p>LLM 기반 자율 에이전트는 핵심 LLM을 사용하여 외부 기능 모듈을 관리하고 세계와 상호작용하는 고급 AI 시스템이다(Ding 등, 2024b). 최근 연구에서는</p>
+<p>그림 6: ALFWorld에서 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+<p>LLM 에이전트는 계획(하오 등, 2023; 쩡 등, 2024; 샤오 등, 2025), 추론(웨이 등, 2022; 야오 등, 2024; 샹 등, 2024; 쉬 등, 2025), 도구 사용(신 등, 2024; 슈익 등, 2024), 그리고 메모리 모니터링(왕 등, 2024a; 파크 등, 2023)과 같은 여러 LLM 중심 기능 모듈을 포함하여, LLM 에이전트의 기능을 크게 향상시킨다. 단일 에이전트의 개선과 함께, 개별 에이전트를 전략적으로 구성하여 시뮬레이션(리 등, 2023; 첸 등, 2023) 및 목표 작업 해결(첸 등, 2024b; 리 등, 2024b)을 수행하기 위해 더 고급 다중 에이전트 시스템을 구축하려는 또 다른 연구 방향이 존재한다. 점점 더 정교해지는 에이전트의 출현은 놀라운 성능 향상을 가져오지만, 그들의 아키텍처와 코드베이스는 서로 크게 다르다. 개별 연구 간에 통일된 설계 공간과 일관된 용어가 부족하기 때문에, 다양한 에이전트를 비교하고, 그 진화 경로를 이해하며, 새로운 에이전트 설계 방향을 안내하기가 어렵다.</p>
+<section id="llm-기반-에이전트의-자동-설계" class="level4">
+<h4 class="anchored" data-anchor-id="llm-기반-에이전트의-자동-설계">5.2 LLM 기반 에이전트의 자동 설계</h4>
+<p>LLM 기반 에이전트 시스템은 가장 진보된 AI 시스템이지만, 아직 통합된 설계 공간과 자동 설계 방법을 형성하지 못하고 있다. LangChain*와 BabyAGI†과 같은 엔지니어링 중심의 오픈 소스 자원은 LLM 중심의 에이전트 시스템을 구축하는 데 편리한 방법을 제공하지만, 여전히 다양한 모듈을 구성하기 위해 인간의 참여가 필요하며 설계된 에이전트의 최적화를 지원하지 못한다. 또한, CoALA(Sumers 등, 2023)와 같은 개념적 프레임워크가 LLM 에이전트의 통합 설계 원칙을 제공하려는 시도를 하고 있다. 그러나 이는 미래에 LLM 에이전트가 어떻게 되어야 하는지에 대한 비전일 뿐, 실용적인 설계 프레임워크를 제공하지는 않는다. 더 중요한 것은, 다양한 검색 공간에서 정의된 LLM 에이전트 시스템의 설계를 자동화(적어도 일부)하는 문제를 탐구하는 최근 연구들이 있다는 점이다. OPRO(Yang 등, 2024)와 Promptbreeder(Fernando 등, 2024)는 프롬프트 공간에서 정의된 LLM 에이전트를 최적화하는 데 LLM을 사용하는 것으로 간주될 수 있다. 더 관련성이 높은 것은 ADAS(Hu 등, 2024)가 코드 공간에서 정의된 전체 에이전트 시스템을 탐색하려는 것을 제안하여, 더 유연한 프롬프트, 도구 사용, 제어 흐름 등을 갖는 LLM 에이전트를 탐색할 수 있게 한다.</p>
+</section>
+</section>
+<section id="결론" class="level1">
+<h1>6 결론</h1>
+<p>이 작업에서는 연구자들이 이전 성공적인 설계를 기반으로 구축하고 공동으로 새로운 통찰을 축적할 수 있는 새로운 모듈형 디자인 공간을 소개합니다. 이를 바탕으로, 이전에 출판되거나 평가된 모듈에서 얻은 지식을 활용하여 LLM 에이전트 설계를 자동으로 최적화하는 것을 목표로 하는 새로운 연구 문제인 모듈화된 LLM 에이전트 검색(Modularized LLM Agent Search, MoLAS)을 제안합니다. 방대한 검색 공간의 도전 과제를 해결하기 위해, 모듈 진화와 재조합을 통해 LLM 에이전트를 최적화하는 자동 검색 프레임워크인 AgentSquare를 제시합니다. 또한 새로운 LLM 에이전트를 평가하기 위한 맥락 내 대리 모델로 성능 예측기를 도입하여 검색 과정을 가속화합니다. 전반적으로, 본 연구는 개별 LLM 에이전트 설계를 연구하는 방식에서 모듈형 디자인 공간 내의 LLM 에이전트를 연구하는 방식으로의 전환을 제공하며, 연구 공동체의 집단적 노력을 더욱 강화합니다.</p>
+<p><span id="page-9-1"></span><sup>*</sup>https://github.com/langchain-ai/langchain <span id="page-9-2"></span><sup>†</sup>https://github.com/yoheinakajima/babyagi</p>
+</section>
+<section id="참고문헌" class="level1">
+<h1>참고문헌</h1>
+<p>Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, 등. Gpt-4 기술 보고서. <em>arXiv preprint arXiv:2303.08774</em>, 2023.</p>
+<p>엔젤리카 첸, 데이비드 도한, 데이비드 소. 에보프롬프팅: 코드 수준 신경망 아키텍처 검색을 위한 언어 모델. <em>신경정보처리시스템 학술대회 논문집</em>, 36, 2024a.</p>
+<p>린 첸, 펑리 쉬, 니안 리, 젠위 한, 맹 왕, 용 리, 팬 후이. 대규모 언어 모델 기반 이질 정보 네트워크 내 메타 구조 탐색. <em>제30회 ACM SIGKDD 지식 발견 및 데이터 마이닝 회의 논문집</em>, pp.&nbsp;307–318, 2024b.</p>
+<p>Weize Chen, Yusheng Su, Jingwei Zuo, Cheng Yang, Chenfei Yuan, Chi-Min Chan, Heyang Yu, Yaxi Lu, Yi-Hsin Hung, Chen Qian, 등. Agentverse: 다중 에이전트 협업을 촉진하고 잠재적 행동을 탐색하기 위한 연구. <em>제12회 국제 학습 표현 학회</em>, 2023.</p>
+<p>한 딩, 이 은형, 왕 준하오, 천 항. 대규모 언어 모델 에이전트를 활용한 금융 거래: 조사. <em>arXiv preprint arXiv:2408.06361</em>, 2024a.</p>
+<p>정타오 딩, 윤케 장, 유 상, 우형 장, 제팡 종, 제 펑, 원 원, 홍위안 수, 니안 리, 니컬러스 슈키엔닉, 등. 세계 모델을 이해하는 것 vs 미래를 예측하는 것? 세계 모델에 대한 포괄적인 조사. <em>arXiv preprint arXiv:2411.14499</em>, 2024b.</p>
+<p>크리산타 페르난도, 다이엘 선일 바나르세, 헨리크 미하엘레프스키, 사이먼 오신데로, 그리고 팀 록타셸. 프롬프트브리더: 프롬프트 진화를 통한 자기참조적 자기개선. <em>제41회 국제 기계학습 회의</em>, 2024.</p>
+<p>Yingqiang Ge, Wenyue Hua, Kai Mei, Juntao Tan, Shuyuan Xu, Zelong Li, Yongfeng Zhang, 등. Openagi: LLM이 도메인 전문가와 만날 때. <em>Neural Information Processing Systems의 발전</em>, 36, 2024.</p>
+<p>하오 시보, 구 이, 마 하오디, 홍 자쉬, 왕 젠, 왕 데이지, 후 지팅. 언어 모델을 통한 추론은 세계 모델을 통한 계획이다. <em>2023년 자연어 처리 실험적 방법 회의 논문집</em>, pp.&nbsp;8154–8173, 2023.</p>
+<p>후성란, 루총, 제프 클룬. 자율 에이전트 시스템의 자동 설계. <em>arXiv 전인증 논문 arXiv:2408.08435</em>, 2024.</p>
+<p>간esh 자와르, 무함마드 압둘마게드, 라크스 VS 라크슈마난, 그리고 두지안 딩. LLM 성능 예측기는 아키텍처 검색의 좋은 초기화자이다. <em>arXiv 전인쇄 arXiv:2310.16712</em>, 2023.</p>
+<p>조엘 레만, 조나단 고든, 쇼언 제인, 카말 난두스, 캐시 예, 케네스 오 스탠리. 대형 모델을 통한 진화. <em>진화적 기계 학습 핸드북</em>, pp.&nbsp;331–366. 스프링어, 2023.</p>
+<p>리준카이, 왕시위, 장멍, 리웨이타오, 라이윈후에, 강신휘, 마웨이즈, 류양. 에이전트 병원: 진화 가능한 의료 에이전트를 갖춘 병원의 시뮬라크룸. <em>arXiv 프리프린트 arXiv:2405.02957</em>, 2024a.</p>
+<p>송웨이 리, 제이 펑, 지웨이 치, 신위안 후, 샤오멍 자오, 펑리 쉬. Limp: 대규모 언어 모델 기반 의도 인식 이동 예측. <em>arXiv preprint arXiv:2408.12832</em>, 2024b.</p>
+<p>Yuan Li, Yixuan Zhang, 그리고 Lichao Sun. Metaagents: LLM 기반 작업 지향 조정을 위한 협업 생성 에이전트를 통한 인간 행동의 상호작용 시뮬레이션. <em>arXiv preprint arXiv:2310.06500</em>, 2023.</p>
+<p>창 마, 장 준레이, 주 지하오, 양 청, 양 유주, 진 야후이, 란 진중, 공 링펑, 허 준현. 에이전트보드: 다중 대화형 LLM 에이전트의 분석 평가 보드. <em>arXiv preprint arXiv:2401.13178</em>, 2024.</p>
+<p>아만 마다안, 니켓 탄던, 프라카르 구파타, 스키러 할리난, 루유 가오, 사라 위그레프, 유리 알론, 누하 디지리, 슈리마이 프라브무요예, 이미잉 양, 등. 셀프리파인: 셀프피드백을 이용한 반복적 개선. <em>네이처 인포메이션 프로세싱 시스템스 진보</em>, 36, 2024.</p>
+<p>내카노 레이이치로, 제이콥 힐튼, 쇼치르 발라지, 제프 우, 룽 오양, 크리스티나 김, 크리스토퍼 헤스, 샨타누 재인, 바이넷 코사라주, 윌리엄 사우더스, 등. 웹지프트: 인간 피드백을 활용한 브라우저 지원 질문 응답. <em>arXiv 전인쇄 arXiv:2112.09332</em>, 2021.</p>
+<p>무하마드 우마이르 나시르, 샘 얼, 줄리안 토겔리우스, 스티븐 제임스, 크리스토퍼 클레그혼. Llmatic: 대규모 언어 모델과 품질 다변이 최적화를 통한 신경망 구조 탐색. <em>유전적 및 진화적 계산 회의 논문집</em>, pp.&nbsp;1110–1118, 2024.</p>
+<p>조운성 박, 조셉 오브라이언, 캐리 준 채, 메르edith 링겔 모리스, 퍼시 리앙, 마이클 S 버나스타인. 생성형 에이전트: 인간 행동의 상호작용 시뮬라크라. <em>제36회 아크엠 유저 인터페이스 소프트웨어 및 기술 학술대회 논문집</em>, pp.&nbsp;1–22, 2023.</p>
+<p>천천, 위류, 홍장류, 노천, 위판당, 가호리, 청양, 위제천, 유승수, 신총, 등. Chatdev: 소프트웨어 개발을 위한 의사소통 에이전트. <em>제62회 연간 회의 논문집 (계산적 언어학 협회)</em> (제1권: 장편 논문), pp.&nbsp;15174–15186, 2024.</p>
+<p>Bernardino Romera-Paredes, Mohammadamin Barekatain, Alexander Novikov, Matej Balog, M Pawan Kumar, Emilien Dupont, Francisco JR Ruiz, Jordan S Ellenberg, Pengming Wang, Omar Fawzi, 등. 대규모 언어 모델을 이용한 프로그램 탐색에서의 수학적 발견. <em>Nature</em>, 625(7995):468–475, 2024.</p>
+<p>티모 슈릭, 제인 드위베디-유, 로베르토 데시, 로베르타 라일레아누, 마리아 로멜리, 에릭 함브로, 루크 제틀모이어, 니콜라 칸체다, 그리고 토마스 시알롬. 툴포머: 언어 모델은 도구 사용을 스스로 배울 수 있다. <em>신경정보처리시스템 학술대회 논문집</em>, 36, 2024.</p>
+<p>유 상, 유 리, 펑리 쉬, 왕 리. Defint: 하이브리드 대형 언어 모델을 활용한 효율적인 추론을 위한 기본 개입 기반 프레임워크. <em>arXiv preprint arXiv:2402.02563</em>, 2024.</p>
+<p>Chenyang Shao, Xinyuan Hu, Yutang Lin, 그리고 Fengli Xu. Division-of-thoughts: 효율적인 디바이스 내 에이전트를 위한 하이브리드 언어 모델 시너지 활용. <em>arXiv preprint arXiv:2502.04392</em>, 2025.</p>
+<p>Yongliang Shen, Kaitao Song, Xu Tan, Dongsheng Li, Weiming Lu, 그리고 Yueting Zhuang. Hugginggpt: Hugging Face에서 ChatGPT 및 친구들과 함께 AI 작업 해결. <em>Advances in Neural Information Processing Systems</em>, 36, 2024.</p>
+<p>노아 신, 페데리코 카사노, 애쉬윈 고핀aths, 카르티크 나라심한, 샤운유 야오. 리플렉션: 구두 강화 학습을 갖는 언어 에이전트. <em>신경정보처리시스템의 진전</em>, 36, 2024.</p>
+<p>모히트 쇼리다르, 싱디 위안, 마르크-알렉산드르 코트, 요나탄 비스크, 애덤 트리스클러, 매튜 하우스크네프. 알프월드: 텍스트와 몸에 입각한 환경을 통합한 상호작용 학습을 위한 접근. <em>국제학습대표성학회(International Conference on Learning Representations)</em>, 2021.</p>
+<p>데이비드 소, 콰크 레, 첸 리앙. 진화된 트랜스포머. <em>기계 학습 국제 회의</em>에서, pp.&nbsp;5877–5886. PMLR, 2019.</p>
+<p>테오도어 R 서머스, 샤운위 야오, 카르티크 나라심한, 토마스 L 그리피스. 언어 에이전트를 위한 인지 구조. <em>arXiv 전인쇄 arXiv:2309.02427</em>, 2023.</p>
+<p>휴고 투르본, 티보 테 라브릴, 고티에 이자카르, 샤를 마르티네, 마리앙느 라샤크스, 티모테 라크루아, 바티스트 로지에, 나만 골, 에릭 암브로, 파이살 아자르, 등. Llama: 오픈 및 <code>효율적인</code> 기초 언어 모델. <em>arXiv 전인쇄 arXiv:2302.13971</em>, 2023.</p>
+<p>왕관치, 샤오위치, 장운판, 아자이 만들라카르, 샤오차오웨이, 주위커, 팬린시, 안나마 안안두카르. 보이저: 대규모 언어 모델을 갖춘 개방형 신체적 에이전트. <em>머신러닝 연구 학술지</em>, 2024a. ISSN 2835-8856.</p>
+<p>루요아 왕, 피터 잔센, 마르크-알렉상드르 코트, 프리트비라주 암마나브롤루. Scienceworld: ‘당신의 에이전트는 5학년 학생보다 더 똑똑한가?’ <em>2022년 자연어 처리 실험적 방법 회의 논문집</em>, pp.&nbsp;11279–11298, 2022.</p>
+<p>왕싱야오, 천양이, 위판위안, 장이제, 리윈주, 펑하오, 지행. 실행 가능한 코드 작업은 더 나은 LLM 에이전트를 유도한다. <em>제41회 국제 기계 학습 회의</em>, 2024b.</p>
+<p>왕학지, 제이슨 웨이, 데일 슈어만스, 쿠옥 V. 레, 에드 H. 치, 샤란 나랑, 아칸크샤 초드허리, 그리고 덴니 주. 자기 일관성이 언어 모델에서 사고의 사슬 추론을 향상시킨다. <em>제11회 국제 학습 표현 학회</em>, 2023a.</p>
+<p>Zhenhailong 왕, 샤오광 마오, 웬산 우, 타오 게, 푸루 웨이, 그리고 헝 지. 대규모 언어 모델의 잠재적 인지적 시너지 해방: 다중 성격 자기 협업을 통한 작업 해결 에이전트. <em>arXiv preprint arXiv:2307.05300</em>, 2023b.</p>
+<p>지하오 왕, 샤오페이 채, 관저우 천, 안지 류, 샤오지안 셰언 마, 그리고 이타오 량. 설명, 설명, 계획 및 선택: 대화형 계획을 통한 LLMs는 오픈월드 다중 작업 에이전트를 가능하게 한다. <em>Neural Information Processing Systems의 발전</em>, 36, 2024c.</p>
+<p>제이슨 웨이, 쑤에즈 지 왕, 데일 슈어만스, 마르텐 보스마, 페이 샤, 에드 치, 쿠옥 V 레, 데니 주, 등. 체인 오브 써웃 프롬프팅은 대형 언어 모델에서 추론을 유도한다. <em>신경정보처리시스템의 진전</em>, 35:24824–24837, 2022.</p>
+<p>Licheng Wen, Daocheng Fu, Xin Li, Xinyu Cai, Tao MA, Pinlong Cai, Min Dou, Botian Shi, Liang He, 그리고 Yu Qiao. Dilu: 대규모 언어 모델을 활용한 지식 기반 자율 주행 접근법. <em>제12회 국제 학습 표현 학회</em>, 2024.</p>
+<p>Lilian Weng. Llm-powered autonomous agents. <em>lilianweng.github.io</em>, 2023년 6월. URL <a href="https://lilianweng.github.io/posts/2023-06-23-agent/">https://lilianweng.github.io/posts/2023-06-23-agent/</a></p>
+<p>콜린 화이트, 윌리 네이스완거, 야시 사바니. 바나나: 신경망 아키텍처를 위한 베이지안 최적화. <em>AAAI 인공지능 회의록</em>, 제35권, pp.&nbsp;10293–10301, 2021.</p>
+<p>지형시, 이원딩, 원샹천, 보양홍, 홍린궈, 준저왕, 딩원양, 천양료, 신궈, 위허 등. Agentgym: 다양한 환경에서 대규모 언어 모델 기반 에이전트의 진화. <em>arXiv preprint arXiv:2406.04151</em>, 2024.</p>
+<p>Jian Xie, Kai Zhang, Jiangjie Chen, Tinghui Zhu, Renze Lou, Yuandong Tian, Yanghua Xiao, 그리고 Yu Su. Travelplanner: 언어 에이전트를 활용한 실세계 계획을 위한 벤치마크. <em>제41회 국제 기계학습 회의</em>, 2024.</p>
+<p>펑리 쉬, 첸위에 하오, 제팡 종, 징웨이 왕, 윤케 장, 징이 왕, 샤오충 란, 지하이 공, 톈젠 오양, 팬진 멩, 등. 대규모 추론 모델을 향해: 대규모 언어 모델을 이용한 강화 추론에 대한 조사. <em>arXiv preprint arXiv:2501.09686</em>, 2025.</p>
+<p>양청룬, 왕학지, 루이펑, 류한샤오, 쿠옥 V 레, 저우덴니, 첸신윈. 대규모 언어 모델을 최적화기로 사용하는 것. <em>제12회 국제학습표현학회</em>, 2024.</p>
+<p>요순우, 호원천, 존 양, 카르티크 나라심한. Webshop: 지능형 언어 에이전트를 활용한 확장 가능한 실세계 웹 상호작용. <em>Neural Information Processing Systems의 발전</em>, 35:20744–20757, 2022.</p>
+<p>요선우, 유디안, 제프리 조, 이자크 샤프란, 톰 그리피스, 채원, 카르티크 나라심한. 나무의 사고: 대규모 언어 모델을 이용한 성찰적 문제 해결. <em>신경정보처리시스템 학술대회 논문집</em>, 36, 2024.</p>
+<p>유준치, 하란, 잉지타오. 사고 전파: 대규모 언어 모델을 이용한 복잡한 추론을 위한 유사성 접근법. <em>제12회 국제학습표현학회</em>, 2024.</p>
+<p>Siyu Yuan, Kaitao Song, Jiangjie Chen, Xu Tan, Dongsheng Li, and Deqing Yang. Evoagent: 자연스러운 다중 에이전트 생성을 위한 진화 알고리즘. <em>arXiv preprint arXiv:2406.14228</em>, 2024.</p>
+<p>정빈 증, 청룡 양, 순난 동, 헤밍 두, 량정, 펑리 쉬, 이용. 지시 없이 목표 지향적 도시 내비게이션을 위한 LLM 에이전트 설계: 인식, 반영, 계획. <em>arXiv preprint arXiv:2408.04168</em>, 2024.</p>
+<p>화이수이 스티븐 정, 스와루프 미슈라, 신윤 첸, 헝쯔 청, 에드 H. 치, 쿠옥 V. 레, 덴니 주. 한 걸음 물러서기: 대규모 언어 모델에서 추상화를 통한 추론 유도. <em>제12회 국제학습표현학회</em>, 2024.</p>
+<p>주홍펑, 양명호, 왕준, 판웨이. 베이즈나스: 신경망 구조 탐색을 위한 베이지안 접근법. <em>기계학습 국제학회</em>, pp.&nbsp;7603–7613, 2019.</p>
+<p>밍첸 주거, 원이 왕, 루이스 키르쉬, 프란체스코 파치오, 드미트리 키즈불린, 그리고 유르겐 슈미드부허. GPTSwarm: 최적화 가능한 그래프로서의 언어 에이전트. <em>제41회 국제 기계학습 회의</em>, 2024.</p>
+</section>
+<section id="부록-a" class="level1">
+<h1>부록 A</h1>
+</section>
+<section id="a.1-실험-설정" class="level1">
+<h1><span id="page-14-0"></span>A.1 실험 설정</h1>
+<p>작업 설정. 우리는 AgentSquare와 비교 대상 방법을 네 가지 주요 도메인을 포함하는 여섯 가지 대표적인 작업에서 평가한다. 이 작업들은 기존 LLM 에이전트 벤치마크에서 널리 채택되고 있다 <a href="#page-10-10">(Ma et al., 2024;</a> <a href="#page-12-6">Xi et al., 2024)</a>:</p>
+<p>embodiment: ALFWorld <a href="#page-11-12">(Shridhar 등, 2021)</a>는 텍스트 기반 가정 내 작업을 수행하는 에이전트가 텍스트 명령을 사용하여 객체를 탐색하고 상호작용하는 환경이며, ScienceWorld <a href="#page-12-8">(Wang 등, 2022)</a>은 에이전트가 방을 탐색하고 실험을 수행해야 하는 상호작용식 과학 작업을 제공하여 과학적 상식을 테스트합니다.</p>
+<p>게임: PDDL <a href="#page-10-10">(Ma et al., 2024)</a>는 에이전트가 PDDL 표현식을 사용하여 작업을 완료하는 다양한 전략적 게임을 포함한다.</p>
+<p>웹: 웹숍 <a href="#page-12-9">(Yao et al., 2022)</a>는 에이전트가 사용자 지시에 따라 제품을 탐색하고 구매하는 온라인 쇼핑 작업에 중점을 둔다.</p>
+<p>도구: TravelPlanner <a href="#page-12-10">(Xie et al., 2024)</a>은 에이전트가 도구와 데이터를 사용하여 상세한 계획을 수립하는 다양한 여행 계획 작업을 포함하며, (6)M3ToolEval <a href="#page-12-11">(Wang et al., 2024b)</a>은 여러 도구와의 다중 대화를 필요로 하는 복잡한 작업을 포함한다.</p>
+<p>성능 평가 지표는 각 작업에 따라 달라지며, 원본 연구의 평가 설정에 따라 결정됩니다. 구체적으로, ALFWorld와 M3ToolEval의 평가 지표는 “성공률(success rate)”이며, Webshop의 평가 지표는 “작업 점수(task score, 에피소드별 평균 보상으로 정의됨)”이며, SciWorld와 PDDL의 평가 지표는 “진행률(progress rate)”이며, TravelPlanner의 평가 지표는 “마이크로 통과율(micro pass rate)”입니다.</p>
+<p>베이스라인. 우리는 AgentSquare을 네 가지 유형의 베이스라인과 비교한다:</p>
+<p>hand-crafted 에이전트. 우리는 CoT <a href="#page-12-1">(Wei et al., 2022)</a>, CoT-SC <a href="#page-12-12">(Wang et al., 2023a)</a>, Self-refine <a href="#page-11-15">(Madaan et al., 2024)</a>, ToT <a href="#page-12-5">(Yao et al., 2024)</a>, Step back <a href="#page-13-3">(Zheng et al., 2024)</a>, Thought propagation <a href="#page-12-13">(Yu et al., 2024)</a>, HuggingGPT <a href="#page-11-1">(Shen et al., 2024)</a>, Voyager <a href="#page-11-7">(Wang et al., 2024a)</a>, Generative Agents <a href="#page-11-2">(Park et al., 2023)</a>, DEPS <a href="#page-12-4">(Wang et al., 2024c)</a>, OPENAGI <a href="#page-10-15">(Ge et al., 2024)</a> 및 Dilu <a href="#page-12-14">(Wen et al., 2024)</a>를 포함한 12개의 hand-crafted 에이전트와 비교한다.</p>
+<p>모듈 검색 방법. 우리는 기존 모듈의 무작위 조합과 베이지안 <a href="#page-13-4">(Zhou et al., 2019)</a> 모듈 조합 최적화를 포함한 두 가지 모듈 수준 에이전트 최적화 방법과 비교한다. 이는 NAS에서 베이지안 최적화에 영감을 받은 것이다 <a href="#page-12-15">(White et al., 2021)</a>.</p>
+<p>프롬프트 검색 방법. 우리는 OPRO <a href="#page-12-2">(Yang et al., 2024)</a>를 대표적인 프롬프트 수준 최적화 접근법으로 선택한다. 이 방법은 LLM을 최적화기로 활용하여 반복적인 프롬프트를 통해 지시를 생성하고 개선한다.</p>
+<p>에이전트 검색 방법. 우리는 전체 에이전트 시스템을 코드 공간에서 최적화하는 ADAS <a href="#page-10-4">(Hu et al., 2024)</a>를 에이전트 검색 기준으로 선택한다. 우리는 ADAS의 공식 코드를 사용하며, 이를 우리의 작업에 적응시키기 위해 약간의 수정을 가한다.</p>
+<p>AgentSquare 설정. AgentSquare를 구현하고 GPT-3.5 turbo-0125 및 GPT-4o <a href="#page-10-0">(Achiam et al., 2023)</a>를 사용하여 실험을 수행한다. 공정한 비교를 위해 모든 방법에서 동일한 수의 피셔트 예시를 사용한다. 초기 에이전트는 무작위 모듈 조합으로 설정되며, 성능 향상이 5회 연속으로 발생하지 않으면 검색 과정이 종료된다.</p>
+<section id="알고리즘-1-에이전트스퀘어-알고리즘" class="level4">
+<h4 class="anchored" data-anchor-id="알고리즘-1-에이전트스퀘어-알고리즘"><strong>알고리즘 1:</strong> 에이전트스퀘어 알고리즘</h4>
+<table class="table">
+<colgroup>
+<col style="width: 22%">
+<col style="width: 20%">
+<col style="width: 9%">
+<col style="width: 10%">
+<col style="width: 10%">
+<col style="width: 8%">
+<col style="width: 8%">
+<col style="width: 7%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th></th>
+<th>웹</th>
+<th>신체화된</th>
+<th></th>
+<th>너무</th>
+<th>올</th>
+<th>게임</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>메서드 유형</td>
+<td>메서드</td>
+<td>웹숍</td>
+<td>ALF월드</td>
+<td>Sci월드</td>
+<td>M3툴</td>
+<td>여행</td>
+<td>PDDL</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>CoT</td>
+<td>0.504</td>
+<td>0.369</td>
+<td>0.142</td>
+<td>0.172</td>
+<td>0.080</td>
+<td>0.151</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>CoT-SC</td>
+<td>0.527</td>
+<td>0.381</td>
+<td>0.105</td>
+<td>0.181</td>
+<td>0.167</td>
+<td>0.178</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>Self-refine</td>
+<td>0.439</td>
+<td>0.388</td>
+<td>0.222</td>
+<td>0.098</td>
+<td>0.000</td>
+<td>0.109</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>ToT</td>
+<td>0.510</td>
+<td>0.381</td>
+<td>0.143</td>
+<td>0.189</td>
+<td>0.163</td>
+<td>0.147</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>Step Back</td>
+<td>0.478</td>
+<td>0.375</td>
+<td>0.027</td>
+<td>0.128</td>
+<td>0.120</td>
+<td>0.137</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>TP</td>
+<td>0.429</td>
+<td>0.299</td>
+<td>0.168</td>
+<td>0.139</td>
+<td>0.063</td>
+<td>0.122</td>
+</tr>
+<tr class="even">
+<td>수동 작성 에이전트</td>
+<td>HuggingGPT</td>
+<td>0.518</td>
+<td>0.502</td>
+<td>0.270</td>
+<td>0.012</td>
+<td>0.470</td>
+<td>0.212</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>Voyager</td>
+<td>0.427</td>
+<td>0.369</td>
+<td>0.301</td>
+<td>0.008</td>
+<td>0.480</td>
+<td>0.149</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>생성형 에이전트</td>
+<td>0.539</td>
+<td>0.388</td>
+<td>0.153</td>
+<td>0.144</td>
+<td>0.060</td>
+<td>0.123</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>DEPS</td>
+<td>0.555</td>
+<td>0.474</td>
+<td>0.308</td>
+<td>0.017</td>
+<td>0.500</td>
+<td>0.186</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>OPENAGI</td>
+<td>0.507</td>
+<td>0.448</td>
+<td>0.257</td>
+<td>0.008</td>
+<td>0.430</td>
+<td>0.178</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>Dilu</td>
+<td>0.418</td>
+<td>0.291</td>
+<td>0.000</td>
+<td>0.131</td>
+<td>0.137</td>
+<td>0.054</td>
+</tr>
+<tr class="even">
+<td>모듈 검색</td>
+<td>무작위</td>
+<td>0.562</td>
+<td>0.569</td>
+<td>0.367</td>
+<td>0.235</td>
+<td>0.473</td>
+<td>0.216</td>
+</tr>
+<tr class="odd">
+<td>모듈 검색</td>
+<td>베이지안</td>
+<td>0.581</td>
+<td>0.611</td>
+<td>0.269</td>
+<td>0.217</td>
+<td>0.497</td>
+<td>0.210</td>
+</tr>
+<tr class="even">
+<td>프롬프트 검색</td>
+<td>OPRO</td>
+<td>0.507</td>
+<td>0.376</td>
+<td>0.032</td>
+<td>0.193</td>
+<td>0.513</td>
+<td>0.179</td>
+</tr>
+<tr class="odd">
+<td>에이전트 검색</td>
+<td>ADAS</td>
+<td>0.519</td>
+<td>0.274</td>
+<td>0.217</td>
+<td>0.193</td>
+<td>0.410</td>
+<td>0.186</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>AgentSquare</td>
+<td>0.617</td>
+<td>0.651</td>
+<td>0.432</td>
+<td>0.285</td>
+<td>0.520</td>
+<td>0.219</td>
+</tr>
+</tbody>
+</table>
+<p>표 A.3: AgentSquare에서 검색한 에이전트와 (1) 기존 인간 설계 에이전트, (2) 모듈 검색 기반 기준, (3) GPT-3.5 기반 프롬프트 검색 기준의 성능 비교(다양한 도메인의 여섯 가지 작업 기준)</p>
+<table class="table">
+<colgroup>
+<col style="width: 17%">
+<col style="width: 11%">
+<col style="width: 12%">
+<col style="width: 10%">
+<col style="width: 19%">
+<col style="width: 27%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>작업</th>
+<th>계획</th>
+<th>추론</th>
+<th>도구 사용</th>
+<th>기억</th>
+<th>최고의 수작업 에이전트</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>웹숍</td>
+<td>IO</td>
+<td>HTSS</td>
+<td>/</td>
+<td>Dilu</td>
+<td>HuggingGPT</td>
+</tr>
+<tr class="even">
+<td>ALFWorld</td>
+<td>TD</td>
+<td>SF-ToT</td>
+<td>/</td>
+<td>생성형 에이전트</td>
+<td>Self-refine</td>
+</tr>
+<tr class="odd">
+<td>SciWorld</td>
+<td>Voyager</td>
+<td>CoT</td>
+<td>/</td>
+<td>Hier</td>
+<td>Voyager</td>
+</tr>
+<tr class="even">
+<td>M3Tool</td>
+<td>/</td>
+<td>CoT-SC</td>
+<td>ToolBF</td>
+<td>/</td>
+<td>Toolbench</td>
+</tr>
+<tr class="odd">
+<td>여행 계획</td>
+<td>DEPS</td>
+<td>CoT</td>
+<td>TH</td>
+<td>/</td>
+<td>DEPS</td>
+</tr>
+<tr class="even">
+<td>PDDL</td>
+<td>IR</td>
+<td>CASRC</td>
+<td>/</td>
+<td>생성형 에이전트</td>
+<td>OPENAGI</td>
+</tr>
+</tbody>
+</table>
+<p>표 A.4: AgentSquare에서 검색한 최고의 에이전트와 모든 작업에서 최고의 인간 설계 에이전트 간의 비교</p>
+<table class="table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 10%">
+<col style="width: 11%">
+<col style="width: 11%">
+<col style="width: 9%">
+<col style="width: 17%">
+<col style="width: 8%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>방법</th>
+<th>웹숍</th>
+<th>ALF월드</th>
+<th>사이언스월드</th>
+<th>M3툴</th>
+<th>여행플래너</th>
+<th>PDDL</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>AgentSquare(전체)</td>
+<td>0.617</td>
+<td>0.651</td>
+<td>0.432</td>
+<td>0.285</td>
+<td>0.520</td>
+<td>0.219</td>
+</tr>
+<tr class="even">
+<td>모듈 진화 없음</td>
+<td>0.595</td>
+<td>0.623</td>
+<td>0.288</td>
+<td>0.236</td>
+<td>0.483</td>
+<td>0.202</td>
+</tr>
+<tr class="odd">
+<td>모듈 재조합 없음</td>
+<td>0.578</td>
+<td>0.546</td>
+<td>0.310</td>
+<td>0.258</td>
+<td>0.267</td>
+<td>0.173</td>
+</tr>
+</tbody>
+</table>
+<p>표 A.5: 다양한 도메인의 여섯 가지 작업에서 AgentSquare의 GPT-3.5에 대한 제거 실험 결과</p>
+<table class="table">
+<colgroup>
+<col style="width: 26%">
+<col style="width: 8%">
+<col style="width: 12%">
+<col style="width: 14%">
+<col style="width: 8%">
+<col style="width: 18%">
+<col style="width: 10%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>웹숍</th>
+<th>ALF월드</th>
+<th>사이언스월드</th>
+<th>M3툴</th>
+<th>트래블플래너</th>
+<th>PDDL</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>평균 비용 (GPT-3.5)</td>
+<td>$3.16</td>
+<td>$4.25</td>
+<td>$1.92</td>
+<td>$2.43</td>
+<td>$1.84</td>
+<td>$2.70</td>
+</tr>
+<tr class="even">
+<td>반복 횟수 (GPT-3.5)</td>
+<td>23</td>
+<td>21</td>
+<td>8</td>
+<td>14</td>
+<td>9</td>
+<td>17</td>
+</tr>
+<tr class="odd">
+<td>평균 비용 (GPT-4o)</td>
+<td>$10.51</td>
+<td>$13.96</td>
+<td>$42.14</td>
+<td>$26.03</td>
+<td>$29.75</td>
+<td>$26.94</td>
+</tr>
+<tr class="even">
+<td>반복 횟수 (GPT-4o)</td>
+<td>18</td>
+<td>15</td>
+<td>9</td>
+<td>18</td>
+<td>8</td>
+<td>12</td>
+</tr>
+</tbody>
+</table>
+<p>표 A.6: AgentSquare가 GPT-3.5와 GPT-40을 사용하여 여섯 가지 작업에서 종료될 때까지 평균 API 비용 및 검색 반복 횟수</p>
+<p><img src="_page_16_Figure_5.jpeg" class="img-fluid"></p>
+<p>그림 A.7: ALFWorld 작업에서 성능과 API 비용 시각화</p>
+<p><img src="_page_16_Figure_7.jpeg" class="img-fluid"></p>
+<p>그림 A.8: 웹숍에서의 성능 대 API 비용 시각화</p>
+<p><img src="_page_16_Figure_9.jpeg" class="img-fluid"></p>
+<p>그림 A.9: Sciworld에서의 성능 대 API 비용 시각화</p>
+<p><img src="_page_17_Figure_1.jpeg" class="img-fluid"></p>
+<p>그림 A.10: M3tool에서의 성능 대 API 비용 시각화</p>
+<p><img src="_page_17_Figure_3.jpeg" class="img-fluid"></p>
+<p>그림 A.11: Travelplanner에서 성능과 API 비용 시각화</p>
+<p><img src="_page_17_Figure_5.jpeg" class="img-fluid"></p>
+<p>그림 A.12: PDDL에서 성능 대 API 비용 시각화</p>
+<p><img src="_page_18_Figure_1.jpeg" class="img-fluid"></p>
+<p>그림 A.13: M3tool 및 PDDL에서 AgentSquare 탐색 경로(최고 수작업 에이전트를 초과할 때 더 많은 수작업 에이전트와 특정 모듈 조합, 최종 진화된 에이전트, 기타 탐색 기준).</p>
+<p><img src="_page_18_Figure_3.jpeg" class="img-fluid"></p>
+<p>그림 A.14: Sciworld 및 Travelplanner에서 AgentSquare의 탐색 경로(최고의 수작업 에이전트를 초과할 때 더 많은 수작업 에이전트와 특정 모듈 조합, 최종 진화된 에이전트, 기타 탐색 기준 모델)</p>
+<p><img src="_page_18_Figure_5.jpeg" class="img-fluid"></p>
+<p>그림 A.15: 각 작업에 대해 동적으로 검색된 에이전트에 대한 성능 예측기의 유효성 검증</p>
+</section>
+<section id="htss" class="level2">
+<h2 class="anchored" data-anchor-id="htss">HTSS</h2>
+<p>설 insights: 현재 추론 모듈의 성능을 살펴보면, 체인 오브 씨트(Chain-of-Thought, CoT)와 트리 오브 씨트(Tree-of-Thoughts, ToT)와 같은 기술이 작업을 작은 단계로 나누고 여러 추론 경로를 평가함으로써 개선을 가져왔습니다. 또한 셀프 콘시스텐시(Self-Consistency, SC) 접근법은 여러 답변을 생성하고 그 중에서 투표를 통해 선택하는 방식으로 유망성을 보이고 있으며, 셀프 라이프(Self-Refine) 모듈은 피드백을 기반으로 반복적으로 개선하는 방식을 사용합니다. 전반적인 아이디어: 성능을 더욱 향상시키기 위해 이러한 기술들을 하나의 모듈에 통합할 수 있습니다. 구체적으로 트리 오브 씨트(ToT) 접근법을 셀프 콘시스텐시(SC)와 셀프 라이프(Self-Refine)와 결합할 수 있습니다. 이 통합 접근법은 여러 추론 경로를 생성하고, 그 중에서 최선의 경로를 선택하기 위해 평가한 후, 선택된 경로를 피드백을 기반으로 반복적으로 개선하는 방식을 포함합니다.</p>
+<p>구현: 1. 다중 추론 경로 생성: 트리 오브 써츠(Tree-of-Thoughts, ToT) 접근법을 사용하여 여러 추론 경로를 생성합니다.<br>
+2. 최적 경로 평가 및 선택: 자기 일관성(Self-Consistency, SC)을 사용하여 이 경로들을 평가하고, 가장 흔하거나 정확한 경로를 선택합니다.<br>
+3. 선택된 경로 개선: 자기 개선(Self-Refine)을 사용하여 피드백을 기반으로 선택된 경로를 반복적으로 개선합니다.<br>
+4. 프롬프트 구조: 단계별 문제 해결을 유도하고, 유사한 해결된 예제를 참조하며, 피드백을 기반으로 출력을 개선하도록 설계된 프롬프트를 작성합니다.</p>
+<p>그림 A.16: Webshop에서 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+<section id="계층" class="level4">
+<h4 class="anchored" data-anchor-id="계층">계층</h4>
+<p>검토 중인 컨퍼런스 논문, ICLR 2025</p>
+<p>설 insights: 제안된 메모리 모듈의 계층 구조는 지능형 에이전트의 작업 관리에 큰 이점을 제공한다. 각 작업을 별도로 저장된 더 작은 하위 작업으로 분할함으로써, 시스템은 집중적인 정보 검색을 가능하게 하여 에이전트가 전체 작업 트래잭션을 뒤져야 하는 대신 관련 데이터만 접근할 수 있게 한다.</p>
+<p>전체적인 아이디어: 제안하는 메모리 모듈은 계층적인 메모리 구조를 만들고, 각 작업을 더 작은 하위 작업으로 나누어 각 하위 작업을 별도로 저장하는 데 중점을 둘 것입니다. 이러한 접근 방식은 에이전트가 전체 작업 트레이잭션보다는 특정 하위 작업에 대한 집중된 정보를 검색할 수 있게 해줍니다. 또한 이 메모리 모듈은 시간이 지남에 따라 메모리의 관련성과 정확성을 향상시키기 위한 피드백 메커니즘을 포함할 것입니다.</p>
+<p>구현: 구현은 메모리 모듈을 수정하여 하위 작업 트랙터리를 저장하고 검색할 수 있도록 하며, 지속적인 개선을 위한 피드백 루프를 도입하는 것을 포함합니다.</p>
+<p>그림 A.17: Sciworld에서 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+</section>
+<section id="toolbf" class="level4">
+<h4 class="anchored" data-anchor-id="toolbf">ToolBF</h4>
+<p>통찰: 이전에 발견된 아키텍처들은 여러 번의 상호작용이나 가장 적합한 도구를 식별하기 위한 여러 시도를 활용함으로써 성능을 향상시킬 수 있음을 보여준다(예: Toolformer). 또한, 벡터 유사도 기반 접근법을 사용하여 가장 관련성이 높은 도구를 검색하는 방식(예: Toolbench)은 유망해 보인다.</p>
+<p>전체적인 아이디어: 벡터 유사도 접근 방식과 다중 시도를 결합하여 최적의 도구를 선택할 확률을 극대화하는 것을 제안합니다. 구체적으로, Toolbench 접근 방식을 보완하여 LLM에 여러 번 호출하여 여러 가지 가능한 해결책을 생성한 후, 투표 메커니즘을 통해 최선의 것을 선택합니다.</p>
+<p>구현: 구현은 지시사항과 API 문서를 벡터 표현으로 변환하고, 가장 관련성이 높은 API를 검색한 후, LLM을 사용하여 여러 응답을 생성한 다음, 투표 메커니즘을 통해 최상의 응답을 선택하는 과정을 포함합니다.</p>
+<p>그림 A.18: M3tool에서 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+</section>
+</section>
+<section id="th" class="level2">
+<h2 class="anchored" data-anchor-id="th">TH</h2>
+<p>인사이트: 현재 탐색된 아키텍처 중에서 ‘Toolformer’ 접근 방식이 0.56의 가장 높은 성능을 보였으며, 이는 여러 후보 응답을 생성한 후 가장 좋은 것을 투표로 선택하는 것이 효과적임을 시사한다. 또 다른 관찰은 ’Anytool’에서처럼 계층적 검색 접근 방식이 작업에 따라 도구를 더 잘 분류하고 선택하는 데 도움이 될 수 있다는 점이다.</p>
+<p>전체적인 아이디어: 계층적 검색 전략을 후보 응답 생성 및 투표 방법과 결합하겠습니다. 이는 먼저 작업 설명에 따라 도구를 분류한 후 여러 후보 응답을 생성하여 최적의 것을 선택하는 방식을 포함합니다. 이는 두 방법의 강점을 활용할 것입니다.</p>
+<p>구현: 도구는 계층적 검색 전략을 사용하여 먼저 선택된 후, 선택된 도구에 대해 여러 응답이 생성되며, 이후 투표 메커니즘을 통해 최적의 응답을 식별합니다.</p>
+<p>그림 A.19: Travelplanner에서 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+</section>
+</section>
+<section id="casrc" class="level1">
+<h1>CASRC</h1>
+<p>통찰: 현재의 접근 방식은 직접적 추론, 단계별 추론(체인 오브 씨트), 그리고 자기 개선 기술을 탐색해 왔다. 특히 ‘체인 오브 씨트’와 ’셀프 라인드’ 방법은 작업을 분해하고 반복적으로 해결책을 개선함으로써 잠재력을 보여주었다. 그러나 이러한 노력에도 불구하고 성능은 여전히 50~55% 수준에 머물러 있어 개선 여지가 있음을 시사한다.</p>
+<p>전체적인 아이디어: 성능을 더욱 향상시키기 위해, 고성능 방법들(체인 오브 씨트와 셀프리파인)의 요소들을 결합하고 새로운 초점(예: <strong>모델의 반복적 검토</strong> 또는 <strong>지식 기반 피드백</strong>)을 추가하는 것을 제안합니다.</p>
+<p>22 그림 A.20: Pddl에 대한 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+<section id="ir-작업" class="level2">
+<h2 class="anchored" data-anchor-id="ir-작업">IR 작업</h2>
+<p>검토 중인 컨퍼런스 논문, ICLR 2025</p>
+<p>아이디어: 에이전트의 ALFworld 작업에서 성능을 극대화하기 위해, 계획 과정에 피드백 루프와 반복적 개선을 통합해야 한다. 발견된 아키텍처를 통해, 가장 효과적인 모듈(DEPS 및 openagi)은 상세한 하위 목표를 제공하고 피드백 기반의 반복적 개선을 활용하는 것으로 보인다. 전반적인 아이디어: 다음 계획 모듈은 피드백을 포함한 반복적 계획에 초점을 맞출 것이다. 초기 하위 작업 세트를 생성한 후, 모듈은 LLM에 하위 작업의 의존성과 완전성을 명시적으로 점검하여 계획을 개선하도록 요청할 것이다. 구현: 초기 하위 작업 세트를 생성한 후 피드백을 기반으로 개선하는 계획 모듈을 구현할 것이다. 이 개선 과정을 통해 하위 작업이 일관성 있고, 최소화되며, 완전해지도록 하여 순차적 의사결정에서 더 나은 성능을 보장할 것이다.</p>
+<p>그림 A.21: Pddl에서 AgentSquare 검색을 통해 발견된 새로운 모듈</p>
+<!-- -->
+
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "복사완료!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "복사완료!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  const viewSource = window.document.getElementById('quarto-view-source') ||
+                     window.document.getElementById('quarto-code-tools-source');
+  if (viewSource) {
+    const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+    viewSource.addEventListener("click", function(e) {
+      if (sourceUrl) {
+        // rstudio viewer pane
+        if (/\bcapabilities=\b/.test(window.location)) {
+          window.open(sourceUrl);
+        } else {
+          window.location.href = sourceUrl;
+        }
+      } else {
+        const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+        modal.show();
+      }
+      return false;
+    });
+  }
+  function toggleCodeHandler(show) {
+    return function(e) {
+      const detailsSrc = window.document.querySelectorAll(".cell > details > .sourceCode");
+      for (let i=0; i<detailsSrc.length; i++) {
+        const details = detailsSrc[i].parentElement;
+        if (show) {
+          details.open = true;
+        } else {
+          details.removeAttribute("open");
+        }
+      }
+      const cellCodeDivs = window.document.querySelectorAll(".cell > .sourceCode");
+      const fromCls = show ? "hidden" : "unhidden";
+      const toCls = show ? "unhidden" : "hidden";
+      for (let i=0; i<cellCodeDivs.length; i++) {
+        const codeDiv = cellCodeDivs[i];
+        if (codeDiv.classList.contains(fromCls)) {
+          codeDiv.classList.remove(fromCls);
+          codeDiv.classList.add(toCls);
+        } 
+      }
+      return false;
+    }
+  }
+  const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+  if (hideAllCode) {
+    hideAllCode.addEventListener("click", toggleCodeHandler(false));
+  }
+  const showAllCode = window.document.getElementById("quarto-show-all-code");
+  if (showAllCode) {
+    showAllCode.addEventListener("click", toggleCodeHandler(true));
+  }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">소스 코드</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="sourceCode" id="cb1" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="an">lang:</span><span class="co"> ko</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="an">format:</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">  html:</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">    toc: true</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">    toc-depth: 3</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">    theme: cosmo</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">    embed-resources: true</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">    code-fold: true</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">    code-tools: true</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">    smooth-scroll: true</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu"># AGENTSQUARE: 모듈러 설계 공간에서의 자동 LLM 에이전트 검색</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>Shang Yu1&lt;sup&gt;∗&lt;/sup&gt; Li Yu2&lt;sup&gt;∗&lt;/sup&gt; Zhao Keyu&lt;sup&gt;1&lt;/sup&gt; Ma Likai&lt;sup&gt;1&lt;/sup&gt; Liu Jiahe&lt;sup&gt;1&lt;/sup&gt; Xu Fengli1† Li Yong1†</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>&lt;sup&gt;1&lt;/sup&gt;전자공학과, 칭화대학</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu"># 요약</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>최근 대형 언어 모델(Large Language Models, LLMs)의 발전으로 다양한 복잡한 작업을 처리할 수 있는 에이전트 시스템의 급속한 성장이 이루어졌다. 그러나 현재의 연구는 주로 수동적이고 작업별로 설계된 방식에 의존하여 새로운 작업에 대한 적응성을 제한하고 있다. 이 논문에서는 새로운 연구 문제인 모듈화된 LLM 에이전트 검색(Modularized LLM Agent Search, MoLAS)을 제안한다. 우리는 기존의 LLM 에이전트 설계를 네 가지 기본 모듈로 추상화하는 모듈화 설계 공간을 제안한다. 이 모듈들은 통일된 입출력 인터페이스를 가지며, *계획(Planning)*, *추론(Reasoning)*, *도구 사용(Tool Use)*, *메모리(Memory)*로 구성된다. 이 설계 공간을 기반으로, 우리는 두 가지 핵심 메커니즘, 즉 *모듈 진화(module evolution)* 및 *재조합(recombination)* 을 도입한 새로운 LLM 에이전트 검색 프레임워크인 AgentSquare를 제시한다. 이를 통해 효율적으로 최적화된 LLM 에이전트를 탐색할 수 있다. 또한, 성능 예측기(performance predictor)를 설계하여, 맥락 내 대체 모델을 사용하여 성과가 낮을 것으로 예상되는 에이전트 설계를 건너뛰는 방식으로 프로세스를 더욱 가속화한다. 웹, 신체적(embodied), 도구 사용 및 게임 응용 분야를 포함하는 여섯 가지 벤치마크에서 실시된 광범위한 실험 결과, AgentSquare는 수작업으로 설계된 에이전트보다 상당히 우수한 성능을 보였으며, 최고 수준의 인간 설계 대비 평균 17.2%의 성능 향상을 달성하였다. 또한, AgentSquare는 해석 가능한 설계 통찰을 생성하여 에이전트 아키텍처와 작업 성능에 미치는 영향에 대한 깊은 이해를 가능하게 한다. 우리는 모듈화 설계 공간과 AgentSquare 검색 프레임워크가 이전에 성공한 설계의 잠재력을 완전히 활용하고 연구 공동체의 집단적 노력을 통합할 수 있는 플랫폼을 제공할 수 있다고 믿는다. 코드 리포지토리는 https://github.com/tsinghua-fib-lab/AgentSquare에서 확인할 수 있다.</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="fu"># 1 도입</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>지난 몇 년간 대형 언어 모델(Large Language Models, LLMs)의 개발에서 놀라운 진전이 이루어졌으며 <span class="co">[</span><span class="ot">\(Achiam et al., 2023;</span><span class="co">](#page-10-0)</span> <span class="co">[</span><span class="ot">Touvron et al., 2023\)</span><span class="co">](#page-11-0)</span>, 이로 인해 다양한 에이전트 시스템이 급속히 확산되고 있다 <span class="co">[</span><span class="ot">\(Weng, 2023;</span><span class="co">](#page-12-0)</span> <span class="co">[</span><span class="ot">Shen et al., 2024\)</span><span class="co">](#page-11-1)</span>. 예를 들어, "사고의 사슬(chain-of-thought)" 프롬프팅은 LLM의 일반적인 추론 능력을 개방했으며 <span class="co">[</span><span class="ot">\(Wei et al., 2022\)</span><span class="co">](#page-12-1)</span>, 메모리 메커니즘은 인간의 행동을 시뮬레이션하는 데 효과적임이 입증되었다 <span class="co">[</span><span class="ot">\(Park et al., 2023\)</span><span class="co">](#page-11-2)</span>. 이러한 새로운 LLM 에이전트는 수학 문제 해결 <span class="co">[</span><span class="ot">\(Romera-Paredes et al., 2024\)</span><span class="co">](#page-11-3)</span>, 웹 탐색 <span class="co">[</span><span class="ot">\(Nakano</span><span class="co">](#page-11-4)</span> <span class="co">[</span><span class="ot">et al., 2021\)</span><span class="co">](#page-11-4)</span>, 금융 조언 제공 <span class="co">[</span><span class="ot">\(Ding et al., 2024a\)</span><span class="co">](#page-10-1)</span>, 의료 결정 지원 <span class="co">[</span><span class="ot">\(Li</span><span class="co">](#page-10-2)</span> <span class="co">[</span><span class="ot">et al., 2024a\)</span><span class="co">](#page-10-2)</span>에 이르기까지 다양한 작업을 변환하는 놀라운 능력을 보여주었다. 따라서 에이전트 시스템의 설계는 다양한 후속 응용을 위해 LLM의 힘을 활용하는 데 중요한 역할을 한다.</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>그러나 현재의 연구는 주로 특정 작업에 맞춰 수동으로 설계된 에이전트 시스템에 의존하고 있으며, 이는 종종 전문가의 통찰력과 집중적인 인간 노동에 크게 의존한다. 또한 이러한 작업별 에이전트 설계는 새로운 작업에 적응하는 데 자주 어려움을 겪는다. 최근 몇몇 연구에서는 LLM을 사용하여 기존 에이전트의 프롬프트를 재작성하고 최적화하는 방식을 탐구하고 있다 <span class="co">[</span><span class="ot">\(Fernando et al.,</span><span class="co">](#page-10-3)</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>&lt;sup&gt;2&lt;/sup&gt;칭화대학 국제대학원, 선전캠퍼스</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>&lt;sup&gt;<span class="sc">\*</span>&lt;/sup&gt;동등한 기여</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>&lt;sup&gt;†&lt;/sup&gt;상응 저자, 연락처: fenglixu@tsinghua.edu.cn, liyong07@tsinghua.edu.cn</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_1_Figure_1.jpeg)</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>그림 1: AgentSquare는 LLM 에이전트를 설계하고 최적화하기 위한 모듈식 프레임워크입니다.</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">2024;</span><span class="co">](#page-10-3)</span> <span class="co">[</span><span class="ot">양 등, 2024</span><span class="co">](#page-12-2)</span>. 최근 연구에서는 LLM을 활용하여 코드 공간에서 정의된 전체 에이전트 시스템을 탐색하는 아이디어를 도입하였다 <span class="co">[</span><span class="ot">후 등, 2024</span><span class="co">](#page-10-4)</span>, 이로써 더 유연한 프롬프트, 제어 흐름 등을 갖는 에이전트를 발견할 수 있게 되었다. 그러나 이전의 접근법들은 서로 다른 연구에서 발견된 에이전트 모듈의 강점을 명시적으로 재조합하고, 별도의 코드베이스에 위치한 모듈들을 통합하는 능력이 제한적이다. 또 다른 연구 방향은 다중 에이전트 시스템의 구성 설정을 최적화하는 데 초점을 맞추고 있다 <span class="co">[</span><span class="ot">천 등, 2023;</span><span class="co">](#page-10-5)</span> <span class="co">[</span><span class="ot">원 등, 2024;</span><span class="co">](#page-13-0)</span> <span class="co">[</span><span class="ot">리 등, 2023;</span><span class="co">](#page-10-6)</span> <span class="co">[</span><span class="ot">주거 등, 2024;</span><span class="co">](#page-13-1)</span> <span class="co">[</span><span class="ot">왕 등, 2023b</span><span class="co">](#page-12-3)</span>. 이러한 노력들은 에이전트 모듈의 설계보다는 다수의 에이전트 간의 역할 수행과 상호작용 패턴에 초점을 두기 때문에, 단일 에이전트 시스템의 최적화와는 정사각형이다.</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>이 논문은 새로운 연구 문제인 모듈화된 LLM 에이전트 탐색(MoLAS)을 다룬다. 목표는 출판되거나 평가된 모듈들의 경험을 활용하여 LLM 에이전트 설계를 자동으로 최적화하는 것이다. 따라서 본 연구의 핵심은 4개의 모듈 카테고리로 구성된 LLM 에이전트의 모듈화 설계 공간이다: *계획*, *추론*, *도구 사용*, *메모리*. 이 설계 공간은 기존 에이전트 시스템에 대한 철저한 문헌 검토에서 추출된 것이다(자세한 내용은 Section 2 참조). 중요한 점은, 우리의 목적이 가장 포괄적이고 일률적인 LLM 에이전트 설계 공간을 제안하는 것이 아니라, 모듈화 설계 공간이 연구자와 지능형 탐색 알고리즘들이 이전 성공적인 설계의 잠재력을 완전히 활용할 수 있도록 하는 것을 보여주는 데 있다는 점이다. MoLAS는 ADAS <span class="co">[</span><span class="ot">\(Hu et al., 2024\)</span><span class="co">](#page-10-4)</span>에서 제안한 전체 코드 탐색의 하위 집합인 모듈화 설계 공간 내에서 유도되고 제약된 탐색 문제이다. 그러나 MoLAS는 에이전트 모듈에 대한 표준화된 IO 인터페이스를 제공하는 특징을 가지고 있어, 다양한 에이전트 시스템의 모듈을 쉽게 재조합할 수 있고, 따라서 새로운 에이전트를 효율적으로 탐색할 수 있다. 또한, 본 설계 공간은 매우 확장 가능하여 새로운 에이전트 시스템을 플러그인 모듈로 통합할 수 있다. 따라서 이는 LLM 에이전트 분야의 연구 공동체의 집단적 노력을 통합할 수 있는 플랫폼을 제공한다. 본 연구의 개요는 그림 <span class="co">[</span><span class="ot">1.</span><span class="co">](#page-1-0)</span>에 설명되어 있다.</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>이 모듈러 설계 공간을 기반으로, 우리는 AgentSquare라는 새로운 LLM 에이전트 검색 프레임워크를 제안한다. 특히, AgentSquare는 *모듈 진화*와 *재조합* 메커니즘을 통해 LLM 에이전트를 최적화한다. *모듈 진화* 메커니즘은 진화적 메타프롬프트를 활용하여 프롬프트 수준 최적화를 통해 새로운 모듈을 탐색하며, 이는 작업 설명, 기존 모듈, 그리고 평가된 모듈의 성능을 함께 모델링한다. 또한, *모듈 재조합* 메커니즘은 LLM의 추론 능력을 활용하여 유망한 모듈 조합을 전략적으로 탐색함으로써 모듈 수준 최적화를 수행한다. LLM 에이전트의 비용이 많이 드는 평가 비용을 줄이기 위해, 우리는 성능 예측기를 도입하여 새로 제안된 LLM 에이전트에 대한 인컨텍스트 대체 모델을 구현함으로써, 성과가 낮은 후보를 건너뛰고 검색 과정을 크게 가속화할 수 있도록 한다.</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>우리는 웹, embodiment, 도구 사용 및 게임 시나리오에 걸쳐 다양한 사용 사례를 포함하는 여섯 가지 널리 채택된 벤치마크에서 포괄적인 평가를 수행합니다. 우리의 실험 결과에 따르면, AgentSqaure는 모든 여섯 가지 벤치마크에서 수작업으로 설계된 에이전트를 능가하는 새로운 LLM 에이전트를 발견할 수 있으며, 최고의 인간 설계 대비 평균 성능 향상률이 17.2%에 달합니다. 또한, AgentSqaure는 더 가파른 최적화 경로를 가지는 점에서 다른 탐색 알고리즘보다도 우수합니다. 더욱 중요한 것은, 사례 연구를 통해 AgentSquare가 새로 발견된 성능이 우수한 에이전트에 대해 인간이 이해할 수 있는 설계 통찰을 제공할 수 있다는 점입니다.</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>이 작업의 주요 기여점은 다음과 같습니다:</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_2_Figure_1.jpeg)</span></span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>그림 2: 모듈형 에이전트 설계 공간과 에이전트 워크플로우(왼쪽) 및 네 가지 유형의 모듈의 표준화된 IO 인터페이스(오른쪽)의 도식도</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>우리는 LLM 에이전트를 위한 새로운 모듈형 설계 공간을 제안하며, 이는 연구자들이 이전의 성공적인 설계를 기반으로 쉽게 개발하고 공동체 차원에서 새로운 발견을 축적할 수 있도록 한다.</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>우리는 모듈 진화, 모듈 재조합, 성능 예측기라는 새로운 메커니즘을 통해 새로운 그리고 우수한 성능을 보이는 LLM 에이전트를 효율적으로 탐색하는 AgentSquare 프레임워크를 설계합니다.</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>여섯 가지 다양한 작업에서의 실험 결과, 우리의 방법은 기존 인간 설계보다 우수한 새로운 LLM 에이전트를 발견함을 보여준다. 또한, AgentSqaure는 이러한 새로운 에이전트에 대한 인간이 이해할 수 있는 설계 통찰을 생성할 수 있다.</span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="fu"># 2 모듈러 설계 공간: LLM 에이전트</span></span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a><span class="fu"># 2.1 배경</span></span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a>LLM을 사용한 자동 최적화는 코드 생성 <span class="co">[</span><span class="ot">\(Lehman et al., 2023;</span><span class="co">](#page-10-7)</span> <span class="co">[</span><span class="ot">Romera-Paredes et al., 2024\)</span><span class="co">](#page-11-3)</span> 및 신경망 아키텍처 검색 <span class="co">[</span><span class="ot">\(Nasir et al., 2024;</span><span class="co">](#page-11-5)</span> <span class="co">[</span><span class="ot">Chen et al., 2024a\)</span><span class="co">](#page-10-8)</span>와 같은 분야에서 널리 연구된 주제이다. 최근 몇몇 연구에서는 LLM에 프롬프트를 제공하여 LLM 에이전트 시스템을 설계하는 문제를 탐구하고 있다. OPRO <span class="co">[</span><span class="ot">\(Yang et al., 2024\)</span><span class="co">](#page-12-2)</span>과 Promptbreeder <span class="co">[</span><span class="ot">\(Fernando et al., 2024\)</span><span class="co">](#page-10-3)</span>은 LLM의 추론 능력을 활용하여 LLM 에이전트의 프롬프트를 개선하는 방식으로 볼 수 있다. 더욱 중요한 것은, ADAS가 코드 공간에서 정의된 전체 에이전트 시스템을 탐색하는 아이디어를 도입하고, 최신 인간 설계를 능가하는 LLM 에이전트를 발견하는 메타 에이전트 검색 알고리즘을 제안했다는 점이다 <span class="co">[</span><span class="ot">\(Hu et al., 2024\)</span><span class="co">](#page-10-4)</span>. 우리의 주요 차이점과 기여는 LLM 에이전트를 위한 모듈러 설계 공간을 도입한 데에 있다. 이는 기존에 성공한 에이전트 구성 요소의 편리한 재사용과 풍부한 혁신적 에이전트 모듈 발견을 지원하는 표준적인 프레임워크를 제공할 수 있다.</span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a>모듈화된 설계 공간은 LLM 에이전트의 이전 성공적인 설계 재사용을 촉진하고 새로운 아키텍처 탐색을 지원한다. 이러한 모듈화의 핵심은 입력-출력 인터페이스의 표준화로, 확장성과 기존 설계와의 원활한 통합을 보장한다. 분야의 많은 전문가들은 엔지니어링 <span class="co">[</span><span class="ot">\(Weng, 2023\)</span><span class="co">](#page-12-0)</span>과 인지적 관점 <span class="co">[</span><span class="ot">\(Sumers et al., 2023\)</span><span class="co">](#page-11-6)</span>에서 핵심 모듈 구성 요소를 활용하여 LLM 에이전트 시스템을 구축할 것을 제안했다. 그러나 이러한 제안들은 대부분 개념적 수준에 머물러 있으며, 기존 LLM 에이전트를 통합할 수 있는 구현 가능한 솔루션을 부족하다. 또한 현재의 LLM 워크플로우 프로그래밍 프레임워크(*예: LangChain 및 Auto-GPT*)는 작업 수준의 구성 요소만 제공하며, 이전 성공적인 설계의 잠재력을 최대한 활용할 수 있는 모듈 수준의 탐색을 지원하지 못한다.</span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a>문제를 해결하기 위해 최근 3년간 NeurIPS, ICML, ICLR에서 출판된 논문에 대한 포괄적인 문헌 검토를 수행합니다. 검토는 제목에 "LLM", "Agent", 또는 "Large Language Model"라는 키워드가 포함된 논문에 초점을 맞추며, 다중 에이전트 시스템 또는 추가 학습이 필요한 에이전트와 관련된 연구는 제외합니다. 우리의 목적은 가장 포괄적이고 일률적인 LLM 에이전트 설계 공간을 제안하는 것이 아니라, 기존 에이전트의 재조합을 가능하게 하고 새로운 에이전트 발견을 촉진하는 표준화된 프레임워크를 제공하는 것입니다. 결과적으로, 16개의 인기 있는 LLM 에이전트를 선별하고 1050개의 가능한 조합을 포함하는 모듈화된 설계 공간을 추출하였으며, 새로운 모듈이 발견될 때 쉽게 확장할 수 있습니다. 아래에서는 에이전트 워크플로우와 설계 공간 내 네 가지 모듈의 기능을 설명합니다.</span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a><span class="fu"># 2.2 워크플로우 개요</span></span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a>제안된 에이전트 워크플로우는 위의 네 가지 모듈 간의 상호 연결을 통해 반복적인 프로세스를 수행하며, 그 과정은 그림 <span class="co">[</span><span class="ot">2.</span><span class="co">](#page-2-0)</span>에 나타나 있다. 태스크 d를 받은 후, 에이전트는 *계획(Planning)* 모듈을 시작하여 이를 n개의 하위 태스크 {s1, s2, ..., sn}로 분해한다. 다음으로, 이 하위 태스크들은 순차적으로 *이해(Reasoning)* 모듈에 전달된다. 하위 태스크 s&lt;sup&gt;i&lt;/sup&gt;의 설명을 입력으로 받아, *이해* 모듈은 LLM(대규모 언어 모델)에 프롬프트를 탐색하여 결과를 도출한다. 이해 과정에서 LLM의 내부 지식에 한계가 발생할 경우, *도구 사용(Tool Use)* 모듈이 활성화되어 미리 정의된 도구 풀 τ에서 적절한 도구를 선택하여 문제 해결을 지원한다. 또한, 이해 과정은 메모리 데이터베이스 mem에서 필요한 관찰과 경험을 읽고 쓰는 *메모리(Memory)* 모듈에 접근하여 이해를 돕는다. 각 하위 태스크의 이해 결과는 행동으로 변환되어 에이전트가 외부 환경과 상호작용하도록 유도한다. 모든 하위 태스크가 완료되거나 이해 과정이 정체될 경우, 에이전트는 받은 피드백을 바탕으로 *계획(Planning)* 모듈을 활성화하여 계획을 조정한다. 에이전트는 이 시도와 오류의 반복 루프를 태스크 d가 완료되거나 설정된 최대 시도 횟수에 도달할 때까지 수행한다.</span>
+<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-74"><a href="#cb1-74" aria-hidden="true" tabindex="-1"></a>계획. 계획 모듈은 목표 작업을 더 작은 하위 작업으로 분해하는 역할을 한다. 작업 설명 d와 선택적 피드백 정보 f를 받고, 계획 모듈 P는 목표 작업을 하위 작업 시퀀스 {s1, s2, . . . , sn} = P(d, f)로 전략적으로 분해한다. 이러한 분해는 특히 MineCraft <span class="co">[</span><span class="ot">\(Wang et al., 2024a;</span><span class="co">](#page-11-7)[</span><span class="ot">c\)</span><span class="co">](#page-12-4)</span>와 같은 개방형 환경에서의 에이전트에게 긴 기간 특성을 가진 매우 복잡한 작업을 처리하는 데 매우 중요하다.</span>
+<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-76"><a href="#cb1-76" aria-hidden="true" tabindex="-1"></a>이유. 대규모 언어 모델(LLM)은 CoT <span class="co">[</span><span class="ot">\(Wei et al., 2022\)</span><span class="co">](#page-12-1)</span>, ToT <span class="co">[</span><span class="ot">\(Yao et al., 2024\)</span><span class="co">](#page-12-5)</span>, 그리고 SoT <span class="co">[</span><span class="ot">\(Shang et al., 2024\)</span><span class="co">](#page-11-8)</span>와 같은 고급 프롬프팅 접근 방식을 통해 놀라운 추론 능력을 보여주었으며, 이는 LLM 에이전트의 지능 기반을 형성하고 있다. 추론 모듈 R은 계획 후 각 하위 작업 s&lt;sup&gt;i&lt;/sup&gt;와 선택적 피드백 정보 f&lt;sup&gt;i&lt;/sup&gt;를 입력으로 받아 순차적으로 하위 작업을 해결하며, 해답 r&lt;sup&gt;i&lt;/sup&gt; = R(s&lt;sup&gt;i&lt;/sup&gt;, f&lt;sup&gt;i&lt;/sup&gt;)을 출력한다.</span>
+<span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-78"><a href="#cb1-78" aria-hidden="true" tabindex="-1"></a>도구 사용. 외부 도구를 사용하는 능력은 <span class="co">[</span><span class="ot">Shen et al., 2024;</span><span class="co">](#page-11-1)</span> <span class="co">[</span><span class="ot">Schick et al., 2024</span><span class="co">](#page-11-9)</span> reasoning 과정 중 LLM의 내부 지식 한계를 극복한다. 공식적으로, 하위 작업 s&lt;sup&gt;i&lt;/sup&gt;의 추론 과정에서 유도된 문제 pij 와 사전 정의된 도구 풀 τ 가 주어졌을 때, 도구 사용 모듈 T는 문제를 해결하기 위해 가장 적합한 도구 tij 를 선택하며, 이를 tij = T(pij , τ )로 나타낸다. 여기서 tij ∈ τ 이다.</span>
+<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-80"><a href="#cb1-80" aria-hidden="true" tabindex="-1"></a>메모리. 메모리는 에이전트의 과거 사고, 행동 및 관찰을 저장하는 데 중요한 역할을 한다 <span class="co">[</span><span class="ot">\(Park et al., 2023;</span><span class="co">](#page-11-2)</span> <span class="co">[</span><span class="ot">Shinn et al., 2024\)</span><span class="co">](#page-11-10)</span>. 추론 과정에서 이 내부 로그는 메모리 모듈 M에 의해 제어되는 메모리 데이터베이스 mem에 동적으로 쓰여지고 검색된다. 쓰기 과정은 mem = Mwrite(o, mem)으로 표현할 수 있으며, 여기서 o는 현재 관찰을 나타낸다. 검색 과정은 m = Mretrieve(o, mem)으로 표현되며, 여기서 m은 현재 상황과 관련된 검색된 지식을 나타낸다.</span>
+<span id="cb1-81"><a href="#cb1-81" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-82"><a href="#cb1-82" aria-hidden="true" tabindex="-1"></a><span class="fu"># 3 AGENTSQUARE 프레임워크</span></span>
+<span id="cb1-83"><a href="#cb1-83" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-84"><a href="#cb1-84" aria-hidden="true" tabindex="-1"></a><span class="fu"># 3.1 MOLAS의 문제 정식화</span></span>
+<span id="cb1-85"><a href="#cb1-85" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-86"><a href="#cb1-86" aria-hidden="true" tabindex="-1"></a>제안된 모듈형 설계 공간에서, LLM 에이전트 A는 계획 모듈 P, 추론 모듈 R, 도구 사용 모듈 T 및 기억 모듈 M의 조합으로 인스턴스화될 수 있으며, 이를 A = (P, R, T, M)로 표기한다. 작업 설명 d와 표준화된 IO 인터페이스를 갖는 모든 가능한 모듈 집합 {P, R, T, M}이 주어졌을 때, 우리는 모듈형 설계 공간 내에서 LLM 에이전트 아키텍처를 탐색하기 위한 최적화 문제를 정식화한다. 목표는 네 가지 설계 차원의 카르테시안 곱으로 정의된 해 공간에서 에이전트 성능을 최대화하는 최적의 모듈 조합을 식별하는 것이다. 작업의 성능 평가 함수를 Evald(·)로 정의하며, 구체적인 지표는 각각의 작업에서 다루는 바와 같이 부록 <span class="co">[</span><span class="ot">A.1.</span><span class="co">](#page-14-0)</span>에서 논의된다. 최적화</span>
+<span id="cb1-87"><a href="#cb1-87" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_4_Figure_1.jpeg)</span></span>
+<span id="cb1-89"><a href="#cb1-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a>그림 3: AgentSquare 검색 프레임워크 개요. AgentSquare는 모듈 진화와 재조합 메커니즘을 통해 LLM 에이전트를 최적화한다. 또한 새로운 에이전트를 효율적으로 평가하기 위해 맥락 내 서브모델을 구현하는 성능 예측기를 도입한다.</span>
+<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a>MoLAS의 문제는 다음과 같이 정의된다:</span>
+<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a>\underset{P \in \mathbb{P}, R \in \mathbb{R}, T \in \mathbb{T}, M \in \mathbb{M}}{\arg \max} Eval_d(P, R, T, M). \tag{1}</span>
+<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a><span class="fu">## 3.2 AGENTSQUARE 검색 알고리즘</span></span>
+<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-100"><a href="#cb1-100" aria-hidden="true" tabindex="-1"></a>모 LAS의 최적화 문제를 해결하는 데 세 가지 핵심 과제가 있다: (1) 네 개의 직교 모듈의 카르테시안 곱으로 정의된 탐색 공간이 방대하여 탐색하기 어렵다; (2) 모듈 세트는 표준 IO 인터페이스를 갖는 모든 코드를 포함하므로 모듈 선택이 개방형 문제이다; (3) 탐색 과정 중 에이전트 평가의 높은 비용으로 인해 전체 탐색 규모가 제한된다. 이러한 문제를 해결하기 위해, 우리는 모듈 설계 공간 내에서 LLM 에이전트를 최적화하기 위한 자동 탐색 프레임워크인 AgentSquare를 소개한다. MoLAS의 방대한 탐색 공간에 직면하여, 우리는 LLM을 활용한 *모듈 재조합* 연산을 제안하여 더 유망한 모듈 조합을 전략적으로 식별할 수 있도록 한다. 이 연산은 자식 샘플의 커버리지를 확대하여, 제한된 공간만 탐색하는 프롬프트 재작성 방법의 한계를 극복한다. 그러나 기존 모듈 조합 내에서만 탐색하는 것은 탐색 공간을 좁히므로, 우리는 코드 수준 최적화를 통해 새로운 모듈을 탐색하기 위한 진화적 메타프롬프트를 사용하는 모듈 진화 연산을 제안한다. 이 연산은 모듈 재조합과 함께 결합되어 개방형 솔루션 공간에서 어떤 모듈 조합이든 탐색할 수 있게 한다. 마지막으로, 탐색된 에이전트의 빈번한 평가 비용을 완화하기 위해, 우리는 탐색된 에이전트를 평가하기 위한 맥락 내 대체 모델로 성능 예측기를 설계하여 탐색 과정을 크게 가속화하고 실제 비용을 줄인다.</span>
+<span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a>AgentSquare의 전체 프레임워크는 그림 3에 도식화되어 있으며, 알고리즘은 알고리즘 1에 제시되어 있다. 다음으로 AgentSquare 탐색 과정의 핵심 구성 요소를 상세히 설명한다.</span>
+<span id="cb1-103"><a href="#cb1-103" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a><span class="fu">#### 3.3 초기화</span></span>
+<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a>기존 AutoML 연구의 통찰에 따르면, 적절한 초기화는 웜업을 향상시키고 비생산적인 집단을 피함으로써 탐색 효율성을 향상시킨다(So et al., 2019; Yuan et al., 2024). AgentSquare는 초기화를 통해 전역 경험 풀 $\mathbb{E}=<span class="sc">\{</span>(P,R,T,M,v)|P_0\in\mathbb{P},R_0\in\mathbb{R},T_0\in\mathbb{T},M_0\in\mathbb{M}<span class="sc">\}</span>$ 을 생성하여, 2절에서 언급한 바와 같이 잘 설계된 에이전트와 그들의 실수값 성능 v를 시드로 설정한다. 모듈 풀 $<span class="sc">\{</span>\mathbb{P},\mathbb{R},\mathbb{T},\mathbb{M}<span class="sc">\}</span>$ 은 이 시드 에이전트에서 추출된 표준화된 모듈로 설정된다.</span>
+<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a><span class="fu">## 3.4 모듈 재조합</span></span>
+<span id="cb1-109"><a href="#cb1-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-110"><a href="#cb1-110" aria-hidden="true" tabindex="-1"></a>모LAS의 방대한 솔루션 공간을 고려할 때, 프롬프트 재작성에만 의존하면 초기 상태의 이웃에 국한된 제한된 탐색에 그치게 된다. 탐색 공간을 확장하기 위해, 우리는 LLM을 *자기적응형 제안자*로 활용할 것을 제안한다. 이는 반복적으로 추론하여 초기 에이전트 구성보다 더 넓은 경험을 바탕으로 유망한 모듈 조합을 식별한다. 재조합 단계의 초기 에이전트를 $A_r^0 = (P_0, R_0, T_0, M_0)$ 로 표기하며, 여기서 $P_0 \in \mathbb{P}, R_0 \in \mathbb{R}, T_0 \in \mathbb{T}, M_0 \in \mathbb{M}$ 이다. 모듈 조합 제안자 LLM $\pi_\theta$ 는 타겟팅된 작업 설명 d, 기존 모듈 풀 $<span class="sc">\{</span>\mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}<span class="sc">\}</span>$ 및 탐색된 모듈 조합의 성능 경험 $\mathbb{E}$ 를 포함하여 유망한 새로운 에이전트 $A_r$ 를 제안한다.</span>
+<span id="cb1-111"><a href="#cb1-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-112"><a href="#cb1-112" aria-hidden="true" tabindex="-1"></a>$$A_r = \pi_\theta((P_0, R_0, T_0, M_0), d, N, \mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}, \mathbb{E}). \tag{2}$$</span>
+<span id="cb1-113"><a href="#cb1-113" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-114"><a href="#cb1-114" aria-hidden="true" tabindex="-1"></a>초기 에이전트 구성 $A_r^0$를 기반으로, LLM은 모듈 풀에서 선택한 대체 모듈로 $A_r^0$의 특정 모듈을 교체하여 N개의 자식 에이전트 $<span class="sc">\{</span>A_r^1, A_r^2, ..., A_r^N<span class="sc">\}</span>$를 제안합니다. 예를 들어, 가능한 해결책은 $(P_0, R', T_0, M_0)$일 수 있으며, 여기서 $R' \in \mathbb{R}$는 모듈 풀에서 선택된 다른 추론 모듈입니다. 그런 다음 생성된 N개의 새로운 에이전트는 성능 예측기 $\pi_p$ (세션 3.6 참조)를 통해 평가되며, 가장 좋은 에이전트가 다음 에피소드의 초기화로 사용됩니다.</span>
+<span id="cb1-115"><a href="#cb1-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-116"><a href="#cb1-116" aria-hidden="true" tabindex="-1"></a><span class="fu">#### 3.5 모듈 진화</span></span>
+<span id="cb1-117"><a href="#cb1-117" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-118"><a href="#cb1-118" aria-hidden="true" tabindex="-1"></a>위에서 언급했듯이, 각 모듈 유형의 솔루션 공간은 표준화된 I/O 인터페이스를 가진 모든 코드를 허용하므로 개방형이다. 결과적으로 모듈 재조합만을 통해 탐색하면 솔루션 공간이 좁아지고 에이전트 성능의 상한이 제한된다. 이 문제를 해결하기 위해, 우리는 프로그램 수준 최적화를 통해 새로운 모듈을 탐색하기 위해 진화적 메타프롬프트를 사용하는 모듈 진화 연산을 설계한다. 이 설계는 FunSearch(Romera-Paredes et al., 2024)의 반복적 파이프라인에서 영감을 받았으며, 이는 기존 솔루션의 목표 문제와 성능 피드백을 기반으로 LLM에 새로운 솔루션을 제안하도록 유도한다. 이 개념을 바탕으로, 우리는 작업 설명, 기존 모듈, 그리고 이전에 평가된 모듈의 성능을 함께 모델링하여 모듈형 설계 공간에서 에이전트 탐색을 수행하는 모듈 프로그래밍 LLM $\pi_{\mathcal{E}}$를 도입한다. 참고로, 최적화 절차를 구현하기 위해 ADAS(Hu et al., 2024)의 일부 오픈소스 코드를 재사용한다. LLM을 사용하여 모듈형 에이전트 설계 공간에서 탐색하는 것은 여러 가지 매력적인 장점이 있다. LLM 에이전트의 제한 없는 설계 공간과 비교했을 때, 기능 모듈을 탐색하면 더 집중적이고 생산적인 탐색 공간을 생성할 수 있다. 또한, 기존에 성공한 모듈 설계를 표준 I/O로 인-컨텍스트 예시로 통합하면, LLM의 반성적 추론 능력을 더 잘 유도하여 이전의 핵심 설계를 식별하고 혁신적인 설계를 제안하는 데 도움을 줄 수 있다. 모듈 진화 단계의 초기 에이전트를 $A_e^0 = (P_0^{'}, R_0^{'}, T_0^{'}, M_0^{'})$로 표기하면, 모듈 프로그래밍 LLM은 $A_e^0$의 현재 모듈을 진화시켜 자식 에이전트의 집단을 생성한다. 공식적으로 모듈 진화 연산은 다음과 같이 표기된다:</span>
+<span id="cb1-119"><a href="#cb1-119" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-120"><a href="#cb1-120" aria-hidden="true" tabindex="-1"></a>$$A_{e} = \pi_{\xi}((P_{0}^{'}, R_{0}^{'}, T_{0}^{'}, M_{0}^{'}), d, N, \mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}, \mathbb{E}). \tag{3}$$</span>
+<span id="cb1-121"><a href="#cb1-121" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-122"><a href="#cb1-122" aria-hidden="true" tabindex="-1"></a>새로 생성된 모듈들은 표준화된 모듈 풀 $<span class="sc">\{</span>\mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}<span class="sc">\}</span>$ 에 추가되며, 각 모듈은 초기 에이전트를 개별적으로 변이시켜 N개의 자식 에이전트 $<span class="sc">\{</span>A_e^1, A_e^2, ..., A_e^N<span class="sc">\}</span>$ 를 생성합니다. 예를 들어, $(P^*, R_0, T_0, M_0)$ 는 계획 모듈이 새로운 변형 $P^*$ 로 변이된 해를 나타냅니다. 이 자식 에이전트들은 실시간 테스트를 거쳐 역사적 경험 풀 $\mathbb{E}$ 에 업데이트됩니다. 최고 성능을 보인 에이전트가 후속 재조합 단계의 초기 에이전트로 선택됩니다.</span>
+<span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-124"><a href="#cb1-124" aria-hidden="true" tabindex="-1"></a><span class="fu">#### &lt;span id="page-5-0"&gt;&lt;/span&gt;3.6 성능 예측기</span></span>
+<span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a>최종적인 자동 에이전트 검색의 과제는 각 후보 에이전트 평가 과정에서 발생하는 높은 API 비용이다. 많은 에이전트 작업은 다중 단계를 필요로 하며, 상당한 입력 및 출력 토큰을 포함하므로 평가 비용이 막대해진다. 예를 들어, GPT-40 기반의 단순한 CoT 에이전트를 ALFWorld(Shridhar 등, 2021)에서 평가하는 데 약 60달러가 소요되며, 이는 대규모로 에이전트 검색을 경제적으로 지속 가능하지 않게 만든다. 이 문제를 해결하기 위해, 우리는 성능 예측자로 추가적인 LLM $\pi_p$를 도입하여 새로운 에이전트 평가를 위한 맥락 내 대체 모델로 활용하는 방안을 제안한다. 이를 통해 비성공적인 후보를 제외하고 검색 과정을 크게 가속화할 수 있다. 실제 환경 평가에 비해, 이러한 맥락 내 대체 모델은 훨씬 적은 토큰을 필요로 하므로 비용 효율적이며, 더 대규모의 검색을 가능하게 한다. 비슷한 접근법은 신경망 구조 검색(NAS)에서 효과적으로 적용된 바 있으며, LLM이</span>
+<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a>|                     |                   | 웹      | 엠보     | 데드     | 투    | 올     | 게임        |</span>
+<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a>|---------------------|-------------------|---------|----------|----------|--------|--------|-------------|</span>
+<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a>| 베이스라인 유형     | 방법            | 웹숍   | ALF월드 | 사이언스월드 | M3툴 | 트래블 | &lt;b&gt;PDDL&lt;/b&gt; |</span>
+<span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a>|                     | CoT               | 0.485   | 0.405    | 0.697    | 0.448  | 0.487  | 0.542       |</span>
+<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a>|                     | Cot-SC            | 0.512   | 0.426    | 0.656    | 0.461  | 0.413  | 0.495       |</span>
+<span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a>|                     | 셀프리파인드    | 0.461   | 0.567    | 0.654    | 0.442  | 0.000  | 0.514       |</span>
+<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a>|                     | ToT               | 0.501   | 0.437    | 0.741    | 0.453  | 0.380  | 0.476       |</span>
+<span id="cb1-135"><a href="#cb1-135" aria-hidden="true" tabindex="-1"></a>|                     | 스텝백           | 0.468   | 0.279    | 0.220    | 0.434  | 0.000  | 0.486       |</span>
+<span id="cb1-136"><a href="#cb1-136" aria-hidden="true" tabindex="-1"></a>|                     | TP                | 0.398   | 0.404    | 0.576    | 0.387  | 0.430  | 0.518       |</span>
+<span id="cb1-137"><a href="#cb1-137" aria-hidden="true" tabindex="-1"></a>| 수동으로 작성된 에이전트 | 허깅지피티      | 0.519   | 0.481    | 0.680    | 0.354  | 0.510  | 0.584       |</span>
+<span id="cb1-138"><a href="#cb1-138" aria-hidden="true" tabindex="-1"></a>|                     | 보이저           | 0.366   | 0.425    | 0.776    | 0.247  | 0.523  | 0.412       |</span>
+<span id="cb1-139"><a href="#cb1-139" aria-hidden="true" tabindex="-1"></a>|                     | 생성형 에이전트  | 0.499   | 0.477    | 0.663    | 0.402  | 0.480  | 0.553       |</span>
+<span id="cb1-140"><a href="#cb1-140" aria-hidden="true" tabindex="-1"></a>|                     | DEPS              | 0.481   | 0.459    | 0.740    | 0.278  | 0.540  | 0.591       |</span>
+<span id="cb1-141"><a href="#cb1-141" aria-hidden="true" tabindex="-1"></a>|                     | &lt;b&gt;OPENAGI&lt;/b&gt;    | 0.506   | 0.510    | 0.718    | 0.322  | 0.533  | 0.616       |</span>
+<span id="cb1-142"><a href="#cb1-142" aria-hidden="true" tabindex="-1"></a>|                     | 딜루              | 0.451   | 0.433    | 0.682    | 0.475  | 0.360  | 0.463       |</span>
+<span id="cb1-143"><a href="#cb1-143" aria-hidden="true" tabindex="-1"></a>| 모듈 검색           | 랜덤             | 0.533   | 0.620    | 0.704    | 0.438  | 0.563  | 0.660       |</span>
+<span id="cb1-144"><a href="#cb1-144" aria-hidden="true" tabindex="-1"></a>| 모듈 검색           | 베이지안         | 0.549   | 0.634    | 0.749    | 0.502  | 0.537  | 0.650       |</span>
+<span id="cb1-145"><a href="#cb1-145" aria-hidden="true" tabindex="-1"></a>| 프롬프트 검색       | OPRO              | 0.505   | 0.380    | 0.569    | 0.309  | 0.523  | 0.589       |</span>
+<span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a>| 에이전트 검색       | ADAS              | 0.521   | 0.543    | 0.754    | 0.475  | 0.373  | 0.568       |</span>
+<span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a>|                     | 에이전트스퀘어    | 0.607   | 0.695    | 0.781    | 0.524  | 0.583  | 0.669       |</span>
+<span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a>표 1: AgentSquare에서 검색한 에이전트와 (1) 기존 인간 설계 에이전트, (2) 모듈 검색 기반, (3) 프롬프트 검색 기반, (4) GPT-40 기반 에이전트 검색 기반의 여섯 가지 작업에서 다양한 도메인에 걸쳐 성능 비교</span>
+<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a>성능을 평가하는 데 활용되었다(자와르 등, 2023; 첸 등, 2024a).</span>
+<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a>검색 과정에서 모듈 진화를 통해 새로 생성된 에이전트는 경험 풀에 등장하지 않기 때문에 실제 작업 환경에서 여전히 테스트됩니다. 또한 성능 예측기(preference predictor)를 사용하여 예측하는 것은 부적절합니다. 모듈 재조합 작업 중에 새로 제안된 에이전트는 성능 예측기 $\pi_p$에 의해 평가되며, 이는 과거 에이전트 조합의 성능 예시를 기반으로 한 인-컨텍스트 추론(in-context reasoning)을 활용하여 효율적인 성능 예측을 제공합니다. 여기서 새로 검색된 에이전트 A'가 주어졌을 때, 성능 예측기는 태스크 설명 d, 모듈 프로파일, 그리고 이전에 테스트된 에이전트들의 인-컨텍스트 성능 예시 $\mathbb E$를 종합적으로 고려하여 새로운 에이전트에 점수를 부여합니다.</span>
+<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a>$$v' = \pi_p(A', d, \mathbb{P}, \mathbb{R}, \mathbb{T}, \mathbb{M}, \mathbb{E}), \tag{4}$$</span>
+<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a>여기서 v'은 평가된 에이전트의 예측 성능을 나타낸다. 실험 결과는 에이전트의 예측 성능이 실제 성능과 밀접하게 일치함을 보여주며, 이는 제안된 성능 예측기의 유효성을 검증하는 것이다. 이에 대한 자세한 내용은 4.3절에서 다룬다.</span>
+<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a><span class="fu">## 4 실험</span></span>
+<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a><span class="fu"># 4.1 실험 설정</span></span>
+<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-163"><a href="#cb1-163" aria-hidden="true" tabindex="-1"></a>**작업 설정.** 우리는 기존 LLM 에이전트 벤치마크에서 널리 채택된 네 가지 도메인: embodiment( embodiment), 게임, 웹 및 도구 응용 분야를 포함하는 여섯 가지 대표적인 작업에서 실험을 수행한다 (Ma 등, 2024; Xi 등, 2024). 자세한 내용은 부록 A.1에 제시되어 있다.</span>
+<span id="cb1-164"><a href="#cb1-164" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-165"><a href="#cb1-165" aria-hidden="true" tabindex="-1"></a>**베이스라인.** AgentSquare은 수작업으로 제작된 에이전트, 모듈 수준 검색, 프롬프트 수준 검색 및 에이전트 검색 방법을 포함한 네 가지 유형의 베이스라인과 비교한다. 자세한 내용은 부록 A.1을 참조하라.</span>
+<span id="cb1-166"><a href="#cb1-166" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-167"><a href="#cb1-167" aria-hidden="true" tabindex="-1"></a>**AgentSquare 설정.** 우리는 AgentSquare를 구현하고 GPT-3.5-turbo-0125 및 GPT-40(Achiam 등, 2023)을 사용하여 실험을 수행한다. 공정한 비교를 위해 모든 방법에서 동일한 수의 소량 샘플 예제를 사용한다. 초기 에이전트는 무작위 모듈 조합으로 설정되며, 성능 향상이 5회 연속으로 발생하지 않으면 검색 과정이 종료된다.</span>
+<span id="cb1-168"><a href="#cb1-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-169"><a href="#cb1-169" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_7_Figure_1.jpeg)</span></span>
+<span id="cb1-170"><a href="#cb1-170" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-171"><a href="#cb1-171" aria-hidden="true" tabindex="-1"></a>그림 4: AgentSquare의 Alfworld 및 Webshop에서의 탐색 경로</span>
+<span id="cb1-172"><a href="#cb1-172" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-173"><a href="#cb1-173" aria-hidden="true" tabindex="-1"></a><span class="fu">#### 4.2 실험 결과</span></span>
+<span id="cb1-174"><a href="#cb1-174" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-175"><a href="#cb1-175" aria-hidden="true" tabindex="-1"></a>**주요 결과.** 우리는 6개의 작업에서 세 가지 유형의 베이스라인과 비교하기 위해 광범위한 실험을 수행하며, Table 1에 GPT-40 기반 결과를, Table A.3에 GPT-3.5 기반 결과를 제시한다. 또한 에이전트의 API 비용을 평가하고 Figure A.7부터 Figure A.12까지의 성능-비용 비교를 제공한다. 이 결과를 통해 다음과 같은 관찰을 얻었다:</span>
+<span id="cb1-176"><a href="#cb1-176" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-177"><a href="#cb1-177" aria-hidden="true" tabindex="-1"></a>AgentSquare는 인간이 설계한 에이전트보다 더 나은 에이전트를 효과적으로 발견할 수 있다. 여섯 가지 대표적인 에이전트 작업에서 AgentSquare가 검색한 최고의 에이전트는 성능 측면에서 인간이 설계한 에이전트보다 일관되게 우수하다. 구체적으로 Table 1과 Table A.3에 보여진 바와 같이, 최고의 인간 설계 에이전트와 비교했을 때, AgentSquare는 Webshop에서 평균 14.1%의 성능 향상, ALFWorld에서 26.1%의 향상, SciWorld에서 20.5%의 향상, M3Tool에서 30.6%의 향상, Travelplanner에서 6.0%의 향상, PDDL에서 6.0%의 향상을 달성한다. 동시에 AgentSquare의 최고 에이전트는 일반적으로 비용 효율적이며, Figure A.7~Figure A.12에서 볼 수 있듯이 비교 대상 모든 에이전트 중 최고의 성능-비용 거래를 달성한다. 검색 비용은 일회성 지출이므로 위 분석에는 포함되지 않으며, Table A.6에 별도로 나열되어 있다.</span>
+<span id="cb1-178"><a href="#cb1-178" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-179"><a href="#cb1-179" aria-hidden="true" tabindex="-1"></a>AgentSquare는 LLM 에이전트 최적화를 위한 더 효율적인 검색 방식을 제공합니다. AgentSquare의 검색 효과를 더욱 명확히 보이기 위해, 모듈 검색, 프롬프트 검색, 에이전트 검색의 세 가지 검색 방법을 비교합니다. 이 검색 방법들 중 최고의 에이전트와 비교했을 때, AgentSquare는 Webshop에서 평균 8.4%의 성능 향상을, ALFWorld에서 8.1%의 향상을, SciWorld에서 11.0%의 향상을, M3Tool에서 12.8%의 향상을, Travelplanner에서 2.5%의 향상을, PDDL에서 1.4%의 향상을 달성합니다. 검색 기반 방법의 비교는 공정성을 확보하기 위해 고정된 LLM 토큰 예산을 기준으로 수행되며, 동일한 검색 반복 횟수를 유지합니다. 원칙적으로 ADAS는 전체 코드 공간에서 검색함으로써 더 정교한 에이전트를 발견할 가능성을 지니지만, 이를 달성하기 위해 더 많은 반복(즉, 더 높은 LLM 토큰 사용량)이 필요할 수 있습니다.</span>
+<span id="cb1-180"><a href="#cb1-180" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-181"><a href="#cb1-181" aria-hidden="true" tabindex="-1"></a>AgentSquare에서의 탐색 경로. Figure 4는 GPT-40 기반 AgentSquare과 ALFWorld 및 Webhop 작업에서의 다른 탐색 방법을 사용한 15회 반복 하에서의 탐색 경로를 보여준다. 다른 작업에 대한 결과는 Figure A.13과 A.14에 제시되어 있다. AgentSquare는 지속적인 수렴 경로를 보여주며, 더 고급화된 에이전트들이 탐색 과정에서 지속적으로 등장한다. 반면, 무작위 및 베이지안 탐색을 포함한 모듈 수준 탐색 방법들은 명확하고 통찰력 있는 탐색 방향을 갖지 못한다. OPRO와 같은 프롬프트 수준 탐색 방법들은 제한된 수정 공간에 제약을 받아 성능 향상이 미미하다. 결과적으로, 이들은 탐색 과정에서 성능 병목 현상을 겪으며, 최적의 에이전트 구조를 도출하지 못한다. 또한, 무작위 재조합과 같은 간단한 모듈 수준 탐색 방법이 프롬프트 수준 탐색보다 훨씬 뛰어난 성능을 보여주며, 모듈 설계 공간에서의 탐색의 중요성을 시사한다.</span>
+<span id="cb1-182"><a href="#cb1-182" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-183"><a href="#cb1-183" aria-hidden="true" tabindex="-1"></a><span class="fu"># &lt;span id="page-7-0"&gt;&lt;/span&gt;4.3 AGENTSQUARE의 제거 연구</span></span>
+<span id="cb1-184"><a href="#cb1-184" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-185"><a href="#cb1-185" aria-hidden="true" tabindex="-1"></a>모듈 진화와 재조합의 효과성. AgentSquare의 검색 프레임워크에는 두 가지 핵심 작업이 있다: 모듈 진화(modul evolution)는 새로운 모듈을 생성하고, 모듈 재조합(modul recombination)은 기존 모듈을 조합하여 새로운 모듈을 만드는 것이다.</span>
+<span id="cb1-186"><a href="#cb1-186" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-187"><a href="#cb1-187" aria-hidden="true" tabindex="-1"></a>| 방법                   | 웹숍 | ALF월드 | 사이언스월드 | M3툴 | 여행플래너 | PDDL  |</span>
+<span id="cb1-188"><a href="#cb1-188" aria-hidden="true" tabindex="-1"></a>|--------------------------|---------|----------|----------|--------|---------------|-------|</span>
+<span id="cb1-189"><a href="#cb1-189" aria-hidden="true" tabindex="-1"></a>| AgentSquare (전체)       | 0.607   | 0.695    | 0.781    | 0.524  | 0.583         | 0.669 |</span>
+<span id="cb1-190"><a href="#cb1-190" aria-hidden="true" tabindex="-1"></a>| 모듈 진화 없음          | 0.564   | 0.649    | 0.736    | 0.502  | 0.577         | 0.614 |</span>
+<span id="cb1-191"><a href="#cb1-191" aria-hidden="true" tabindex="-1"></a>| 모듈 재조합 없음        | 0.560   | 0.616    | 0.710    | 0.481  | 0.280         | 0.669 |</span>
+<span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-193"><a href="#cb1-193" aria-hidden="true" tabindex="-1"></a>표 2: 다양한 도메인의 여섯 가지 작업에서 AgentSquare의 GPT-40에 대한 제거 연구</span>
+<span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_8_Figure_3.jpeg)</span></span>
+<span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a>그림 5: 각 작업에서 성능 예측기의 유효성 검증(실제 성능과 예측 성능 간의 상관관계)</span>
+<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a>조합을 전략적으로 재조합하는 방식입니다. 각 설계의 효과를 확인하기 위해 세 가지 변형을 테스트했습니다: 전체 모델, 모듈 진화가 없는 버전, 그리고 모듈 재조합이 없는 버전입니다. 결과는 각각 GPT-40과 GPT-3.5를 기반으로 Table 2와 Table A.5에 제시되어 있습니다. 각 설계를 제거하면 성능이 뚜렷하게 하락하는 것을 볼 수 있으며, 모듈 재조합이 더 큰 영향을 미칩니다. 모듈 재조합은 검색 공간을 크게 확장하여 국소 최적값에 빠질 위험을 줄입니다. 한편, 모듈 진화는 특정 작업에 맞춰 더 고급 모듈을 발견하는 데 도움을 줍니다. 이 두 작업은 잘 협력하여 AgentSquare의 검색 과정의 효과를 보장합니다.</span>
+<span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a>**성능 예측기의 효과성.** 이 부분에서는 이 설계의 효과성을 경험적으로 검증한다. 그림 5는 GPT-3.5와 GPT-40을 모두 사용하여 모든 여섯 작업에서 주어진 에이전트의 예측 성능과 실제 테스트 성능을 보여준다. 테스트된 에이전트는 기존 모듈을 무작위로 조합하여 무작위 샘플링을 통해 생성되었다. 예측 성능이 실제 성능과 밀접하게 일치하는 것을 확인할 수 있으며, 이는 성능 예측기의 효과성을 입증한다. 예를 들어, 예측기의 평가 비용은 ALFWorld에서 GPT-40 기반의 전체 평가 비용의 약 0.025%에 불과하여 놀라운 비용 효율성을 보여준다. 동적으로 검색된 에이전트의 성능 예측에 대한 추가 실험 결과는 부록의 그림 A.15에서 제공된다.</span>
+<span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a><span class="fu">#### 4.4 AGENTSQUARE에서 발견된 최고의 에이전트</span></span>
+<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a>이 섹션에서는 검색된 최고의 에이전트 예시를 제공하며, 특히 발견된 유망한 모듈들을 소개합니다. 표 A.4는 AgentSquare에서 검색한 최고의 에이전트와 모든 작업에서 최고의 수작업 에이전트를 요약합니다. AgentSquare가 주어진 작업에 맞춰 기존 모듈과 새로 프로그래밍된 모듈을 적응적으로 식별할 수 있음을 관찰할 수 있습니다. 예를 들어, ALFWorld의 발견된 최고 에이전트는 *Generative Agents*에서 기존에 잘 설계된 메모리 모듈과 새로 생성된 계획 모듈(*TD*라고 명명됨) 및 추론 모듈(*SF-ToT*라고 명명됨)을 결합합니다. 반면, 최고의 수작업 에이전트인 *Self-refine*은 추론 모듈 설계에만 집중하면서 다른 기능 모듈을 간과하여 최적의 성능을 달성하지 못합니다. 또한, Figure 6에서는 ALFWorld에서 발견된 두 가지 새로운 모듈과 인간이 이해할 수 있는 설계 통찰을 보여줍니다. 더 많은 예시는 Figure A.16부터 Figure A.21까지 나열되어 있습니다.</span>
+<span id="cb1-206"><a href="#cb1-206" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-207"><a href="#cb1-207" aria-hidden="true" tabindex="-1"></a><span class="fu"># 5 관련 연구</span></span>
+<span id="cb1-208"><a href="#cb1-208" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-209"><a href="#cb1-209" aria-hidden="true" tabindex="-1"></a><span class="fu"># 5.1 LLM 기반 자율 에이전트</span></span>
+<span id="cb1-210"><a href="#cb1-210" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a>LLM 기반 자율 에이전트는 핵심 LLM을 사용하여 외부 기능 모듈을 관리하고 세계와 상호작용하는 고급 AI 시스템이다(Ding 등, 2024b). 최근 연구에서는</span>
+<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a>그림 6: ALFWorld에서 AgentSquare 검색을 통해 발견된 새로운 모듈</span>
+<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-215"><a href="#cb1-215" aria-hidden="true" tabindex="-1"></a>LLM 에이전트는 계획(하오 등, 2023; 쩡 등, 2024; 샤오 등, 2025), 추론(웨이 등, 2022; 야오 등, 2024; 샹 등, 2024; 쉬 등, 2025), 도구 사용(신 등, 2024; 슈익 등, 2024), 그리고 메모리 모니터링(왕 등, 2024a; 파크 등, 2023)과 같은 여러 LLM 중심 기능 모듈을 포함하여, LLM 에이전트의 기능을 크게 향상시킨다. 단일 에이전트의 개선과 함께, 개별 에이전트를 전략적으로 구성하여 시뮬레이션(리 등, 2023; 첸 등, 2023) 및 목표 작업 해결(첸 등, 2024b; 리 등, 2024b)을 수행하기 위해 더 고급 다중 에이전트 시스템을 구축하려는 또 다른 연구 방향이 존재한다. 점점 더 정교해지는 에이전트의 출현은 놀라운 성능 향상을 가져오지만, 그들의 아키텍처와 코드베이스는 서로 크게 다르다. 개별 연구 간에 통일된 설계 공간과 일관된 용어가 부족하기 때문에, 다양한 에이전트를 비교하고, 그 진화 경로를 이해하며, 새로운 에이전트 설계 방향을 안내하기가 어렵다.</span>
+<span id="cb1-216"><a href="#cb1-216" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-217"><a href="#cb1-217" aria-hidden="true" tabindex="-1"></a><span class="fu">#### 5.2 LLM 기반 에이전트의 자동 설계</span></span>
+<span id="cb1-218"><a href="#cb1-218" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-219"><a href="#cb1-219" aria-hidden="true" tabindex="-1"></a>LLM 기반 에이전트 시스템은 가장 진보된 AI 시스템이지만, 아직 통합된 설계 공간과 자동 설계 방법을 형성하지 못하고 있다. LangChain<span class="sc">\*</span>와 BabyAGI†과 같은 엔지니어링 중심의 오픈 소스 자원은 LLM 중심의 에이전트 시스템을 구축하는 데 편리한 방법을 제공하지만, 여전히 다양한 모듈을 구성하기 위해 인간의 참여가 필요하며 설계된 에이전트의 최적화를 지원하지 못한다. 또한, CoALA(Sumers 등, 2023)와 같은 개념적 프레임워크가 LLM 에이전트의 통합 설계 원칙을 제공하려는 시도를 하고 있다. 그러나 이는 미래에 LLM 에이전트가 어떻게 되어야 하는지에 대한 비전일 뿐, 실용적인 설계 프레임워크를 제공하지는 않는다. 더 중요한 것은, 다양한 검색 공간에서 정의된 LLM 에이전트 시스템의 설계를 자동화(적어도 일부)하는 문제를 탐구하는 최근 연구들이 있다는 점이다. OPRO(Yang 등, 2024)와 Promptbreeder(Fernando 등, 2024)는 프롬프트 공간에서 정의된 LLM 에이전트를 최적화하는 데 LLM을 사용하는 것으로 간주될 수 있다. 더 관련성이 높은 것은 ADAS(Hu 등, 2024)가 코드 공간에서 정의된 전체 에이전트 시스템을 탐색하려는 것을 제안하여, 더 유연한 프롬프트, 도구 사용, 제어 흐름 등을 갖는 LLM 에이전트를 탐색할 수 있게 한다.</span>
+<span id="cb1-220"><a href="#cb1-220" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-221"><a href="#cb1-221" aria-hidden="true" tabindex="-1"></a><span class="fu"># 6 결론</span></span>
+<span id="cb1-222"><a href="#cb1-222" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-223"><a href="#cb1-223" aria-hidden="true" tabindex="-1"></a>이 작업에서는 연구자들이 이전 성공적인 설계를 기반으로 구축하고 공동으로 새로운 통찰을 축적할 수 있는 새로운 모듈형 디자인 공간을 소개합니다. 이를 바탕으로, 이전에 출판되거나 평가된 모듈에서 얻은 지식을 활용하여 LLM 에이전트 설계를 자동으로 최적화하는 것을 목표로 하는 새로운 연구 문제인 모듈화된 LLM 에이전트 검색(Modularized LLM Agent Search, MoLAS)을 제안합니다. 방대한 검색 공간의 도전 과제를 해결하기 위해, 모듈 진화와 재조합을 통해 LLM 에이전트를 최적화하는 자동 검색 프레임워크인 AgentSquare를 제시합니다. 또한 새로운 LLM 에이전트를 평가하기 위한 맥락 내 대리 모델로 성능 예측기를 도입하여 검색 과정을 가속화합니다. 전반적으로, 본 연구는 개별 LLM 에이전트 설계를 연구하는 방식에서 모듈형 디자인 공간 내의 LLM 에이전트를 연구하는 방식으로의 전환을 제공하며, 연구 공동체의 집단적 노력을 더욱 강화합니다.</span>
+<span id="cb1-224"><a href="#cb1-224" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-225"><a href="#cb1-225" aria-hidden="true" tabindex="-1"></a>&lt;span id="page-9-1"&gt;&lt;/span&gt;&lt;sup&gt;<span class="sc">\*</span>&lt;/sup&gt;https://github.com/langchain-ai/langchain &lt;span id="page-9-2"&gt;&lt;/span&gt;&lt;sup&gt;†&lt;/sup&gt;https://github.com/yoheinakajima/babyagi</span>
+<span id="cb1-226"><a href="#cb1-226" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-227"><a href="#cb1-227" aria-hidden="true" tabindex="-1"></a><span class="fu"># 참고문헌</span></span>
+<span id="cb1-228"><a href="#cb1-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-229"><a href="#cb1-229" aria-hidden="true" tabindex="-1"></a>Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, 등. Gpt-4 기술 보고서. *arXiv preprint arXiv:2303.08774*, 2023.</span>
+<span id="cb1-230"><a href="#cb1-230" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-231"><a href="#cb1-231" aria-hidden="true" tabindex="-1"></a>엔젤리카 첸, 데이비드 도한, 데이비드 소. 에보프롬프팅: 코드 수준 신경망 아키텍처 검색을 위한 언어 모델. *신경정보처리시스템 학술대회 논문집*, 36, 2024a.</span>
+<span id="cb1-232"><a href="#cb1-232" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-233"><a href="#cb1-233" aria-hidden="true" tabindex="-1"></a>린 첸, 펑리 쉬, 니안 리, 젠위 한, 맹 왕, 용 리, 팬 후이. 대규모 언어 모델 기반 이질 정보 네트워크 내 메타 구조 탐색. *제30회 ACM SIGKDD 지식 발견 및 데이터 마이닝 회의 논문집*, pp. 307–318, 2024b.</span>
+<span id="cb1-234"><a href="#cb1-234" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-235"><a href="#cb1-235" aria-hidden="true" tabindex="-1"></a>Weize Chen, Yusheng Su, Jingwei Zuo, Cheng Yang, Chenfei Yuan, Chi-Min Chan, Heyang Yu, Yaxi Lu, Yi-Hsin Hung, Chen Qian, 등. Agentverse: 다중 에이전트 협업을 촉진하고 잠재적 행동을 탐색하기 위한 연구. *제12회 국제 학습 표현 학회*, 2023.</span>
+<span id="cb1-236"><a href="#cb1-236" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-237"><a href="#cb1-237" aria-hidden="true" tabindex="-1"></a>한 딩, 이 은형, 왕 준하오, 천 항. 대규모 언어 모델 에이전트를 활용한 금융 거래: 조사. *arXiv preprint arXiv:2408.06361*, 2024a.</span>
+<span id="cb1-238"><a href="#cb1-238" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-239"><a href="#cb1-239" aria-hidden="true" tabindex="-1"></a>정타오 딩, 윤케 장, 유 상, 우형 장, 제팡 종, 제 펑, 원 원, 홍위안 수, 니안 리, 니컬러스 슈키엔닉, 등. 세계 모델을 이해하는 것 vs 미래를 예측하는 것? 세계 모델에 대한 포괄적인 조사. *arXiv preprint arXiv:2411.14499*, 2024b.</span>
+<span id="cb1-240"><a href="#cb1-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-241"><a href="#cb1-241" aria-hidden="true" tabindex="-1"></a>크리산타 페르난도, 다이엘 선일 바나르세, 헨리크 미하엘레프스키, 사이먼 오신데로, 그리고 팀 록타셸. 프롬프트브리더: 프롬프트 진화를 통한 자기참조적 자기개선. *제41회 국제 기계학습 회의*, 2024.</span>
+<span id="cb1-242"><a href="#cb1-242" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-243"><a href="#cb1-243" aria-hidden="true" tabindex="-1"></a>Yingqiang Ge, Wenyue Hua, Kai Mei, Juntao Tan, Shuyuan Xu, Zelong Li, Yongfeng Zhang, 등. Openagi: LLM이 도메인 전문가와 만날 때. *Neural Information Processing Systems의 발전*, 36, 2024.</span>
+<span id="cb1-244"><a href="#cb1-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-245"><a href="#cb1-245" aria-hidden="true" tabindex="-1"></a>하오 시보, 구 이, 마 하오디, 홍 자쉬, 왕 젠, 왕 데이지, 후 지팅. 언어 모델을 통한 추론은 세계 모델을 통한 계획이다. *2023년 자연어 처리 실험적 방법 회의 논문집*, pp. 8154–8173, 2023.</span>
+<span id="cb1-246"><a href="#cb1-246" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-247"><a href="#cb1-247" aria-hidden="true" tabindex="-1"></a>후성란, 루총, 제프 클룬. 자율 에이전트 시스템의 자동 설계. *arXiv 전인증 논문 arXiv:2408.08435*, 2024.</span>
+<span id="cb1-248"><a href="#cb1-248" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-249"><a href="#cb1-249" aria-hidden="true" tabindex="-1"></a>간esh 자와르, 무함마드 압둘마게드, 라크스 VS 라크슈마난, 그리고 두지안 딩. LLM 성능 예측기는 아키텍처 검색의 좋은 초기화자이다. *arXiv 전인쇄 arXiv:2310.16712*, 2023.</span>
+<span id="cb1-250"><a href="#cb1-250" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-251"><a href="#cb1-251" aria-hidden="true" tabindex="-1"></a>조엘 레만, 조나단 고든, 쇼언 제인, 카말 난두스, 캐시 예, 케네스 오 스탠리. 대형 모델을 통한 진화. *진화적 기계 학습 핸드북*, pp. 331–366. 스프링어, 2023.</span>
+<span id="cb1-252"><a href="#cb1-252" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-253"><a href="#cb1-253" aria-hidden="true" tabindex="-1"></a>리준카이, 왕시위, 장멍, 리웨이타오, 라이윈후에, 강신휘, 마웨이즈, 류양. 에이전트 병원: 진화 가능한 의료 에이전트를 갖춘 병원의 시뮬라크룸. *arXiv 프리프린트 arXiv:2405.02957*, 2024a.</span>
+<span id="cb1-254"><a href="#cb1-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-255"><a href="#cb1-255" aria-hidden="true" tabindex="-1"></a>송웨이 리, 제이 펑, 지웨이 치, 신위안 후, 샤오멍 자오, 펑리 쉬. Limp: 대규모 언어 모델 기반 의도 인식 이동 예측. *arXiv preprint arXiv:2408.12832*, 2024b.</span>
+<span id="cb1-256"><a href="#cb1-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-257"><a href="#cb1-257" aria-hidden="true" tabindex="-1"></a>Yuan Li, Yixuan Zhang, 그리고 Lichao Sun. Metaagents: LLM 기반 작업 지향 조정을 위한 협업 생성 에이전트를 통한 인간 행동의 상호작용 시뮬레이션. *arXiv preprint arXiv:2310.06500*, 2023.</span>
+<span id="cb1-258"><a href="#cb1-258" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-259"><a href="#cb1-259" aria-hidden="true" tabindex="-1"></a>창 마, 장 준레이, 주 지하오, 양 청, 양 유주, 진 야후이, 란 진중, 공 링펑, 허 준현. 에이전트보드: 다중 대화형 LLM 에이전트의 분석 평가 보드. *arXiv preprint arXiv:2401.13178*, 2024.</span>
+<span id="cb1-260"><a href="#cb1-260" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-261"><a href="#cb1-261" aria-hidden="true" tabindex="-1"></a>아만 마다안, 니켓 탄던, 프라카르 구파타, 스키러 할리난, 루유 가오, 사라 위그레프, 유리 알론, 누하 디지리, 슈리마이 프라브무요예, 이미잉 양, 등. 셀프리파인: 셀프피드백을 이용한 반복적 개선. *네이처 인포메이션 프로세싱 시스템스 진보*, 36, 2024.</span>
+<span id="cb1-262"><a href="#cb1-262" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-263"><a href="#cb1-263" aria-hidden="true" tabindex="-1"></a>내카노 레이이치로, 제이콥 힐튼, 쇼치르 발라지, 제프 우, 룽 오양, 크리스티나 김, 크리스토퍼 헤스, 샨타누 재인, 바이넷 코사라주, 윌리엄 사우더스, 등. 웹지프트: 인간 피드백을 활용한 브라우저 지원 질문 응답. *arXiv 전인쇄 arXiv:2112.09332*, 2021.</span>
+<span id="cb1-264"><a href="#cb1-264" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-265"><a href="#cb1-265" aria-hidden="true" tabindex="-1"></a>무하마드 우마이르 나시르, 샘 얼, 줄리안 토겔리우스, 스티븐 제임스, 크리스토퍼 클레그혼. Llmatic: 대규모 언어 모델과 품질 다변이 최적화를 통한 신경망 구조 탐색. *유전적 및 진화적 계산 회의 논문집*, pp. 1110–1118, 2024.</span>
+<span id="cb1-266"><a href="#cb1-266" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-267"><a href="#cb1-267" aria-hidden="true" tabindex="-1"></a>조운성 박, 조셉 오브라이언, 캐리 준 채, 메르edith 링겔 모리스, 퍼시 리앙, 마이클 S 버나스타인. 생성형 에이전트: 인간 행동의 상호작용 시뮬라크라. *제36회 아크엠 유저 인터페이스 소프트웨어 및 기술 학술대회 논문집*, pp. 1–22, 2023.</span>
+<span id="cb1-268"><a href="#cb1-268" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-269"><a href="#cb1-269" aria-hidden="true" tabindex="-1"></a>천천, 위류, 홍장류, 노천, 위판당, 가호리, 청양, 위제천, 유승수, 신총, 등. Chatdev: 소프트웨어 개발을 위한 의사소통 에이전트. *제62회 연간 회의 논문집 (계산적 언어학 협회)* (제1권: 장편 논문), pp. 15174–15186, 2024.</span>
+<span id="cb1-270"><a href="#cb1-270" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-271"><a href="#cb1-271" aria-hidden="true" tabindex="-1"></a>Bernardino Romera-Paredes, Mohammadamin Barekatain, Alexander Novikov, Matej Balog, M Pawan Kumar, Emilien Dupont, Francisco JR Ruiz, Jordan S Ellenberg, Pengming Wang, Omar Fawzi, 등. 대규모 언어 모델을 이용한 프로그램 탐색에서의 수학적 발견. *Nature*, 625(7995):468–475, 2024.</span>
+<span id="cb1-272"><a href="#cb1-272" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-273"><a href="#cb1-273" aria-hidden="true" tabindex="-1"></a>티모 슈릭, 제인 드위베디-유, 로베르토 데시, 로베르타 라일레아누, 마리아 로멜리, 에릭 함브로, 루크 제틀모이어, 니콜라 칸체다, 그리고 토마스 시알롬. 툴포머: 언어 모델은 도구 사용을 스스로 배울 수 있다. *신경정보처리시스템 학술대회 논문집*, 36, 2024.</span>
+<span id="cb1-274"><a href="#cb1-274" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-275"><a href="#cb1-275" aria-hidden="true" tabindex="-1"></a>유 상, 유 리, 펑리 쉬, 왕 리. Defint: 하이브리드 대형 언어 모델을 활용한 효율적인 추론을 위한 기본 개입 기반 프레임워크. *arXiv preprint arXiv:2402.02563*, 2024.</span>
+<span id="cb1-276"><a href="#cb1-276" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-277"><a href="#cb1-277" aria-hidden="true" tabindex="-1"></a>Chenyang Shao, Xinyuan Hu, Yutang Lin, 그리고 Fengli Xu. Division-of-thoughts: 효율적인 디바이스 내 에이전트를 위한 하이브리드 언어 모델 시너지 활용. *arXiv preprint arXiv:2502.04392*, 2025.</span>
+<span id="cb1-278"><a href="#cb1-278" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-279"><a href="#cb1-279" aria-hidden="true" tabindex="-1"></a>Yongliang Shen, Kaitao Song, Xu Tan, Dongsheng Li, Weiming Lu, 그리고 Yueting Zhuang. Hugginggpt: Hugging Face에서 ChatGPT 및 친구들과 함께 AI 작업 해결. *Advances in Neural Information Processing Systems*, 36, 2024.</span>
+<span id="cb1-280"><a href="#cb1-280" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-281"><a href="#cb1-281" aria-hidden="true" tabindex="-1"></a>노아 신, 페데리코 카사노, 애쉬윈 고핀aths, 카르티크 나라심한, 샤운유 야오. 리플렉션: 구두 강화 학습을 갖는 언어 에이전트. *신경정보처리시스템의 진전*, 36, 2024.</span>
+<span id="cb1-282"><a href="#cb1-282" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-283"><a href="#cb1-283" aria-hidden="true" tabindex="-1"></a>모히트 쇼리다르, 싱디 위안, 마르크-알렉산드르 코트, 요나탄 비스크, 애덤 트리스클러, 매튜 하우스크네프. 알프월드: 텍스트와 몸에 입각한 환경을 통합한 상호작용 학습을 위한 접근. *국제학습대표성학회(International Conference on Learning Representations)*, 2021.</span>
+<span id="cb1-284"><a href="#cb1-284" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-285"><a href="#cb1-285" aria-hidden="true" tabindex="-1"></a>데이비드 소, 콰크 레, 첸 리앙. 진화된 트랜스포머. *기계 학습 국제 회의*에서, pp. 5877–5886. PMLR, 2019.</span>
+<span id="cb1-286"><a href="#cb1-286" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-287"><a href="#cb1-287" aria-hidden="true" tabindex="-1"></a>테오도어 R 서머스, 샤운위 야오, 카르티크 나라심한, 토마스 L 그리피스. 언어 에이전트를 위한 인지 구조. *arXiv 전인쇄 arXiv:2309.02427*, 2023.</span>
+<span id="cb1-288"><a href="#cb1-288" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-289"><a href="#cb1-289" aria-hidden="true" tabindex="-1"></a>휴고 투르본, 티보 테 라브릴, 고티에 이자카르, 샤를 마르티네, 마리앙느 라샤크스, 티모테 라크루아, 바티스트 로지에, 나만 골, 에릭 암브로, 파이살 아자르, 등. Llama: 오픈 및 <span class="in">`효율적인`</span> 기초 언어 모델. *arXiv 전인쇄 arXiv:2302.13971*, 2023.</span>
+<span id="cb1-290"><a href="#cb1-290" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-291"><a href="#cb1-291" aria-hidden="true" tabindex="-1"></a>왕관치, 샤오위치, 장운판, 아자이 만들라카르, 샤오차오웨이, 주위커, 팬린시, 안나마 안안두카르. 보이저: 대규모 언어 모델을 갖춘 개방형 신체적 에이전트. *머신러닝 연구 학술지*, 2024a. ISSN 2835-8856.</span>
+<span id="cb1-292"><a href="#cb1-292" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-293"><a href="#cb1-293" aria-hidden="true" tabindex="-1"></a>루요아 왕, 피터 잔센, 마르크-알렉상드르 코트, 프리트비라주 암마나브롤루. Scienceworld: '당신의 에이전트는 5학년 학생보다 더 똑똑한가?' *2022년 자연어 처리 실험적 방법 회의 논문집*, pp. 11279–11298, 2022.</span>
+<span id="cb1-294"><a href="#cb1-294" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-295"><a href="#cb1-295" aria-hidden="true" tabindex="-1"></a>왕싱야오, 천양이, 위판위안, 장이제, 리윈주, 펑하오, 지행. 실행 가능한 코드 작업은 더 나은 LLM 에이전트를 유도한다. *제41회 국제 기계 학습 회의*, 2024b.</span>
+<span id="cb1-296"><a href="#cb1-296" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-297"><a href="#cb1-297" aria-hidden="true" tabindex="-1"></a>왕학지, 제이슨 웨이, 데일 슈어만스, 쿠옥 V. 레, 에드 H. 치, 샤란 나랑, 아칸크샤 초드허리, 그리고 덴니 주. 자기 일관성이 언어 모델에서 사고의 사슬 추론을 향상시킨다. *제11회 국제 학습 표현 학회*, 2023a.</span>
+<span id="cb1-298"><a href="#cb1-298" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-299"><a href="#cb1-299" aria-hidden="true" tabindex="-1"></a>Zhenhailong 왕, 샤오광 마오, 웬산 우, 타오 게, 푸루 웨이, 그리고 헝 지. 대규모 언어 모델의 잠재적 인지적 시너지 해방: 다중 성격 자기 협업을 통한 작업 해결 에이전트. *arXiv preprint arXiv:2307.05300*, 2023b.</span>
+<span id="cb1-300"><a href="#cb1-300" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-301"><a href="#cb1-301" aria-hidden="true" tabindex="-1"></a>지하오 왕, 샤오페이 채, 관저우 천, 안지 류, 샤오지안 셰언 마, 그리고 이타오 량. 설명, 설명, 계획 및 선택: 대화형 계획을 통한 LLMs는 오픈월드 다중 작업 에이전트를 가능하게 한다. *Neural Information Processing Systems의 발전*, 36, 2024c.</span>
+<span id="cb1-302"><a href="#cb1-302" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-303"><a href="#cb1-303" aria-hidden="true" tabindex="-1"></a>제이슨 웨이, 쑤에즈 지 왕, 데일 슈어만스, 마르텐 보스마, 페이 샤, 에드 치, 쿠옥 V 레, 데니 주, 등. 체인 오브 써웃 프롬프팅은 대형 언어 모델에서 추론을 유도한다. *신경정보처리시스템의 진전*, 35:24824–24837, 2022.</span>
+<span id="cb1-304"><a href="#cb1-304" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-305"><a href="#cb1-305" aria-hidden="true" tabindex="-1"></a>Licheng Wen, Daocheng Fu, Xin Li, Xinyu Cai, Tao MA, Pinlong Cai, Min Dou, Botian Shi, Liang He, 그리고 Yu Qiao. Dilu: 대규모 언어 모델을 활용한 지식 기반 자율 주행 접근법. *제12회 국제 학습 표현 학회*, 2024.</span>
+<span id="cb1-306"><a href="#cb1-306" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-307"><a href="#cb1-307" aria-hidden="true" tabindex="-1"></a>Lilian Weng. Llm-powered autonomous agents. *lilianweng.github.io*, 2023년 6월. URL <span class="co">[</span><span class="ot">https://lilianweng.github.io/posts/2023-06-23-agent/</span><span class="co">](https://lilianweng.github.io/posts/2023-06-23-agent/)</span></span>
+<span id="cb1-308"><a href="#cb1-308" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-309"><a href="#cb1-309" aria-hidden="true" tabindex="-1"></a>콜린 화이트, 윌리 네이스완거, 야시 사바니. 바나나: 신경망 아키텍처를 위한 베이지안 최적화. *AAAI 인공지능 회의록*, 제35권, pp. 10293–10301, 2021.</span>
+<span id="cb1-310"><a href="#cb1-310" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-311"><a href="#cb1-311" aria-hidden="true" tabindex="-1"></a>지형시, 이원딩, 원샹천, 보양홍, 홍린궈, 준저왕, 딩원양, 천양료, 신궈, 위허 등. Agentgym: 다양한 환경에서 대규모 언어 모델 기반 에이전트의 진화. *arXiv preprint arXiv:2406.04151*, 2024.</span>
+<span id="cb1-312"><a href="#cb1-312" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-313"><a href="#cb1-313" aria-hidden="true" tabindex="-1"></a>Jian Xie, Kai Zhang, Jiangjie Chen, Tinghui Zhu, Renze Lou, Yuandong Tian, Yanghua Xiao, 그리고 Yu Su. Travelplanner: 언어 에이전트를 활용한 실세계 계획을 위한 벤치마크. *제41회 국제 기계학습 회의*, 2024.</span>
+<span id="cb1-314"><a href="#cb1-314" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-315"><a href="#cb1-315" aria-hidden="true" tabindex="-1"></a>펑리 쉬, 첸위에 하오, 제팡 종, 징웨이 왕, 윤케 장, 징이 왕, 샤오충 란, 지하이 공, 톈젠 오양, 팬진 멩, 등. 대규모 추론 모델을 향해: 대규모 언어 모델을 이용한 강화 추론에 대한 조사. *arXiv preprint arXiv:2501.09686*, 2025.</span>
+<span id="cb1-316"><a href="#cb1-316" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-317"><a href="#cb1-317" aria-hidden="true" tabindex="-1"></a>양청룬, 왕학지, 루이펑, 류한샤오, 쿠옥 V 레, 저우덴니, 첸신윈. 대규모 언어 모델을 최적화기로 사용하는 것. *제12회 국제학습표현학회*, 2024.</span>
+<span id="cb1-318"><a href="#cb1-318" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-319"><a href="#cb1-319" aria-hidden="true" tabindex="-1"></a>요순우, 호원천, 존 양, 카르티크 나라심한. Webshop: 지능형 언어 에이전트를 활용한 확장 가능한 실세계 웹 상호작용. *Neural Information Processing Systems의 발전*, 35:20744–20757, 2022.</span>
+<span id="cb1-320"><a href="#cb1-320" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-321"><a href="#cb1-321" aria-hidden="true" tabindex="-1"></a>요선우, 유디안, 제프리 조, 이자크 샤프란, 톰 그리피스, 채원, 카르티크 나라심한. 나무의 사고: 대규모 언어 모델을 이용한 성찰적 문제 해결. *신경정보처리시스템 학술대회 논문집*, 36, 2024.</span>
+<span id="cb1-322"><a href="#cb1-322" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-323"><a href="#cb1-323" aria-hidden="true" tabindex="-1"></a>유준치, 하란, 잉지타오. 사고 전파: 대규모 언어 모델을 이용한 복잡한 추론을 위한 유사성 접근법. *제12회 국제학습표현학회*, 2024.</span>
+<span id="cb1-324"><a href="#cb1-324" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-325"><a href="#cb1-325" aria-hidden="true" tabindex="-1"></a>Siyu Yuan, Kaitao Song, Jiangjie Chen, Xu Tan, Dongsheng Li, and Deqing Yang. Evoagent: 자연스러운 다중 에이전트 생성을 위한 진화 알고리즘. *arXiv preprint arXiv:2406.14228*, 2024.</span>
+<span id="cb1-326"><a href="#cb1-326" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-327"><a href="#cb1-327" aria-hidden="true" tabindex="-1"></a>정빈 증, 청룡 양, 순난 동, 헤밍 두, 량정, 펑리 쉬, 이용. 지시 없이 목표 지향적 도시 내비게이션을 위한 LLM 에이전트 설계: 인식, 반영, 계획. *arXiv preprint arXiv:2408.04168*, 2024.</span>
+<span id="cb1-328"><a href="#cb1-328" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-329"><a href="#cb1-329" aria-hidden="true" tabindex="-1"></a>화이수이 스티븐 정, 스와루프 미슈라, 신윤 첸, 헝쯔 청, 에드 H. 치, 쿠옥 V. 레, 덴니 주. 한 걸음 물러서기: 대규모 언어 모델에서 추상화를 통한 추론 유도. *제12회 국제학습표현학회*, 2024.</span>
+<span id="cb1-330"><a href="#cb1-330" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-331"><a href="#cb1-331" aria-hidden="true" tabindex="-1"></a>주홍펑, 양명호, 왕준, 판웨이. 베이즈나스: 신경망 구조 탐색을 위한 베이지안 접근법. *기계학습 국제학회*, pp. 7603–7613, 2019.</span>
+<span id="cb1-332"><a href="#cb1-332" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-333"><a href="#cb1-333" aria-hidden="true" tabindex="-1"></a>밍첸 주거, 원이 왕, 루이스 키르쉬, 프란체스코 파치오, 드미트리 키즈불린, 그리고 유르겐 슈미드부허. GPTSwarm: 최적화 가능한 그래프로서의 언어 에이전트. *제41회 국제 기계학습 회의*, 2024.</span>
+<span id="cb1-334"><a href="#cb1-334" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-335"><a href="#cb1-335" aria-hidden="true" tabindex="-1"></a><span class="fu"># 부록 A</span></span>
+<span id="cb1-336"><a href="#cb1-336" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-337"><a href="#cb1-337" aria-hidden="true" tabindex="-1"></a><span class="fu"># &lt;span id="page-14-0"&gt;&lt;/span&gt;A.1 실험 설정</span></span>
+<span id="cb1-338"><a href="#cb1-338" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-339"><a href="#cb1-339" aria-hidden="true" tabindex="-1"></a>작업 설정. 우리는 AgentSquare와 비교 대상 방법을 네 가지 주요 도메인을 포함하는 여섯 가지 대표적인 작업에서 평가한다. 이 작업들은 기존 LLM 에이전트 벤치마크에서 널리 채택되고 있다 <span class="co">[</span><span class="ot">\(Ma et al., 2024;</span><span class="co">](#page-10-10)</span> <span class="co">[</span><span class="ot">Xi et al., 2024\)</span><span class="co">](#page-12-6)</span>:</span>
+<span id="cb1-340"><a href="#cb1-340" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-341"><a href="#cb1-341" aria-hidden="true" tabindex="-1"></a>embodiment: ALFWorld <span class="co">[</span><span class="ot">\(Shridhar 등, 2021\)</span><span class="co">](#page-11-12)</span>는 텍스트 기반 가정 내 작업을 수행하는 에이전트가 텍스트 명령을 사용하여 객체를 탐색하고 상호작용하는 환경이며, ScienceWorld <span class="co">[</span><span class="ot">\(Wang 등, 2022\)</span><span class="co">](#page-12-8)</span>은 에이전트가 방을 탐색하고 실험을 수행해야 하는 상호작용식 과학 작업을 제공하여 과학적 상식을 테스트합니다.</span>
+<span id="cb1-342"><a href="#cb1-342" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-343"><a href="#cb1-343" aria-hidden="true" tabindex="-1"></a>게임: PDDL <span class="co">[</span><span class="ot">\(Ma et al., 2024\)</span><span class="co">](#page-10-10)</span>는 에이전트가 PDDL 표현식을 사용하여 작업을 완료하는 다양한 전략적 게임을 포함한다.</span>
+<span id="cb1-344"><a href="#cb1-344" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-345"><a href="#cb1-345" aria-hidden="true" tabindex="-1"></a>웹: 웹숍 <span class="co">[</span><span class="ot">\(Yao et al., 2022\)</span><span class="co">](#page-12-9)</span>는 에이전트가 사용자 지시에 따라 제품을 탐색하고 구매하는 온라인 쇼핑 작업에 중점을 둔다.</span>
+<span id="cb1-346"><a href="#cb1-346" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-347"><a href="#cb1-347" aria-hidden="true" tabindex="-1"></a>도구: TravelPlanner <span class="co">[</span><span class="ot">\(Xie et al., 2024\)</span><span class="co">](#page-12-10)</span>은 에이전트가 도구와 데이터를 사용하여 상세한 계획을 수립하는 다양한 여행 계획 작업을 포함하며, (6)M3ToolEval <span class="co">[</span><span class="ot">\(Wang et al., 2024b\)</span><span class="co">](#page-12-11)</span>은 여러 도구와의 다중 대화를 필요로 하는 복잡한 작업을 포함한다.</span>
+<span id="cb1-348"><a href="#cb1-348" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-349"><a href="#cb1-349" aria-hidden="true" tabindex="-1"></a>성능 평가 지표는 각 작업에 따라 달라지며, 원본 연구의 평가 설정에 따라 결정됩니다. 구체적으로, ALFWorld와 M3ToolEval의 평가 지표는 "성공률(success rate)"이며, Webshop의 평가 지표는 "작업 점수(task score, 에피소드별 평균 보상으로 정의됨)"이며, SciWorld와 PDDL의 평가 지표는 "진행률(progress rate)"이며, TravelPlanner의 평가 지표는 "마이크로 통과율(micro pass rate)"입니다.</span>
+<span id="cb1-350"><a href="#cb1-350" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-351"><a href="#cb1-351" aria-hidden="true" tabindex="-1"></a>베이스라인. 우리는 AgentSquare을 네 가지 유형의 베이스라인과 비교한다:</span>
+<span id="cb1-352"><a href="#cb1-352" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-353"><a href="#cb1-353" aria-hidden="true" tabindex="-1"></a>hand-crafted 에이전트. 우리는 CoT <span class="co">[</span><span class="ot">\(Wei et al., 2022\)</span><span class="co">](#page-12-1)</span>, CoT-SC <span class="co">[</span><span class="ot">\(Wang et al., 2023a\)</span><span class="co">](#page-12-12)</span>, Self-refine <span class="co">[</span><span class="ot">\(Madaan et al., 2024\)</span><span class="co">](#page-11-15)</span>, ToT <span class="co">[</span><span class="ot">\(Yao et al., 2024\)</span><span class="co">](#page-12-5)</span>, Step back <span class="co">[</span><span class="ot">\(Zheng et al., 2024\)</span><span class="co">](#page-13-3)</span>, Thought propagation <span class="co">[</span><span class="ot">\(Yu et al., 2024\)</span><span class="co">](#page-12-13)</span>, HuggingGPT <span class="co">[</span><span class="ot">\(Shen et al., 2024\)</span><span class="co">](#page-11-1)</span>, Voyager <span class="co">[</span><span class="ot">\(Wang et al., 2024a\)</span><span class="co">](#page-11-7)</span>, Generative Agents <span class="co">[</span><span class="ot">\(Park et al., 2023\)</span><span class="co">](#page-11-2)</span>, DEPS <span class="co">[</span><span class="ot">\(Wang et al., 2024c\)</span><span class="co">](#page-12-4)</span>, OPENAGI <span class="co">[</span><span class="ot">\(Ge et al., 2024\)</span><span class="co">](#page-10-15)</span> 및 Dilu <span class="co">[</span><span class="ot">\(Wen et al., 2024\)</span><span class="co">](#page-12-14)</span>를 포함한 12개의 hand-crafted 에이전트와 비교한다.</span>
+<span id="cb1-354"><a href="#cb1-354" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-355"><a href="#cb1-355" aria-hidden="true" tabindex="-1"></a>모듈 검색 방법. 우리는 기존 모듈의 무작위 조합과 베이지안 <span class="co">[</span><span class="ot">\(Zhou et al., 2019\)</span><span class="co">](#page-13-4)</span> 모듈 조합 최적화를 포함한 두 가지 모듈 수준 에이전트 최적화 방법과 비교한다. 이는 NAS에서 베이지안 최적화에 영감을 받은 것이다 <span class="co">[</span><span class="ot">\(White et al., 2021\)</span><span class="co">](#page-12-15)</span>.</span>
+<span id="cb1-356"><a href="#cb1-356" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-357"><a href="#cb1-357" aria-hidden="true" tabindex="-1"></a>프롬프트 검색 방법. 우리는 OPRO <span class="co">[</span><span class="ot">\(Yang et al., 2024\)</span><span class="co">](#page-12-2)</span>를 대표적인 프롬프트 수준 최적화 접근법으로 선택한다. 이 방법은 LLM을 최적화기로 활용하여 반복적인 프롬프트를 통해 지시를 생성하고 개선한다.</span>
+<span id="cb1-358"><a href="#cb1-358" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-359"><a href="#cb1-359" aria-hidden="true" tabindex="-1"></a>에이전트 검색 방법. 우리는 전체 에이전트 시스템을 코드 공간에서 최적화하는 ADAS <span class="co">[</span><span class="ot">\(Hu et al., 2024\)</span><span class="co">](#page-10-4)</span>를 에이전트 검색 기준으로 선택한다. 우리는 ADAS의 공식 코드를 사용하며, 이를 우리의 작업에 적응시키기 위해 약간의 수정을 가한다.</span>
+<span id="cb1-360"><a href="#cb1-360" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-361"><a href="#cb1-361" aria-hidden="true" tabindex="-1"></a>AgentSquare 설정. AgentSquare를 구현하고 GPT-3.5 turbo-0125 및 GPT-4o <span class="co">[</span><span class="ot">\(Achiam et al., 2023\)</span><span class="co">](#page-10-0)</span>를 사용하여 실험을 수행한다. 공정한 비교를 위해 모든 방법에서 동일한 수의 피셔트 예시를 사용한다. 초기 에이전트는 무작위 모듈 조합으로 설정되며, 성능 향상이 5회 연속으로 발생하지 않으면 검색 과정이 종료된다.</span>
+<span id="cb1-362"><a href="#cb1-362" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-363"><a href="#cb1-363" aria-hidden="true" tabindex="-1"></a><span class="fu">#### **알고리즘 1:** 에이전트스퀘어 알고리즘</span></span>
+<span id="cb1-364"><a href="#cb1-364" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-365"><a href="#cb1-365" aria-hidden="true" tabindex="-1"></a>|                     |                   | 웹      | 신체화된 |          | 너무    | 올     | 게임  |</span>
+<span id="cb1-366"><a href="#cb1-366" aria-hidden="true" tabindex="-1"></a>|---------------------|-------------------|---------|----------|----------|--------|--------|-------|</span>
+<span id="cb1-367"><a href="#cb1-367" aria-hidden="true" tabindex="-1"></a>| 메서드 유형         | 메서드            | 웹숍    | ALF월드  | Sci월드  | M3툴  | 여행   | PDDL  |</span>
+<span id="cb1-368"><a href="#cb1-368" aria-hidden="true" tabindex="-1"></a>|                     | CoT               | 0.504   | 0.369    | 0.142    | 0.172  | 0.080  | 0.151 |</span>
+<span id="cb1-369"><a href="#cb1-369" aria-hidden="true" tabindex="-1"></a>|                     | CoT-SC            | 0.527   | 0.381    | 0.105    | 0.181  | 0.167  | 0.178 |</span>
+<span id="cb1-370"><a href="#cb1-370" aria-hidden="true" tabindex="-1"></a>|                     | Self-refine       | 0.439   | 0.388    | 0.222    | 0.098  | 0.000  | 0.109 |</span>
+<span id="cb1-371"><a href="#cb1-371" aria-hidden="true" tabindex="-1"></a>|                     | ToT               | 0.510   | 0.381    | 0.143    | 0.189  | 0.163  | 0.147 |</span>
+<span id="cb1-372"><a href="#cb1-372" aria-hidden="true" tabindex="-1"></a>|                     | Step Back         | 0.478   | 0.375    | 0.027    | 0.128  | 0.120  | 0.137 |</span>
+<span id="cb1-373"><a href="#cb1-373" aria-hidden="true" tabindex="-1"></a>|                     | TP                | 0.429   | 0.299    | 0.168    | 0.139  | 0.063  | 0.122 |</span>
+<span id="cb1-374"><a href="#cb1-374" aria-hidden="true" tabindex="-1"></a>| 수동 작성 에이전트  | HuggingGPT        | 0.518   | 0.502    | 0.270    | 0.012  | 0.470  | 0.212 |</span>
+<span id="cb1-375"><a href="#cb1-375" aria-hidden="true" tabindex="-1"></a>|                     | Voyager           | 0.427   | 0.369    | 0.301    | 0.008  | 0.480  | 0.149 |</span>
+<span id="cb1-376"><a href="#cb1-376" aria-hidden="true" tabindex="-1"></a>|                     | 생성형 에이전트  | 0.539   | 0.388    | 0.153    | 0.144  | 0.060  | 0.123 |</span>
+<span id="cb1-377"><a href="#cb1-377" aria-hidden="true" tabindex="-1"></a>|                     | DEPS              | 0.555   | 0.474    | 0.308    | 0.017  | 0.500  | 0.186 |</span>
+<span id="cb1-378"><a href="#cb1-378" aria-hidden="true" tabindex="-1"></a>|                     | OPENAGI           | 0.507   | 0.448    | 0.257    | 0.008  | 0.430  | 0.178 |</span>
+<span id="cb1-379"><a href="#cb1-379" aria-hidden="true" tabindex="-1"></a>|                     | Dilu              | 0.418   | 0.291    | 0.000    | 0.131  | 0.137  | 0.054 |</span>
+<span id="cb1-380"><a href="#cb1-380" aria-hidden="true" tabindex="-1"></a>| 모듈 검색           | 무작위            | 0.562   | 0.569    | 0.367    | 0.235  | 0.473  | 0.216 |</span>
+<span id="cb1-381"><a href="#cb1-381" aria-hidden="true" tabindex="-1"></a>| 모듈 검색           | 베이지안          | 0.581   | 0.611    | 0.269    | 0.217  | 0.497  | 0.210 |</span>
+<span id="cb1-382"><a href="#cb1-382" aria-hidden="true" tabindex="-1"></a>| 프롬프트 검색       | OPRO              | 0.507   | 0.376    | 0.032    | 0.193  | 0.513  | 0.179 |</span>
+<span id="cb1-383"><a href="#cb1-383" aria-hidden="true" tabindex="-1"></a>| 에이전트 검색       | ADAS              | 0.519   | 0.274    | 0.217    | 0.193  | 0.410  | 0.186 |</span>
+<span id="cb1-384"><a href="#cb1-384" aria-hidden="true" tabindex="-1"></a>|                     | AgentSquare       | 0.617   | 0.651    | 0.432    | 0.285  | 0.520  | 0.219 |</span>
+<span id="cb1-385"><a href="#cb1-385" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-386"><a href="#cb1-386" aria-hidden="true" tabindex="-1"></a>표 A.3: AgentSquare에서 검색한 에이전트와 (1) 기존 인간 설계 에이전트, (2) 모듈 검색 기반 기준, (3) GPT-3.5 기반 프롬프트 검색 기준의 성능 비교(다양한 도메인의 여섯 가지 작업 기준)</span>
+<span id="cb1-387"><a href="#cb1-387" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-388"><a href="#cb1-388" aria-hidden="true" tabindex="-1"></a>| 작업          | 계획     | 추론      | 도구 사용 | 기억              | 최고의 수작업 에이전트       |</span>
+<span id="cb1-389"><a href="#cb1-389" aria-hidden="true" tabindex="-1"></a>|---------------|----------|-----------|---------|-----------------|------------------------|</span>
+<span id="cb1-390"><a href="#cb1-390" aria-hidden="true" tabindex="-1"></a>| 웹숍         | IO       | HTSS      | /       | Dilu              | HuggingGPT               |</span>
+<span id="cb1-391"><a href="#cb1-391" aria-hidden="true" tabindex="-1"></a>| ALFWorld      | TD       | SF-ToT    | /       | 생성형 에이전트   | Self-refine              |</span>
+<span id="cb1-392"><a href="#cb1-392" aria-hidden="true" tabindex="-1"></a>| SciWorld      | Voyager  | CoT       | /       | Hier              | Voyager                  |</span>
+<span id="cb1-393"><a href="#cb1-393" aria-hidden="true" tabindex="-1"></a>| M3Tool        | /        | CoT-SC    | ToolBF  | /                 | Toolbench                |</span>
+<span id="cb1-394"><a href="#cb1-394" aria-hidden="true" tabindex="-1"></a>| 여행 계획     | DEPS     | CoT       | TH      | /                 | DEPS                     |</span>
+<span id="cb1-395"><a href="#cb1-395" aria-hidden="true" tabindex="-1"></a>| PDDL          | IR       | CASRC     | /       | 생성형 에이전트   | OPENAGI                  |</span>
+<span id="cb1-396"><a href="#cb1-396" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-397"><a href="#cb1-397" aria-hidden="true" tabindex="-1"></a>표 A.4: AgentSquare에서 검색한 최고의 에이전트와 모든 작업에서 최고의 인간 설계 에이전트 간의 비교</span>
+<span id="cb1-398"><a href="#cb1-398" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-399"><a href="#cb1-399" aria-hidden="true" tabindex="-1"></a>| 방법                   | 웹숍 | ALF월드 | 사이언스월드 | M3툴 | 여행플래너 | PDDL  |</span>
+<span id="cb1-400"><a href="#cb1-400" aria-hidden="true" tabindex="-1"></a>|--------------------------|---------|----------|----------|--------|---------------|-------|</span>
+<span id="cb1-401"><a href="#cb1-401" aria-hidden="true" tabindex="-1"></a>| AgentSquare(전체)        | 0.617   | 0.651    | 0.432    | 0.285  | 0.520         | 0.219 |</span>
+<span id="cb1-402"><a href="#cb1-402" aria-hidden="true" tabindex="-1"></a>| 모듈 진화 없음           | 0.595   | 0.623    | 0.288    | 0.236  | 0.483         | 0.202 |</span>
+<span id="cb1-403"><a href="#cb1-403" aria-hidden="true" tabindex="-1"></a>| 모듈 재조합 없음         | 0.578   | 0.546    | 0.310    | 0.258  | 0.267         | 0.173 |</span>
+<span id="cb1-404"><a href="#cb1-404" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-405"><a href="#cb1-405" aria-hidden="true" tabindex="-1"></a>표 A.5: 다양한 도메인의 여섯 가지 작업에서 AgentSquare의 GPT-3.5에 대한 제거 실험 결과</span>
+<span id="cb1-406"><a href="#cb1-406" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-407"><a href="#cb1-407" aria-hidden="true" tabindex="-1"></a>|                      | 웹숍 | ALF월드 | 사이언스월드 | M3툴 | 트래블플래너 | PDDL    |</span>
+<span id="cb1-408"><a href="#cb1-408" aria-hidden="true" tabindex="-1"></a>|----------------------|-------|----------|------------|-------|---------------|---------|</span>
+<span id="cb1-409"><a href="#cb1-409" aria-hidden="true" tabindex="-1"></a>| 평균 비용 (GPT-3.5)   | \$3.16 | \$4.25   | \$1.92     | \$2.43 | \$1.84        | \$2.70  |</span>
+<span id="cb1-410"><a href="#cb1-410" aria-hidden="true" tabindex="-1"></a>| 반복 횟수 (GPT-3.5)   | 23    | 21       | 8          | 14    | 9             | 17      |</span>
+<span id="cb1-411"><a href="#cb1-411" aria-hidden="true" tabindex="-1"></a>| 평균 비용 (GPT-4o)    | \$10.51 | \$13.96  | \$42.14    | \$26.03 | \$29.75       | \$26.94 |</span>
+<span id="cb1-412"><a href="#cb1-412" aria-hidden="true" tabindex="-1"></a>| 반복 횟수 (GPT-4o)    | 18    | 15       | 9          | 18    | 8             | 12      |</span>
+<span id="cb1-413"><a href="#cb1-413" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-414"><a href="#cb1-414" aria-hidden="true" tabindex="-1"></a>표 A.6: AgentSquare가 GPT-3.5와 GPT-40을 사용하여 여섯 가지 작업에서 종료될 때까지 평균 API 비용 및 검색 반복 횟수</span>
+<span id="cb1-415"><a href="#cb1-415" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-416"><a href="#cb1-416" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_16_Figure_5.jpeg)</span></span>
+<span id="cb1-417"><a href="#cb1-417" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-418"><a href="#cb1-418" aria-hidden="true" tabindex="-1"></a>그림 A.7: ALFWorld 작업에서 성능과 API 비용 시각화</span>
+<span id="cb1-419"><a href="#cb1-419" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-420"><a href="#cb1-420" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_16_Figure_7.jpeg)</span></span>
+<span id="cb1-421"><a href="#cb1-421" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-422"><a href="#cb1-422" aria-hidden="true" tabindex="-1"></a>그림 A.8: 웹숍에서의 성능 대 API 비용 시각화</span>
+<span id="cb1-423"><a href="#cb1-423" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-424"><a href="#cb1-424" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_16_Figure_9.jpeg)</span></span>
+<span id="cb1-425"><a href="#cb1-425" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-426"><a href="#cb1-426" aria-hidden="true" tabindex="-1"></a>그림 A.9: Sciworld에서의 성능 대 API 비용 시각화</span>
+<span id="cb1-427"><a href="#cb1-427" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-428"><a href="#cb1-428" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_17_Figure_1.jpeg)</span></span>
+<span id="cb1-429"><a href="#cb1-429" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-430"><a href="#cb1-430" aria-hidden="true" tabindex="-1"></a>그림 A.10: M3tool에서의 성능 대 API 비용 시각화</span>
+<span id="cb1-431"><a href="#cb1-431" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-432"><a href="#cb1-432" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_17_Figure_3.jpeg)</span></span>
+<span id="cb1-433"><a href="#cb1-433" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-434"><a href="#cb1-434" aria-hidden="true" tabindex="-1"></a>그림 A.11: Travelplanner에서 성능과 API 비용 시각화</span>
+<span id="cb1-435"><a href="#cb1-435" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-436"><a href="#cb1-436" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_17_Figure_5.jpeg)</span></span>
+<span id="cb1-437"><a href="#cb1-437" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-438"><a href="#cb1-438" aria-hidden="true" tabindex="-1"></a>그림 A.12: PDDL에서 성능 대 API 비용 시각화</span>
+<span id="cb1-439"><a href="#cb1-439" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-440"><a href="#cb1-440" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_18_Figure_1.jpeg)</span></span>
+<span id="cb1-441"><a href="#cb1-441" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-442"><a href="#cb1-442" aria-hidden="true" tabindex="-1"></a>그림 A.13: M3tool 및 PDDL에서 AgentSquare 탐색 경로(최고 수작업 에이전트를 초과할 때 더 많은 수작업 에이전트와 특정 모듈 조합, 최종 진화된 에이전트, 기타 탐색 기준).</span>
+<span id="cb1-443"><a href="#cb1-443" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-444"><a href="#cb1-444" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_18_Figure_3.jpeg)</span></span>
+<span id="cb1-445"><a href="#cb1-445" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-446"><a href="#cb1-446" aria-hidden="true" tabindex="-1"></a>그림 A.14: Sciworld 및 Travelplanner에서 AgentSquare의 탐색 경로(최고의 수작업 에이전트를 초과할 때 더 많은 수작업 에이전트와 특정 모듈 조합, 최종 진화된 에이전트, 기타 탐색 기준 모델)</span>
+<span id="cb1-447"><a href="#cb1-447" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-448"><a href="#cb1-448" aria-hidden="true" tabindex="-1"></a><span class="al">![](_page_18_Figure_5.jpeg)</span></span>
+<span id="cb1-449"><a href="#cb1-449" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-450"><a href="#cb1-450" aria-hidden="true" tabindex="-1"></a>그림 A.15: 각 작업에 대해 동적으로 검색된 에이전트에 대한 성능 예측기의 유효성 검증</span>
+<span id="cb1-451"><a href="#cb1-451" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-452"><a href="#cb1-452" aria-hidden="true" tabindex="-1"></a><span class="fu">## HTSS</span></span>
+<span id="cb1-453"><a href="#cb1-453" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-454"><a href="#cb1-454" aria-hidden="true" tabindex="-1"></a>설 insights: 현재 추론 모듈의 성능을 살펴보면, 체인 오브 씨트(Chain-of-Thought, CoT)와 트리 오브 씨트(Tree-of-Thoughts, ToT)와 같은 기술이 작업을 작은 단계로 나누고 여러 추론 경로를 평가함으로써 개선을 가져왔습니다. 또한 셀프 콘시스텐시(Self-Consistency, SC) 접근법은 여러 답변을 생성하고 그 중에서 투표를 통해 선택하는 방식으로 유망성을 보이고 있으며, 셀프 라이프(Self-Refine) 모듈은 피드백을 기반으로 반복적으로 개선하는 방식을 사용합니다. 전반적인 아이디어: 성능을 더욱 향상시키기 위해 이러한 기술들을 하나의 모듈에 통합할 수 있습니다. 구체적으로 트리 오브 씨트(ToT) 접근법을 셀프 콘시스텐시(SC)와 셀프 라이프(Self-Refine)와 결합할 수 있습니다. 이 통합 접근법은 여러 추론 경로를 생성하고, 그 중에서 최선의 경로를 선택하기 위해 평가한 후, 선택된 경로를 피드백을 기반으로 반복적으로 개선하는 방식을 포함합니다.</span>
+<span id="cb1-455"><a href="#cb1-455" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-456"><a href="#cb1-456" aria-hidden="true" tabindex="-1"></a>구현: 1. 다중 추론 경로 생성: 트리 오브 써츠(Tree-of-Thoughts, ToT) 접근법을 사용하여 여러 추론 경로를 생성합니다.  </span>
+<span id="cb1-457"><a href="#cb1-457" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>최적 경로 평가 및 선택: 자기 일관성(Self-Consistency, SC)을 사용하여 이 경로들을 평가하고, 가장 흔하거나 정확한 경로를 선택합니다.  </span>
+<span id="cb1-458"><a href="#cb1-458" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>선택된 경로 개선: 자기 개선(Self-Refine)을 사용하여 피드백을 기반으로 선택된 경로를 반복적으로 개선합니다.  </span>
+<span id="cb1-459"><a href="#cb1-459" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>프롬프트 구조: 단계별 문제 해결을 유도하고, 유사한 해결된 예제를 참조하며, 피드백을 기반으로 출력을 개선하도록 설계된 프롬프트를 작성합니다.</span>
+<span id="cb1-460"><a href="#cb1-460" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-461"><a href="#cb1-461" aria-hidden="true" tabindex="-1"></a>그림 A.16: Webshop에서 AgentSquare 검색을 통해 발견된 새로운 모듈</span>
+<span id="cb1-462"><a href="#cb1-462" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-463"><a href="#cb1-463" aria-hidden="true" tabindex="-1"></a><span class="fu">#### 계층</span></span>
+<span id="cb1-464"><a href="#cb1-464" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-465"><a href="#cb1-465" aria-hidden="true" tabindex="-1"></a>검토 중인 컨퍼런스 논문, ICLR 2025</span>
+<span id="cb1-466"><a href="#cb1-466" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-467"><a href="#cb1-467" aria-hidden="true" tabindex="-1"></a>설 insights: 제안된 메모리 모듈의 계층 구조는 지능형 에이전트의 작업 관리에 큰 이점을 제공한다. 각 작업을 별도로 저장된 더 작은 하위 작업으로 분할함으로써, 시스템은 집중적인 정보 검색을 가능하게 하여 에이전트가 전체 작업 트래잭션을 뒤져야 하는 대신 관련 데이터만 접근할 수 있게 한다.</span>
+<span id="cb1-468"><a href="#cb1-468" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-469"><a href="#cb1-469" aria-hidden="true" tabindex="-1"></a>전체적인 아이디어: 제안하는 메모리 모듈은 계층적인 메모리 구조를 만들고, 각 작업을 더 작은 하위 작업으로 나누어 각 하위 작업을 별도로 저장하는 데 중점을 둘 것입니다. 이러한 접근 방식은 에이전트가 전체 작업 트레이잭션보다는 특정 하위 작업에 대한 집중된 정보를 검색할 수 있게 해줍니다. 또한 이 메모리 모듈은 시간이 지남에 따라 메모리의 관련성과 정확성을 향상시키기 위한 피드백 메커니즘을 포함할 것입니다.</span>
+<span id="cb1-470"><a href="#cb1-470" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-471"><a href="#cb1-471" aria-hidden="true" tabindex="-1"></a>구현: 구현은 메모리 모듈을 수정하여 하위 작업 트랙터리를 저장하고 검색할 수 있도록 하며, 지속적인 개선을 위한 피드백 루프를 도입하는 것을 포함합니다.</span>
+<span id="cb1-472"><a href="#cb1-472" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-473"><a href="#cb1-473" aria-hidden="true" tabindex="-1"></a>그림 A.17: Sciworld에서 AgentSquare 검색을 통해 발견된 새로운 모듈</span>
+<span id="cb1-474"><a href="#cb1-474" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-475"><a href="#cb1-475" aria-hidden="true" tabindex="-1"></a><span class="fu">#### ToolBF</span></span>
+<span id="cb1-476"><a href="#cb1-476" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-477"><a href="#cb1-477" aria-hidden="true" tabindex="-1"></a>통찰: 이전에 발견된 아키텍처들은 여러 번의 상호작용이나 가장 적합한 도구를 식별하기 위한 여러 시도를 활용함으로써 성능을 향상시킬 수 있음을 보여준다(예: Toolformer). 또한, 벡터 유사도 기반 접근법을 사용하여 가장 관련성이 높은 도구를 검색하는 방식(예: Toolbench)은 유망해 보인다.</span>
+<span id="cb1-478"><a href="#cb1-478" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-479"><a href="#cb1-479" aria-hidden="true" tabindex="-1"></a>전체적인 아이디어: 벡터 유사도 접근 방식과 다중 시도를 결합하여 최적의 도구를 선택할 확률을 극대화하는 것을 제안합니다. 구체적으로, Toolbench 접근 방식을 보완하여 LLM에 여러 번 호출하여 여러 가지 가능한 해결책을 생성한 후, 투표 메커니즘을 통해 최선의 것을 선택합니다.</span>
+<span id="cb1-480"><a href="#cb1-480" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-481"><a href="#cb1-481" aria-hidden="true" tabindex="-1"></a>구현: 구현은 지시사항과 API 문서를 벡터 표현으로 변환하고, 가장 관련성이 높은 API를 검색한 후, LLM을 사용하여 여러 응답을 생성한 다음, 투표 메커니즘을 통해 최상의 응답을 선택하는 과정을 포함합니다.</span>
+<span id="cb1-482"><a href="#cb1-482" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-483"><a href="#cb1-483" aria-hidden="true" tabindex="-1"></a>그림 A.18: M3tool에서 AgentSquare 검색을 통해 발견된 새로운 모듈</span>
+<span id="cb1-484"><a href="#cb1-484" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-485"><a href="#cb1-485" aria-hidden="true" tabindex="-1"></a><span class="fu">## TH</span></span>
+<span id="cb1-486"><a href="#cb1-486" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-487"><a href="#cb1-487" aria-hidden="true" tabindex="-1"></a>인사이트: 현재 탐색된 아키텍처 중에서 'Toolformer' 접근 방식이 0.56의 가장 높은 성능을 보였으며, 이는 여러 후보 응답을 생성한 후 가장 좋은 것을 투표로 선택하는 것이 효과적임을 시사한다. 또 다른 관찰은 'Anytool'에서처럼 계층적 검색 접근 방식이 작업에 따라 도구를 더 잘 분류하고 선택하는 데 도움이 될 수 있다는 점이다.</span>
+<span id="cb1-488"><a href="#cb1-488" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-489"><a href="#cb1-489" aria-hidden="true" tabindex="-1"></a>전체적인 아이디어: 계층적 검색 전략을 후보 응답 생성 및 투표 방법과 결합하겠습니다. 이는 먼저 작업 설명에 따라 도구를 분류한 후 여러 후보 응답을 생성하여 최적의 것을 선택하는 방식을 포함합니다. 이는 두 방법의 강점을 활용할 것입니다.</span>
+<span id="cb1-490"><a href="#cb1-490" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-491"><a href="#cb1-491" aria-hidden="true" tabindex="-1"></a>구현: 도구는 계층적 검색 전략을 사용하여 먼저 선택된 후, 선택된 도구에 대해 여러 응답이 생성되며, 이후 투표 메커니즘을 통해 최적의 응답을 식별합니다.</span>
+<span id="cb1-492"><a href="#cb1-492" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-493"><a href="#cb1-493" aria-hidden="true" tabindex="-1"></a>그림 A.19: Travelplanner에서 AgentSquare 검색을 통해 발견된 새로운 모듈</span>
+<span id="cb1-494"><a href="#cb1-494" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-495"><a href="#cb1-495" aria-hidden="true" tabindex="-1"></a><span class="fu"># CASRC</span></span>
+<span id="cb1-496"><a href="#cb1-496" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-497"><a href="#cb1-497" aria-hidden="true" tabindex="-1"></a>통찰: 현재의 접근 방식은 직접적 추론, 단계별 추론(체인 오브 씨트), 그리고 자기 개선 기술을 탐색해 왔다. 특히 '체인 오브 씨트'와 '셀프 라인드' 방법은 작업을 분해하고 반복적으로 해결책을 개선함으로써 잠재력을 보여주었다. 그러나 이러한 노력에도 불구하고 성능은 여전히 50~55% 수준에 머물러 있어 개선 여지가 있음을 시사한다.</span>
+<span id="cb1-498"><a href="#cb1-498" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-499"><a href="#cb1-499" aria-hidden="true" tabindex="-1"></a>전체적인 아이디어: 성능을 더욱 향상시키기 위해, 고성능 방법들(체인 오브 씨트와 셀프리파인)의 요소들을 결합하고 새로운 초점(예: **모델의 반복적 검토** 또는 **지식 기반 피드백**)을 추가하는 것을 제안합니다.</span>
+<span id="cb1-500"><a href="#cb1-500" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-501"><a href="#cb1-501" aria-hidden="true" tabindex="-1"></a>22 그림 A.20: Pddl에 대한 AgentSquare 검색을 통해 발견된 새로운 모듈</span>
+<span id="cb1-502"><a href="#cb1-502" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-503"><a href="#cb1-503" aria-hidden="true" tabindex="-1"></a><span class="fu">## IR 작업</span></span>
+<span id="cb1-504"><a href="#cb1-504" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-505"><a href="#cb1-505" aria-hidden="true" tabindex="-1"></a>검토 중인 컨퍼런스 논문, ICLR 2025</span>
+<span id="cb1-506"><a href="#cb1-506" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-507"><a href="#cb1-507" aria-hidden="true" tabindex="-1"></a>아이디어: 에이전트의 ALFworld 작업에서 성능을 극대화하기 위해, 계획 과정에 피드백 루프와 반복적 개선을 통합해야 한다. 발견된 아키텍처를 통해, 가장 효과적인 모듈(DEPS 및 openagi)은 상세한 하위 목표를 제공하고 피드백 기반의 반복적 개선을 활용하는 것으로 보인다. 전반적인 아이디어: 다음 계획 모듈은 피드백을 포함한 반복적 계획에 초점을 맞출 것이다. 초기 하위 작업 세트를 생성한 후, 모듈은 LLM에 하위 작업의 의존성과 완전성을 명시적으로 점검하여 계획을 개선하도록 요청할 것이다. 구현: 초기 하위 작업 세트를 생성한 후 피드백을 기반으로 개선하는 계획 모듈을 구현할 것이다. 이 개선 과정을 통해 하위 작업이 일관성 있고, 최소화되며, 완전해지도록 하여 순차적 의사결정에서 더 나은 성능을 보장할 것이다.</span>
+<span id="cb1-508"><a href="#cb1-508" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-509"><a href="#cb1-509" aria-hidden="true" tabindex="-1"></a>그림 A.21: Pddl에서 AgentSquare 검색을 통해 발견된 새로운 모듈</span></code><button title="클립보드 복사" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+<script src="AgentSquare- Automatic LLM Agent Search in Modular Design Space _ko_files/libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

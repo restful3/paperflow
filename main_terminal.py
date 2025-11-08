@@ -302,12 +302,66 @@ def convert_pdf_to_md(pdf_path, output_dir):
             json.dump(metadata_dict, f, ensure_ascii=False, indent=4)
 
         print_success(f"PDF conversion complete")
+
+        # Explicitly release GPU memory to allow batch processing
+        try:
+            import gc
+            print_info("Releasing GPU memory...")
+
+            # Get memory before cleanup
+            if torch.cuda.is_available():
+                mem_before = torch.cuda.memory_allocated() / (1024**3)  # GB
+                print_info(f"GPU memory allocated before cleanup: {mem_before:.2f} GB")
+
+            # Delete large objects
+            del model_dict
+            del converter
+            del rendered
+            if 'full_text' in locals():
+                del full_text
+            if 'metadata' in locals():
+                del metadata
+
+            # Force garbage collection
+            gc.collect()
+
+            # Clear CUDA cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+                mem_after = torch.cuda.memory_allocated() / (1024**3)  # GB
+                mem_freed = mem_before - mem_after
+                gpu_mem_free_now = torch.cuda.mem_get_info()[0] / (1024**3)
+
+                print_success(f"GPU memory freed: {mem_freed:.2f} GB")
+                print_info(f"GPU memory available: {gpu_mem_free_now:.2f} GB")
+        except Exception as e:
+            print_warning(f"GPU cleanup warning: {e}")
+
         return md_path
 
     except Exception as e:
         print_error(f"PDF to MD conversion error: {e}")
         import traceback
         print_error(traceback.format_exc())
+
+        # Try to cleanup even on error
+        try:
+            import gc
+            if 'model_dict' in locals():
+                del model_dict
+            if 'converter' in locals():
+                del converter
+            if 'rendered' in locals():
+                del rendered
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print_info("GPU memory cleanup attempted after error")
+        except:
+            pass
+
         return None
 
 def split_markdown_by_structure(content, max_tokens=800):
@@ -514,10 +568,40 @@ def translate_md_to_korean(md_path, output_dir, config, prompt):
                     time.sleep(config["retry_delay"])
 
         print()  # New line after progress
+
+        # Unload Ollama model to free GPU memory for next PDF
+        try:
+            print_info("Unloading Ollama model to free GPU memory...")
+            unload_response = requests.post(
+                f"{config['ollama_url']}/api/generate",
+                json={
+                    "model": config["model_name"],
+                    "keep_alive": 0  # Unload immediately
+                },
+                timeout=10
+            )
+            if unload_response.status_code == 200:
+                print_success("Ollama model unloaded successfully")
+            else:
+                print_warning(f"Ollama unload returned status {unload_response.status_code}")
+        except Exception as e:
+            print_warning(f"Failed to unload Ollama model: {e}")
+
         return ko_md_path
 
     except Exception as e:
         print_error(f"MD translation error: {e}")
+
+        # Try to unload model even on error
+        try:
+            requests.post(
+                f"{config['ollama_url']}/api/generate",
+                json={"model": config["model_name"], "keep_alive": 0},
+                timeout=5
+            )
+        except:
+            pass
+
         return None
 
 def render_md_to_html(ko_md_path):
@@ -565,7 +649,7 @@ def process_single_pdf(pdf_path, config, prompt):
     """Process single PDF file"""
     try:
         pdf_name = os.path.basename(pdf_path)
-        base_name = pdf_name.replace('.pdf', '')
+        base_name = pdf_name.replace('.pdf', '').strip()  # Remove trailing/leading whitespace
 
         print_header(f"Processing: {pdf_name}")
         print_info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
