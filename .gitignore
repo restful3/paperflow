@@ -31,6 +31,7 @@ env/
 
 # PaperFlow specific directories
 outputs/
+archives/
 newones/
 logs/
 

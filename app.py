@@ -296,6 +296,8 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'username' not in st.session_state:
     st.session_state.username = None
+if 'current_tab' not in st.session_state:
+    st.session_state.current_tab = 'unread'  # 'unread' or 'archived'
 
 
 def render_login_page():
@@ -369,18 +371,20 @@ def get_latest_log():
         return latest_log, f"로그 파일을 읽을 수 없습니다: {str(e)}"
 
 
-def get_paper_list():
+def get_paper_list(directory='outputs'):
     """
-    Scan the outputs directory and return list of paper folders.
+    Scan the specified directory and return list of paper folders.
+    Args:
+        directory: 'outputs' or 'archives'
     Returns list of tuples: (folder_name, folder_path)
     """
-    outputs_dir = Path("outputs")
+    target_dir = Path(directory)
 
-    if not outputs_dir.exists():
+    if not target_dir.exists():
         return []
 
     papers = []
-    for item in outputs_dir.iterdir():
+    for item in target_dir.iterdir():
         if item.is_dir():
             papers.append((item.name, str(item)))
 
@@ -414,6 +418,84 @@ def get_paper_files(paper_path):
                 files['md_en'] = str(file)
 
     return files
+
+
+def archive_paper(paper_path):
+    """
+    Move paper from outputs/ to archives/
+    Returns: (success: bool, message: str)
+    """
+    try:
+        paper_path = Path(paper_path)
+        paper_name = paper_path.name
+
+        # Create archives directory if it doesn't exist
+        archives_dir = Path("archives")
+        archives_dir.mkdir(exist_ok=True)
+
+        # Destination path
+        dest_path = archives_dir / paper_name
+
+        # Check if already exists in archives
+        if dest_path.exists():
+            return False, f"⚠️ {paper_name}이(가) 이미 아카이브에 존재합니다."
+
+        # Move the entire folder
+        import shutil
+        shutil.move(str(paper_path), str(dest_path))
+
+        return True, f"✓ {paper_name}이(가) 읽은 논문으로 이동되었습니다."
+
+    except Exception as e:
+        return False, f"❌ 이동 실패: {str(e)}"
+
+
+def restore_paper(paper_path):
+    """
+    Move paper from archives/ to outputs/
+    Returns: (success: bool, message: str)
+    """
+    try:
+        paper_path = Path(paper_path)
+        paper_name = paper_path.name
+
+        # Create outputs directory if it doesn't exist
+        outputs_dir = Path("outputs")
+        outputs_dir.mkdir(exist_ok=True)
+
+        # Destination path
+        dest_path = outputs_dir / paper_name
+
+        # Check if already exists in outputs
+        if dest_path.exists():
+            return False, f"⚠️ {paper_name}이(가) 이미 읽을 논문 목록에 존재합니다."
+
+        # Move the entire folder
+        import shutil
+        shutil.move(str(paper_path), str(dest_path))
+
+        return True, f"✓ {paper_name}이(가) 읽을 논문으로 복원되었습니다."
+
+    except Exception as e:
+        return False, f"❌ 복원 실패: {str(e)}"
+
+
+def get_paper_stats():
+    """
+    Get statistics about papers
+    Returns: dict with counts
+    """
+    outputs_dir = Path("outputs")
+    archives_dir = Path("archives")
+
+    unread_count = len([d for d in outputs_dir.iterdir() if d.is_dir()]) if outputs_dir.exists() else 0
+    archived_count = len([d for d in archives_dir.iterdir() if d.is_dir()]) if archives_dir.exists() else 0
+
+    return {
+        'unread_count': unread_count,
+        'archived_count': archived_count,
+        'total_count': unread_count + archived_count
+    }
 
 
 def display_html(html_path, font_size=100, dual_view=False):
@@ -655,60 +737,129 @@ def render_paper_list():
                     use_container_width=True
                 )
 
-    st.markdown("### 변환된 논문 목록")
-    st.markdown("---")
+    # Tab navigation
+    stats = get_paper_stats()
 
-    papers = get_paper_list()
+    tab1, tab2 = st.tabs([
+        f"📚 읽을 논문 ({stats['unread_count']}개)",
+        f"✅ 읽은 논문 ({stats['archived_count']}개)"
+    ])
 
-    if not papers:
-        st.info("📂 `outputs/` 디렉토리에 논문이 없습니다.")
-        st.markdown("**사용 방법:**")
-        st.code("./run_batch_venv.sh", language="bash")
-        return
+    # Unread papers tab
+    with tab1:
+        st.session_state.current_tab = 'unread'
+        papers = get_paper_list('outputs')
 
-    # Paper count badge
-    st.markdown(f'<div class="paper-count">📚 총 {len(papers)}개의 논문</div>', unsafe_allow_html=True)
+        if not papers:
+            st.info("📂 읽을 논문이 없습니다.")
+            st.markdown("**사용 방법:**")
+            st.code("./run_batch_venv.sh", language="bash")
+        else:
+            # Display papers in a grid using columns (3 per row for compact view)
+            cols_per_row = 3
+            for i in range(0, len(papers), cols_per_row):
+                cols = st.columns(cols_per_row, gap="medium")
 
-    # Display papers in a grid using columns (3 per row for compact view)
-    cols_per_row = 3
-    for i in range(0, len(papers), cols_per_row):
-        cols = st.columns(cols_per_row, gap="medium")
+                for j in range(cols_per_row):
+                    idx = i + j
+                    if idx < len(papers):
+                        paper_name, paper_path = papers[idx]
 
-        for j in range(cols_per_row):
-            idx = i + j
-            if idx < len(papers):
-                paper_name, paper_path = papers[idx]
+                        with cols[j]:
+                            # Check available formats
+                            files = get_paper_files(paper_path)
+                            formats_html = []
 
-                with cols[j]:
-                    # Check available formats
-                    files = get_paper_files(paper_path)
-                    formats_html = []
+                            # Check if paper is being processed (no HTML/PDF yet)
+                            if not files['html'] and not files['pdf']:
+                                formats_html.append('<span class="format-badge" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🔄 처리중</span>')
+                            else:
+                                if files['html']:
+                                    formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
+                                if files['pdf']:
+                                    formats_html.append('<span class="format-badge">🇬🇧 English</span>')
 
-                    # Check if paper is being processed (no HTML/PDF yet)
-                    if not files['html'] and not files['pdf']:
-                        formats_html.append('<span class="format-badge" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🔄 처리중</span>')
-                    else:
-                        if files['html']:
-                            formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
-                        if files['pdf']:
-                            formats_html.append('<span class="format-badge">🇬🇧 English</span>')
+                            # Create a beautiful card using HTML
+                            card_html = f'''
+                            <div class="paper-card">
+                                <div class="paper-title">📄 {paper_name}</div>
+                                <div style="margin-bottom: 8px;">
+                                    {''.join(formats_html)}
+                                </div>
+                            </div>
+                            '''
+                            st.markdown(card_html, unsafe_allow_html=True)
 
-                    # Create a beautiful card using HTML
-                    card_html = f'''
-                    <div class="paper-card">
-                        <div class="paper-title">📄 {paper_name}</div>
-                        <div style="margin-bottom: 8px;">
-                            {''.join(formats_html)}
-                        </div>
-                    </div>
-                    '''
-                    st.markdown(card_html, unsafe_allow_html=True)
+                            # Buttons row
+                            btn_col1, btn_col2 = st.columns(2, gap="small")
+                            with btn_col1:
+                                if st.button("📖 보기", key=f"view_unread_{idx}", use_container_width=True):
+                                    st.session_state.selected_paper = paper_path
+                                    st.session_state.view = 'detail'
+                                    st.rerun()
+                            with btn_col2:
+                                if st.button("✅ 완료", key=f"archive_{idx}", use_container_width=True):
+                                    success, message = archive_paper(paper_path)
+                                    if success:
+                                        st.success(message)
+                                        st.rerun()
+                                    else:
+                                        st.error(message)
 
-                    # View button (more compact)
-                    if st.button("📖 보기", key=f"view_{idx}", use_container_width=True):
-                        st.session_state.selected_paper = paper_path
-                        st.session_state.view = 'detail'
-                        st.rerun()
+    # Archived papers tab
+    with tab2:
+        st.session_state.current_tab = 'archived'
+        papers = get_paper_list('archives')
+
+        if not papers:
+            st.info("📂 읽은 논문이 없습니다.")
+        else:
+            # Display papers in a grid using columns (3 per row for compact view)
+            cols_per_row = 3
+            for i in range(0, len(papers), cols_per_row):
+                cols = st.columns(cols_per_row, gap="medium")
+
+                for j in range(cols_per_row):
+                    idx = i + j
+                    if idx < len(papers):
+                        paper_name, paper_path = papers[idx]
+
+                        with cols[j]:
+                            # Check available formats
+                            files = get_paper_files(paper_path)
+                            formats_html = []
+
+                            if files['html']:
+                                formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
+                            if files['pdf']:
+                                formats_html.append('<span class="format-badge">🇬🇧 English</span>')
+
+                            # Create a beautiful card using HTML with archived style
+                            card_html = f'''
+                            <div class="paper-card archived" style="opacity: 0.95; background: #f7fafc;">
+                                <div class="paper-title">📄 {paper_name}</div>
+                                <div style="margin-bottom: 8px;">
+                                    {''.join(formats_html)}
+                                </div>
+                            </div>
+                            '''
+                            st.markdown(card_html, unsafe_allow_html=True)
+
+                            # Buttons row
+                            btn_col1, btn_col2 = st.columns(2, gap="small")
+                            with btn_col1:
+                                if st.button("📖 보기", key=f"view_archived_{idx}", use_container_width=True):
+                                    st.session_state.selected_paper = paper_path
+                                    st.session_state.view = 'detail'
+                                    st.rerun()
+                            with btn_col2:
+                                if st.button("↩️ 복원", key=f"restore_{idx}", use_container_width=True):
+                                    success, message = restore_paper(paper_path)
+                                    if success:
+                                        st.success(message)
+                                        st.rerun()
+                                    else:
+                                        st.error(message)
 
 
 def render_paper_detail():
@@ -822,6 +973,37 @@ def render_paper_detail():
                     if st.session_state.split_ratio > 20:
                         st.session_state.split_ratio -= 10
                         st.rerun()
+
+        # Archive/Restore button at the bottom of sidebar
+        st.markdown("---")
+
+        # Check if paper is in outputs or archives
+        paper_path_obj = Path(paper_path)
+        is_archived = paper_path_obj.parent.name == 'archives'
+
+        if is_archived:
+            # Show restore button for archived papers
+            if st.button("↩️ 읽을 논문으로 복원", use_container_width=True, key="restore_detail"):
+                success, message = restore_paper(paper_path)
+                if success:
+                    st.success(message)
+                    # Update selected paper path to new location
+                    st.session_state.selected_paper = str(Path("outputs") / paper_name)
+                    st.rerun()
+                else:
+                    st.error(message)
+        else:
+            # Show archive button for unread papers
+            if st.button("✅ 읽음으로 표시", use_container_width=True, key="archive_detail"):
+                success, message = archive_paper(paper_path)
+                if success:
+                    st.success(message)
+                    # Return to list view after archiving
+                    st.session_state.view = 'list'
+                    st.session_state.selected_paper = None
+                    st.rerun()
+                else:
+                    st.error(message)
 
     # Main content area - display selected format directly without header
     # Check if "분할 보기" mode is selected

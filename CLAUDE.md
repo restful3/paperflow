@@ -80,12 +80,17 @@ Terminal-based PDF conversion pipeline:
 
 #### 2. Web Viewer ([app.py](app.py))
 Streamlit-based viewing interface:
-- Scans `outputs/` directory for converted papers
+- **Tab Navigation**: Separate tabs for "읽을 논문" (unread) and "읽은 논문" (archived)
+- Scans `outputs/` and `archives/` directories for papers
 - Grid layout with paper cards showing available formats
+- **Paper Management**: Archive/restore papers with one-click buttons
+  - "✅ 완료" button: Move paper from `outputs/` to `archives/`
+  - "↩️ 복원" button: Move paper from `archives/` to `outputs/`
 - Tabbed viewer: Korean (HTML) and English (PDF) side-by-side
 - Uses `streamlit-pdf-viewer` component for PDF rendering
 - Session state management for navigation (list view ↔ detail view)
 - Responsive design with gradient UI styling
+- Login authentication with session persistence
 
 ### Batch Processing Pipeline
 
@@ -322,6 +327,7 @@ PaperFlow/
 ├── prompt.md              # Translation prompt
 ├── requirements.txt       # Python dependencies
 ├── newones/               # Input: place PDFs here
-├── outputs/               # Output: converted papers
+├── outputs/               # Output: unread papers (to be read)
+├── archives/              # Output: read papers (archived)
 └── logs/                  # Processing logs
 ```
