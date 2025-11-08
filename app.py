@@ -538,10 +538,18 @@ def render_paper_list():
     """
     Render the home screen with list of papers
     """
-    # Header with upload, log, refresh, and logout buttons
-    col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
+    # Header: Title on the left, buttons on the right
+    st.title("📚 PaperFlow Viewer")
+
+    # Buttons aligned to the right
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     with col1:
-        st.title("📚 PaperFlow Viewer")
+        if st.button("🚪 로그아웃", use_container_width=True):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            # Delete session file
+            delete_session()
+            st.rerun()
     with col2:
         if st.button("📤 업로드", use_container_width=True):
             st.session_state.show_upload = not st.session_state.show_upload
@@ -552,13 +560,6 @@ def render_paper_list():
             st.rerun()
     with col4:
         if st.button("🔄 새로고침", use_container_width=True):
-            st.rerun()
-    with col5:
-        if st.button("🚪 로그아웃", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            # Delete session file
-            delete_session()
             st.rerun()
 
     # Upload UI expander (shown when show_upload is True)
@@ -735,17 +736,6 @@ def render_paper_detail():
     with st.sidebar:
         st.markdown("### 📄 논문 뷰어")
 
-        # User info and logout
-        st.markdown(f"**👤 {st.session_state.username}**")
-        if st.button("🚪 로그아웃", use_container_width=True, key="logout_detail"):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            # Delete session file
-            delete_session()
-            st.rerun()
-
-        st.markdown("---")
-
         # Back to list button
         if st.button("⬅️ 목록으로 돌아가기", use_container_width=True):
             st.session_state.view = 'list'
@@ -761,15 +751,22 @@ def render_paper_detail():
         st.markdown("**보기 형식 선택:**")
 
         # Radio buttons for format selection
-        format_names = list(format_options.keys())
+        format_names = []
 
-        # Add "둘다 보기" option if both HTML and PDF are available
+        # Add "분할 보기" option first if both HTML and PDF are available
         if files['html'] and files['pdf']:
-            format_names.append("🔄 둘다 보기 (한국어 + 영어)")
+            format_names.append("🔄 분할 보기 (한국어 + 영어)")
+
+        # Then add individual format options
+        format_names.extend(list(format_options.keys()))
 
         # Initialize selected format if not set
         if st.session_state.selected_format is None:
-            st.session_state.selected_format = format_names[0]
+            # Default to "분할 보기" if both HTML and PDF are available
+            if files['html'] and files['pdf']:
+                st.session_state.selected_format = "🔄 분할 보기 (한국어 + 영어)"
+            else:
+                st.session_state.selected_format = format_names[0]
 
         selected_format_name = st.radio(
             "형식",
@@ -781,7 +778,7 @@ def render_paper_detail():
         st.session_state.selected_format = selected_format_name
 
         # Font size control - only show for HTML-containing formats
-        if selected_format_name in ["🇰🇷 한국어 (HTML)", "🔄 둘다 보기 (한국어 + 영어)"]:
+        if selected_format_name in ["🇰🇷 한국어 (HTML)", "🔄 분할 보기 (한국어 + 영어)"]:
             st.markdown("---")
             st.markdown("**📏 글자 크기:**")
 
@@ -801,7 +798,7 @@ def render_paper_detail():
                         st.rerun()
 
         # Screen ratio control - only show for dual view mode
-        if selected_format_name == "🔄 둘다 보기 (한국어 + 영어)":
+        if selected_format_name == "🔄 분할 보기 (한국어 + 영어)":
             st.markdown("---")
             st.markdown("**📐 화면 비율:**")
 
@@ -823,8 +820,8 @@ def render_paper_detail():
                         st.rerun()
 
     # Main content area - display selected format directly without header
-    # Check if "둘다 보기" mode is selected
-    if selected_format_name == "🔄 둘다 보기 (한국어 + 영어)":
+    # Check if "분할 보기" mode is selected
+    if selected_format_name == "🔄 분할 보기 (한국어 + 영어)":
         # Split screen with adjustable ratio: Korean HTML on left, English PDF on right
         html_ratio = st.session_state.split_ratio
         pdf_ratio = 100 - html_ratio
