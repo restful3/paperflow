@@ -12,35 +12,61 @@ from pathlib import Path
 from streamlit_pdf_viewer import pdf_viewer
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
 
 # Load environment variables
 load_dotenv()
 
-# Session file path
-SESSION_FILE = Path(".paperflow_session")
+
+def get_session_id():
+    """
+    Get current Streamlit session ID
+    Returns None if context is not available
+    """
+    try:
+        ctx = get_script_run_ctx()
+        if ctx is None:
+            return None
+        return ctx.session_id
+    except Exception:
+        return None
+
+
+def get_session_file():
+    """
+    Get session file path for current session
+    Each browser/tab gets its own session file
+    """
+    session_id = get_session_id()
+    if session_id:
+        return Path(f".paperflow_session_{session_id}")
+    # Fallback to default if session ID unavailable
+    return Path(".paperflow_session_default")
 
 
 def save_session(username):
-    """Save login session to file"""
+    """Save login session to file (session-specific)"""
+    session_file = get_session_file()
     session_data = {
         "username": username,
         "login_time": datetime.now().isoformat(),
         "expires_at": (datetime.now() + timedelta(days=30)).isoformat()
     }
     try:
-        with open(SESSION_FILE, 'w') as f:
+        with open(session_file, 'w') as f:
             json.dump(session_data, f)
     except Exception as e:
         print(f"Failed to save session: {e}")
 
 
 def load_session():
-    """Load login session from file"""
-    if not SESSION_FILE.exists():
+    """Load login session from file (session-specific)"""
+    session_file = get_session_file()
+    if not session_file.exists():
         return None
 
     try:
-        with open(SESSION_FILE, 'r') as f:
+        with open(session_file, 'r') as f:
             session_data = json.load(f)
 
         # Check if session is expired
@@ -57,10 +83,11 @@ def load_session():
 
 
 def delete_session():
-    """Delete login session file"""
+    """Delete login session file (session-specific)"""
+    session_file = get_session_file()
     try:
-        if SESSION_FILE.exists():
-            SESSION_FILE.unlink()
+        if session_file.exists():
+            session_file.unlink()
     except Exception as e:
         print(f"Failed to delete session: {e}")
 
@@ -385,12 +412,13 @@ def get_paper_files(paper_path):
     return files
 
 
-def display_html(html_path, font_size=100):
+def display_html(html_path, font_size=100, dual_view=False):
     """
     Display HTML file using iframe with injected CSS to hide TOC and headers
     Args:
         html_path: Path to HTML file
         font_size: Font size percentage (default 100)
+        dual_view: If True, use fixed height for side-by-side view (default False)
     """
     try:
         with open(html_path, 'r', encoding='utf-8') as f:
@@ -444,8 +472,11 @@ def display_html(html_path, font_size=100):
             # If no head tag, add it at the beginning
             html_content = custom_css + html_content
 
-        # Use st.components.v1.html with tall height for natural scrolling
-        st.components.v1.html(html_content, height=3000, scrolling=True)
+        # Choose height based on view mode
+        # Dual view: fixed height for independent left/right scrolling
+        # Single view: very tall height to minimize outer page scroll
+        height = 3000 if dual_view else 50000
+        st.components.v1.html(html_content, height=height, scrolling=True)
 
     except Exception as e:
         st.error(f"HTML 파일을 불러올 수 없습니다: {str(e)}")
@@ -453,20 +484,24 @@ def display_html(html_path, font_size=100):
     return html_content if 'html_content' in locals() else None
 
 
-def display_pdf(pdf_path):
+def display_pdf(pdf_path, dual_view=False):
     """
-    Display PDF file using streamlit-pdf-viewer with very tall height
+    Display PDF file using streamlit-pdf-viewer
+    Args:
+        pdf_path: Path to PDF file
+        dual_view: If True, use fixed height for side-by-side view (default False)
     """
     try:
         with open(pdf_path, 'rb') as f:
             pdf_bytes = f.read()
 
-        # Display PDF with very tall height to minimize internal scrolling
-        # User can scroll the page naturally
+        # Choose height based on view mode
+        # Dual view: fixed height for independent left/right scrolling
+        # Single view: very tall height to minimize outer page scroll
+        height = 3000 if dual_view else 50000
         pdf_viewer(
             pdf_bytes,
-            width=900,
-            height=3000,  # Very tall to show more content
+            height=height,
             render_text=True
         )
 
@@ -787,19 +822,19 @@ def render_paper_detail():
         col_left, col_right = st.columns([html_ratio, pdf_ratio])
 
         with col_left:
-            display_html(files['html'], st.session_state.html_font_size)
+            display_html(files['html'], st.session_state.html_font_size, dual_view=True)
 
         with col_right:
-            display_pdf(files['pdf'])
+            display_pdf(files['pdf'], dual_view=True)
     else:
         # Single view mode
         file_type, file_path = format_options[selected_format_name]
 
         # Display the content based on type (no title, just content)
         if file_type == 'html':
-            display_html(file_path, st.session_state.html_font_size)
+            display_html(file_path, st.session_state.html_font_size, dual_view=False)
         elif file_type == 'pdf':
-            display_pdf(file_path)
+            display_pdf(file_path, dual_view=False)
         elif file_type == 'md_en':
             display_markdown(file_path)
 
