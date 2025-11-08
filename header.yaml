@@ -1,0 +1,12 @@
+---
+lang: ko
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+    smooth-scroll: true
+---
