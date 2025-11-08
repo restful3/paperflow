@@ -63,3 +63,11 @@ Thumbs.db
 # Streamlit
 .streamlit/
 *.streamlit/
+
+# Quarto temporary files
+*_ko_temp.md
+*_ko_temp.html
+*_ko_temp_files/
+test*.md
+test*.html
+test*_files/

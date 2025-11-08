@@ -623,7 +623,7 @@ def translate_md_to_korean(md_path, output_dir, config, prompt):
         return None
 
 def render_md_to_html(ko_md_path):
-    """Render MD to HTML using Quarto"""
+    """Render MD to HTML using Quarto with fallback for YAML parsing issues"""
     try:
         print_info(f"Running Quarto to render HTML...")
 
@@ -647,11 +647,16 @@ def render_md_to_html(ko_md_path):
                 print_success(f"HTML file created: {os.path.getsize(html_output) / 1024:.2f} KB")
             return html_output
         else:
-            print_error(f"Quarto rendering failed (exit code: {result.returncode})")
-            print_error(f"STDERR: {result.stderr}")
-            if result.stdout:
-                print_info(f"STDOUT: {result.stdout}")
-            return None
+            # Check if it's a YAML parsing error
+            if "YAML parse exception" in result.stderr or "Error running Lua" in result.stderr:
+                print_warning(f"YAML parsing error detected. Trying with simplified header...")
+                return _render_with_simple_header(ko_md_path_abs, output_dir, md_filename)
+            else:
+                print_error(f"Quarto rendering failed (exit code: {result.returncode})")
+                print_error(f"STDERR: {result.stderr}")
+                if result.stdout:
+                    print_info(f"STDOUT: {result.stdout}")
+                return None
 
     except FileNotFoundError:
         print_error(f"Quarto command not found. Is Quarto installed?")
@@ -659,6 +664,88 @@ def render_md_to_html(ko_md_path):
         return None
     except Exception as e:
         print_error(f"PDF rendering error: {e}")
+        import traceback
+        print_error(traceback.format_exc())
+        return None
+
+
+def _render_with_simple_header(ko_md_path_abs, output_dir, md_filename):
+    """Fallback: Replace complex YAML header with simple one and retry rendering"""
+    try:
+        # Read the markdown file
+        with open(ko_md_path_abs, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Extract body (everything after second ---)
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                body = parts[2]
+            else:
+                print_error("Cannot extract markdown body")
+                return None
+        else:
+            print_error("No YAML header found")
+            return None
+
+        # Create simple YAML header
+        simple_header = '''---
+format:
+  html:
+    embed-resources: true
+    toc: false
+    theme: cosmo
+---
+'''
+
+        # Create temporary file with simple header
+        temp_filename = md_filename.replace('_ko.md', '_ko_temp.md')
+        temp_path = os.path.join(output_dir, temp_filename)
+
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            f.write(simple_header + body)
+
+        print_info(f"Created temporary file with simplified header: {temp_filename}")
+
+        # Render the temporary file
+        cmd = ["quarto", "render", temp_filename]
+        result = subprocess.run(cmd, cwd=output_dir, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            # Move the generated HTML to the original filename
+            temp_html = temp_path.replace('_ko_temp.md', '_ko_temp.html')
+            final_html = ko_md_path_abs.replace('_ko.md', '_ko.html')
+
+            if os.path.exists(temp_html):
+                import shutil
+                shutil.move(temp_html, final_html)
+                print_success(f"HTML created with simplified header: {os.path.getsize(final_html) / 1024:.2f} KB")
+                print_warning(f"Note: CSS styling from header.yaml was not applied due to compatibility issue")
+
+                # Clean up temporary files
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                # Clean up quarto-generated temp directories
+                temp_files_dir = temp_path.replace('_ko_temp.md', '_ko_temp_files')
+                if os.path.exists(temp_files_dir):
+                    shutil.rmtree(temp_files_dir)
+
+                return final_html
+            else:
+                print_error(f"Temporary HTML not found: {temp_html}")
+                return None
+        else:
+            print_error(f"Quarto rendering failed even with simple header")
+            print_error(f"STDERR: {result.stderr}")
+
+            # Clean up temporary file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+            return None
+
+    except Exception as e:
+        print_error(f"Error in fallback rendering: {e}")
         import traceback
         print_error(traceback.format_exc())
         return None
