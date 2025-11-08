@@ -2,11 +2,21 @@
 lang: ko
 format:
   html:
-    toc: true
-    toc-depth: 3
+    toc: false
     theme: cosmo
     embed-resources: true
     code-fold: true
     code-tools: true
     smooth-scroll: true
+    css: |
+      body {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+      }
+      #quarto-header {
+        display: none !important;
+      }
+      .quarto-title-block {
+        display: none !important;
+      }
 ---

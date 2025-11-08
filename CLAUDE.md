@@ -4,145 +4,132 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PaperFlow is a Python-based terminal tool that converts PDF documents (especially academic papers) to Markdown, translates them to Korean, and renders them as HTML. It uses:
+PaperFlow is a Python-based tool that converts PDF documents (especially academic papers) to Markdown, translates them to Korean, and renders them as HTML. It consists of two main components:
+
+1. **Batch Processor** ([main_terminal.py](main_terminal.py)) - Converts PDFs to Korean HTML
+2. **Web Viewer** ([app.py](app.py)) - Streamlit app for viewing converted papers
+
+**Technology Stack**:
 - **marker-pdf library**: Local Python library for PDF to Markdown conversion with OCR capabilities
 - **Ollama**: Local LLM server for Korean translation
 - **Quarto**: Renders translated Markdown to HTML format
+- **Streamlit**: Web interface for viewing results
 
 **Key Feature**: Fully local processing - no external API calls, all processing happens on your machine.
 
 ## Running the Application
 
-### Quick Start (Virtual Environment - Recommended)
+### Initial Setup
 
 ```bash
-# First time setup
+# First time setup (creates .venv and installs dependencies)
 ./setup_venv.sh
-
-# Place PDF files in newones directory
-cp /path/to/your/file.pdf newones/
-
-# Run batch processing
-./run_batch_venv.sh
-
-# Check results in outputs directory
-ls outputs/
 ```
 
-This is the simplest way to use PaperFlow. Just drop PDFs into `newones/` and run the script. Results appear in `outputs/` with colored terminal UI showing progress.
+### Batch Processing
 
-### Manual Execution
-
+**Option 1: Watch Mode (Recommended for continuous processing)**
 ```bash
-# Activate virtual environment
+# Runs in background, automatically processes new PDFs
+./run_batch_watch.sh
+
+# Add PDFs from another terminal
+cp /path/to/your/file.pdf newones/
+# → Processing starts automatically
+```
+
+**Option 2: Single Run**
+```bash
+# Process all PDFs in newones/ once
+cp /path/to/your/file.pdf newones/
+./run_batch.sh
+```
+
+**Manual execution** (for debugging):
+```bash
 source .venv/bin/activate
-
-# Run batch processing
 python main_terminal.py
+```
 
-# Check results
-ls outputs/
+### Viewing Results
+
+**Web Viewer (Recommended)**:
+```bash
+./run_app.sh
+# Opens browser at http://localhost:8501
+# View Korean (HTML) and English (PDF) versions side-by-side
+```
+
+**Direct file access**:
+```bash
+firefox outputs/your_paper/your_paper_ko.html
 ```
 
 ## Architecture
 
-### Application Structure
+### Two-Component System
 
-**Single Terminal Application**: [main_terminal.py](main_terminal.py) - CLI with colored ANSI output
-- Automatically processes all PDFs in `newones/` directory
+#### 1. Batch Processor ([main_terminal.py](main_terminal.py))
+Terminal-based PDF conversion pipeline:
+- Processes all PDFs in `newones/` directory sequentially
 - Saves results to `outputs/{pdf_name}/` directory structure
-- Shows real-time progress with colored output (green ✓, red ✗, yellow ⚠, blue ℹ, progress bars)
-- Dual logging: console + timestamped log files in `logs/` directory
-- **Auto-cleanup**: Moves processed PDFs from `newones/` to their output directories
+- Colored terminal UI (green ✓, red ✗, yellow ⚠, blue ℹ, progress bars)
+- Dual logging: console + timestamped files in `logs/`
+- **Auto-cleanup**: Moves processed PDFs from `newones/` to output directories
+- **GPU memory management**: Explicit VRAM cleanup between PDFs for batch processing
 
-### Processing Pipeline
+#### 2. Web Viewer ([app.py](app.py))
+Streamlit-based viewing interface:
+- Scans `outputs/` directory for converted papers
+- Grid layout with paper cards showing available formats
+- Tabbed viewer: Korean (HTML) and English (PDF) side-by-side
+- Uses `streamlit-pdf-viewer` component for PDF rendering
+- Session state management for navigation (list view ↔ detail view)
+- Responsive design with gradient UI styling
 
-All processing runs in the main thread with colored output:
+### Batch Processing Pipeline
+
+The pipeline executes 4 stages for each PDF (see `process_single_pdf()` at [main_terminal.py:648](main_terminal.py#L648)):
 
 #### 1. PDF → Markdown (`convert_pdf_to_md()` at [main_terminal.py:175](main_terminal.py#L175))
-- **Library-based**: Uses marker-pdf Python library directly (NOT API server)
-- **GPU-only mode**: Requires CUDA GPU (will fail if GPU not available)
-- **GPU Memory Check**: Displays available GPU memory before loading models
-- **Model Loading**: Creates model dictionary with `create_model_dict(device="cuda", dtype=torch.float16)`
-- **Conversion**: Uses `PdfConverter` with loaded models to convert PDF to markdown
-- **Image Extraction**: Handles both single Image objects and lists from `rendered.images` dict
-  - Fixes filename generation to avoid duplication
-  - Saves images as JPEG to output directory
-- **Metadata**: Makes all metadata JSON-serializable with recursive `make_serializable()` function
-- **VRAM Management**: Explicitly releases GPU memory after conversion to enable batch processing
-  - Deletes model_dict, converter, rendered objects
-  - Calls `gc.collect()` to force garbage collection
-  - Calls `torch.cuda.empty_cache()` and `torch.cuda.synchronize()` to free VRAM
-  - Reports memory freed and available for next PDF
-- Outputs: markdown file, extracted images, metadata JSON
+- **GPU-only mode**: Requires CUDA GPU, checks memory before loading models
+- Uses marker-pdf library with `PdfConverter` (device="cuda", dtype=torch.float16)
+- Extracts text, images (JPEG), and metadata (JSON-serializable)
+- **Critical VRAM cleanup**: After conversion, deletes models and calls `torch.cuda.empty_cache()` to free ~4-8GB VRAM for next PDF
 
-#### 2. Markdown Chunking ([main_terminal.py:385](main_terminal.py#L385))
-- **Primary**: `split_markdown_by_structure()` - Uses markdown-it-py to parse structure and split at logical boundaries
-- **Fallback**: `split_text_simple()` - Token-based splitting if structure parsing fails
-- Preserves markdown formatting including headers, code blocks, math equations
-- Configurable chunk size (default: 5, recommended: 3-5)
+#### 2. Markdown Chunking (`split_markdown_by_structure()` at [main_terminal.py:367](main_terminal.py#L367))
+- Primary: Structure-aware splitting using markdown-it-py (preserves headers, code blocks, math)
+- Fallback: Simple token-based splitting if parsing fails
+- Configurable chunk size (default: 5 tokens, recommended: 3-5)
 
 #### 3. Korean Translation (`translate_md_to_korean()` at [main_terminal.py:517](main_terminal.py#L517))
-- Translates each chunk via Ollama API
-- Shows progress bar with percentage completion
-- Writes chunks incrementally to `*_ko.md` as they complete
-- Retry logic with configurable timeout/retries/delay
-- Prepends `header.yaml` content to translated file for Quarto
-- **Ollama Memory Management**: Unloads model after translation ([main_terminal.py:572-588](main_terminal.py#L572-L588))
-  - Sends `keep_alive: 0` to Ollama API to unload model immediately
-  - Frees ~22GB GPU memory used by Ollama during translation
-  - Critical for batch processing to prevent CUDA OOM on subsequent PDFs
-  - Also attempts unload on translation errors
+- Translates chunks via Ollama API with retry logic
+- Writes incrementally to `*_ko.md` with `header.yaml` prepended
+- **Critical Ollama cleanup** ([main_terminal.py:572-588](main_terminal.py#L572-L588)): Sends `keep_alive: 0` to unload model and free ~22GB VRAM
 
-#### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:567](main_terminal.py#L567))
-- Uses Quarto CLI to render Korean markdown to HTML
-- **Important**: Runs quarto in the output directory with just filename (not full path)
-- Command: `quarto render {filename}_ko.md`
-- Quarto configuration in `header.yaml` specifies theme, TOC, embed-resources
+#### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:607](main_terminal.py#L607))
+- **Important**: Runs `quarto render {filename}_ko.md` from the output directory (not full path)
+- Quarto config in `header.yaml`: theme, TOC, embedded resources
 
-#### 5. PDF Cleanup ([main_terminal.py:615](main_terminal.py#L615))
-- After successful processing, moves source PDF from `newones/` to output directory
-- Uses `shutil.move()` to relocate file
-- Leaves `newones/` empty for next batch
-
-### Key Dependencies
-
-- **marker-pdf library** - Python package for local PDF processing (includes PyTorch)
-- **PyTorch** - For GPU/CPU acceleration of PDF conversion
-- **Pillow (PIL)** - For image extraction and manipulation
-- **Ollama** - Must be running at `http://localhost:11434`
-- **Quarto CLI** - Must be installed system-wide for HTML rendering
-- **markdown-it-py** - For structure-aware markdown parsing
+#### 5. Cleanup
+- Moves source PDF from `newones/` to output directory
+- Leaves `newones/` empty for next batch (or watch mode detection)
 
 ### Configuration Files
 
-- [config.json](config.json) - Ollama URL, model name, chunk size, timeout, retries, retry delay, temperature
-- [prompt.md](prompt.md) - Translation prompt for Ollama (English→Korean translation rules)
-- [header.yaml](header.yaml) - Quarto HTML formatting (theme: cosmo, TOC, embedded resources)
-- [requirements.txt](requirements.txt) - Python dependencies (marker-pdf, torch, pillow, requests, markdown-it-py)
+Critical configuration files in project root:
 
-### Logging System
+- **[config.json](config.json)**: Ollama URL, model name, chunk size, timeout/retries, temperature
+- **[prompt.md](prompt.md)**: Translation prompt enforcing markdown preservation and LaTeX→Typst math conversion
+- **[header.yaml](header.yaml)**: Quarto HTML format (theme: cosmo, TOC, embed-resources: true)
+- **[requirements.txt](requirements.txt)**: Python dependencies
 
-**TeeOutput Class** ([main_terminal.py:38](main_terminal.py#L38)):
-- Dual output: console + log file
-- Timestamped log files: `logs/pdf2md_YYYYMMDD_HHMMSS.log`
-- Captures all stdout during processing
-- ANSI color codes preserved in logs
+### Runtime Dependencies
 
-**Colored Output Functions**:
-- `print_success()` - Green ✓ for successful operations
-- `print_error()` - Red ✗ for errors
-- `print_warning()` - Yellow ⚠ for warnings
-- `print_info()` - Blue ℹ for informational messages
-- Progress bars with percentage: `[████████████████████░░░░░░░░░░] 66.7%`
-
-### Translation Strategy
-
-The translation prompt ([prompt.md](prompt.md)) enforces:
-- Preserve all Markdown structure (headers, lists, tables, links, images)
-- Maintain LaTeX math syntax compatibility
-- Translate technical terms with English in parentheses for clarity
-- Output only Korean translation (no explanations or original text)
+Must be available at runtime:
+- **Ollama service**: Running at `http://localhost:11434` with model downloaded (e.g., `ollama pull qwen3-vl:30b-a3b-instruct`)
+- **Quarto CLI**: System-wide installation for HTML rendering
+- **CUDA GPU**: Required for marker-pdf (no CPU fallback)
 
 ### Output Structure
 
@@ -161,205 +148,180 @@ The HTML file is self-contained with embedded images and CSS (configured via `em
 
 ## Development Notes
 
-### Batch Processing Workflow
+### Script Workflows
 
-The [run_batch_venv.sh](run_batch_venv.sh) script:
-1. Activates `.venv` virtual environment
-2. Checks for PDF files in `newones/` directory
-3. Runs [main_terminal.py](main_terminal.py) to process all PDFs sequentially
-4. Terminal UI shows colored progress indicators during processing
-5. Logs saved to `logs/` directory with timestamp
+**[run_batch.sh](run_batch.sh)**: One-time batch processing
+- Activates `.venv`, checks for PDFs in `newones/`, runs `main_terminal.py` once
 
-**Multiple PDF Processing** ([main_terminal.py:776-784](main_terminal.py#L776-L784)):
-- Processes all PDFs in `newones/` directory in a `for` loop
-- Each PDF goes through complete pipeline: PDF→MD→Translation→HTML→Cleanup
-- **Dual GPU Memory Management**:
-  1. **After PDF→MD conversion**: Releases ~4-8GB VRAM from marker-pdf models
-  2. **After Translation**: Unloads Ollama model to release ~22GB VRAM
-- Safe for processing multiple large PDFs consecutively without CUDA OOM errors
+**[run_batch_watch.sh](run_batch_watch.sh)**: Continuous watch mode
+- Monitors `newones/` directory using `inotifywait`
+- Triggers batch processing when new PDFs appear
+- Waits for processing to complete before watching again
+- Ideal for automated workflows
 
-### GPU Memory Management
+**[run_app.sh](run_app.sh)**: Streamlit viewer
+- Activates `.venv`, kills existing Streamlit on port 8501, launches `app.py`
 
-**GPU-Only Mode** ([main_terminal.py:186-200](main_terminal.py#L186-L200)):
-- Application now **requires CUDA GPU** and will fail if not available
-- No automatic CPU fallback (GPU provides significantly better performance)
-- Checks and displays GPU memory before loading models
+### Multiple PDF Processing
 
-**VRAM Release for Batch Processing** ([main_terminal.py:306-340](main_terminal.py#L306-L340)):
-```python
-# After PDF conversion completes
-del model_dict
-del converter
-del rendered
-gc.collect()
-torch.cuda.empty_cache()
-torch.cuda.synchronize()
-```
+Main loop at [main_terminal.py:814](main_terminal.py#L814):
+- Processes all PDFs in `newones/` sequentially in a `for` loop
+- **Dual GPU Memory Management** prevents CUDA OOM:
+  1. After PDF→MD: Frees ~4-8GB VRAM (marker-pdf models)
+  2. After Translation: Frees ~22GB VRAM (Ollama model unload)
+- Critical for processing multiple large PDFs without crashes
 
-This **critical feature** enables processing multiple PDFs sequentially:
-- Frees ~4-8GB VRAM after each PDF conversion (marker-pdf models)
-- Combined with Ollama model unload, frees total ~26-30GB per PDF cycle
-- Prevents CUDA OOM errors when processing 2+ PDFs
-- Reports memory freed and available for monitoring
-- Also attempts cleanup on conversion errors
+### GPU Memory Management (Critical for Batch Processing)
 
-**Ollama Model Unload** ([main_terminal.py:572-588](main_terminal.py#L572-L588)):
-```python
-# After translation completes
-requests.post(f"{ollama_url}/api/generate",
-              json={"model": model_name, "keep_alive": 0})
-```
+**Why This Matters**: Processing multiple PDFs requires careful VRAM management to prevent CUDA OOM errors.
 
-This unloads the Ollama LLM from VRAM:
-- Ollama keeps models in memory by default for fast subsequent calls
-- In batch processing, this causes CUDA OOM on 2nd PDF
-- `keep_alive: 0` forces immediate unload
-- Frees ~22GB VRAM used by qwen3-vl:30b model
-- Next PDF can then load marker-pdf models successfully
+**Two-Stage Cleanup Pattern**:
 
-**Monitoring GPU Usage**:
+1. **After PDF→MD** ([main_terminal.py:306-340](main_terminal.py#L306-L340)):
+   ```python
+   del model_dict, converter, rendered
+   gc.collect()
+   torch.cuda.empty_cache()
+   torch.cuda.synchronize()
+   ```
+   Frees ~4-8GB VRAM from marker-pdf models
+
+2. **After Translation** ([main_terminal.py:572-588](main_terminal.py#L572-L588)):
+   ```python
+   requests.post(f"{ollama_url}/api/generate",
+                 json={"model": model_name, "keep_alive": 0})
+   ```
+   Sends `keep_alive: 0` to unload Ollama model, freeing ~22GB VRAM
+
+**Result**: Total ~26-30GB freed per PDF cycle, enabling sequential processing of multiple large PDFs.
+
+**Debug Commands**:
 ```bash
-# Watch GPU memory in real-time during batch processing
+# Monitor GPU in real-time
 watch -n 1 nvidia-smi
 
-# Check memory release messages in logs
+# Check cleanup messages in logs
 grep "GPU memory" logs/paperflow_*.log
 ```
 
-### Image Extraction Handling
+### Implementation Gotchas
 
-**Critical Code** ([main_terminal.py:244](main_terminal.py#L244)):
-- marker-pdf returns `rendered.images` as a dict where values can be:
-  - Single `PIL.Image` object
-  - List of `PIL.Image` objects
-- Page index keys may be already formatted strings like `_page_1_Figure_0.jpeg`
-- Must check `isinstance(page_images, list)` and wrap singles in list
-- Check if key starts with `_page_` to avoid filename duplication
-
-### JSON Serialization
-
-**Recursive Converter** ([main_terminal.py:288](main_terminal.py#L288)):
+**1. Quarto Path Handling** ([main_terminal.py:616-624](main_terminal.py#L616-L624))
 ```python
-def make_serializable(obj):
-    if isinstance(obj, dict):
-        return {k: make_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [make_serializable(item) for item in obj]
-    elif hasattr(obj, '__dict__'):
-        return str(obj)
-    else:
-        try:
-            json.dumps(obj)
-            return obj
-        except (TypeError, ValueError):
-            return str(obj)
+# CORRECT: Run from output dir with filename only
+subprocess.run(["quarto", "render", f"{filename}_ko.md"], cwd=output_dir)
+
+# WRONG: Full path causes "No valid input files" error
+subprocess.run(["quarto", "render", f"{output_dir}/{filename}_ko.md"])
 ```
 
-This handles PIL Image objects and other non-serializable types in metadata.
+**2. Image Extraction** ([main_terminal.py:239-244](main_terminal.py#L239-L244))
+- `rendered.images` dict values can be single `PIL.Image` OR list of Images
+- Must check `isinstance(page_images, list)` and wrap if needed
+- Keys may already be formatted strings like `_page_1_Figure_0.jpeg`
 
-### Quarto Path Handling
+**3. JSON Serialization** ([main_terminal.py:283](main_terminal.py#L283))
+- Metadata contains non-serializable objects (PIL Images, etc.)
+- Use recursive `make_serializable()` function to convert to strings
 
-**Important**: Quarto must be run from the directory containing the markdown file with just the filename, not full path:
+**4. Logging** ([main_terminal.py:758-771](main_terminal.py#L758-L771))
+- `TeeOutput` class redirects stdout to both console and log file
+- Timestamped logs: `logs/paperflow_YYYYMMDD_HHMMSS.log`
+- ANSI color codes preserved in files
 
-```python
-# Correct
-cwd = output_dir
-cmd = ["quarto", "render", f"{pdf_name}_ko.md"]
+### Translation Configuration
 
-# Wrong (causes "No valid input files" error)
-cmd = ["quarto", "render", f"{output_dir}/{pdf_name}_ko.md"]
-```
+**Chunk Size** (config.json):
+- Recommended: 3-5 tokens per chunk
+- Above 10: Performance degradation and context loss
 
-### Chunk Size Recommendations
+**Temperature** (config.json):
+- Recommended: 0.2-0.4 for consistent translations
 
-- **Recommended**: 3-5 paragraphs per chunk
-- **Above 10**: Performance degradation and context loss
-- **Temperature**: 0.2-0.4 range for consistent translations
-
-### Model Recommendations
-
-From testing, ranked by translation quality:
-1. **qwen3-vl:30b-a3b-instruct** ⭐ - Best quality, fast, stable
-2. **gpt-oss:20b** - Fast and stable, occasionally incomplete
-3. **qwen3:30b** - Good quality but slower
+**Model Recommendations** (tested):
+1. `qwen3-vl:30b-a3b-instruct` ⭐ - Best quality, fast, stable
+2. `gpt-oss:20b` - Fast and stable, occasionally incomplete
+3. `qwen3:30b` - Good quality but slower
 
 ## Troubleshooting
 
+### Startup Checks
+
+Before processing, the system checks dependencies (see `check_services()` at [main_terminal.py:710](main_terminal.py#L710)):
+- marker-pdf library installed
+- Ollama service reachable at configured URL
+- Translation model available in Ollama
+
 ### Common Issues
 
-1. **Ollama Connection Failed**
-   - Check: `ollama serve` running
-   - Check: Model downloaded with `ollama pull qwen3-vl:30b-a3b-instruct`
-   - Check: `config.json` has correct URL
+**Ollama Connection Failed**:
+```bash
+# Start Ollama service
+ollama serve
 
-2. **GPU Memory Issues**
-   - Application now requires GPU (no CPU fallback)
-   - If GPU not available, install CUDA and PyTorch with CUDA support
-   - For batch processing: VRAM is automatically released between PDFs
-   - Check other GPU processes with `nvidia-smi`
-   - Monitor memory usage during processing: `watch -n 1 nvidia-smi`
+# Download model (in another terminal)
+ollama pull qwen3-vl:30b-a3b-instruct
 
-3. **Quarto Not Found**
-   - Install: `sudo apt install quarto` or from https://quarto.org/
-   - Verify: `which quarto`
+# Verify model is available
+ollama list
+```
 
-4. **Translation Failures**
-   - Increase `timeout`, `retries` in config.json
-   - Reduce `Chunk_size` to process smaller sections
-   - Try smaller/faster model
+**GPU Memory Issues**:
+- Application requires CUDA GPU (no CPU fallback)
+- VRAM automatically released between PDFs (see GPU Memory Management section)
+- Check competing GPU processes: `nvidia-smi`
 
-5. **Image Extraction Errors**
-   - Check log files in `logs/` directory
-   - Verify PIL/Pillow installation: `pip show pillow`
+**Quarto Not Found**:
+```bash
+# Ubuntu/Debian
+sudo apt install quarto
+
+# Or download from https://quarto.org/
+which quarto  # Verify installation
+```
+
+**Translation Failures**:
+- Increase `timeout` and `retries` in config.json
+- Reduce `Chunk_size` for smaller sections
+- Try smaller/faster model
 
 ### Log Analysis
 
 ```bash
-# View latest log
+# View live log
 tail -f logs/paperflow_*.log
 
-# Find errors
+# Find errors/warnings/GPU info
 grep "✗" logs/paperflow_*.log
-
-# Find warnings
 grep "⚠" logs/paperflow_*.log
-
-# Monitor GPU memory operations
 grep "GPU memory" logs/paperflow_*.log
 ```
 
-## Project Evolution Notes
+## Key Architectural Decisions
 
-**Removed Features** (as of current version):
-- GUI mode (main.py) - removed in favor of terminal-only batch processing
-- API-based marker-pdf - switched to library-based approach
-- PDF output - switched to HTML output for better web compatibility
-- uv-based dependency management - switched to standard venv
-- CPU fallback mode - now requires GPU for performance (as of batch processing update)
+1. **Two-Component Design**: Separate batch processor and web viewer for flexibility
+2. **Library over API**: marker-pdf used as Python library for better control and offline operation
+3. **GPU-Only Mode**: Requires CUDA GPU (no CPU fallback) for performance
+4. **Explicit VRAM Management**: Two-stage memory cleanup enables batch processing of multiple large PDFs
+5. **Auto-cleanup**: Moves processed PDFs from `newones/` to output dirs to prevent re-processing
+6. **Watch Mode**: Continuous monitoring for automated workflows
+7. **Self-contained HTML**: Embedded images and CSS for portability
 
-**Key Architectural Decisions**:
-1. **Library over API**: marker-pdf used as Python library for better control and offline capability
-2. **GPU-Only Mode**: Requires CUDA GPU for optimal performance, no CPU fallback
-3. **Explicit VRAM Management**: Memory released after each PDF to enable batch processing
-4. **Batch Processing**: Optimized for processing multiple papers sequentially
-5. **HTML Output**: More accessible and easier to style than PDF
-6. **Auto-cleanup**: Keeps newones/ folder clean by moving processed files
-
-## File Structure
+## Project Structure
 
 ```
 PaperFlow/
-├── main_terminal.py       # Main application (terminal UI, batch processing)
-├── run_batch_venv.sh      # Execution script (activates venv, runs app)
-├── setup_venv.sh          # Setup script (creates venv, installs deps)
-├── config.json            # Configuration (Ollama, model, chunk size, etc.)
-├── header.yaml            # Quarto HTML format settings
-├── prompt.md              # Translation prompt for Ollama
+├── main_terminal.py       # Batch processor (PDF → Korean HTML)
+├── app.py                 # Streamlit web viewer
+├── run_batch.sh           # One-time batch processing
+├── run_batch_watch.sh     # Continuous watch mode
+├── run_app.sh             # Launch Streamlit viewer
+├── setup_venv.sh          # Setup script (creates .venv)
+├── config.json            # Ollama/model configuration
+├── header.yaml            # Quarto HTML format
+├── prompt.md              # Translation prompt
 ├── requirements.txt       # Python dependencies
-├── README.md              # User-facing documentation
-├── CLAUDE.md              # This file - developer guide
-├── PROJECT_STRUCTURE.md   # Project cleanup documentation
-├── newones/               # Input directory (place PDFs here)
-├── outputs/               # Output directory (results per PDF)
-└── logs/                  # Log files (timestamped per run)
+├── newones/               # Input: place PDFs here
+├── outputs/               # Output: converted papers
+└── logs/                  # Processing logs
 ```
