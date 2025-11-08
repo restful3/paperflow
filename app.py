@@ -6,6 +6,7 @@ A web interface for viewing converted academic papers in Korean and English
 import streamlit as st
 import os
 import base64
+import re
 from pathlib import Path
 from streamlit_pdf_viewer import pdf_viewer
 
@@ -169,6 +170,38 @@ if 'html_font_size' not in st.session_state:
     st.session_state.html_font_size = 100
 if 'split_ratio' not in st.session_state:
     st.session_state.split_ratio = 50  # HTML 비율 (기본 50%)
+if 'show_log' not in st.session_state:
+    st.session_state.show_log = False
+if 'show_upload' not in st.session_state:
+    st.session_state.show_upload = False
+
+
+def get_latest_log():
+    """
+    Get the latest log file from logs directory.
+    Returns tuple: (log_path, log_content) or (None, None) if no logs found
+    """
+    logs_dir = Path("logs")
+
+    if not logs_dir.exists():
+        return None, None
+
+    # Find all log files with pattern paperflow_*.log
+    log_files = list(logs_dir.glob("paperflow_*.log"))
+
+    if not log_files:
+        return None, None
+
+    # Sort by modification time, most recent first
+    log_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    latest_log = log_files[0]
+
+    try:
+        with open(latest_log, 'r', encoding='utf-8') as f:
+            log_content = f.read()
+        return latest_log, log_content
+    except Exception as e:
+        return latest_log, f"로그 파일을 읽을 수 없습니다: {str(e)}"
 
 
 def get_paper_list():
@@ -327,13 +360,110 @@ def render_paper_list():
     """
     Render the home screen with list of papers
     """
-    # Header with refresh button
-    col1, col2 = st.columns([6, 1])
+    # Header with upload, log, and refresh buttons
+    col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
     with col1:
         st.title("📚 PaperFlow Viewer")
     with col2:
+        if st.button("📤 업로드", use_container_width=True):
+            st.session_state.show_upload = not st.session_state.show_upload
+            st.rerun()
+    with col3:
+        if st.button("📋 로그", use_container_width=True):
+            st.session_state.show_log = not st.session_state.show_log
+            st.rerun()
+    with col4:
         if st.button("🔄 새로고침", use_container_width=True):
             st.rerun()
+
+    # Upload UI expander (shown when show_upload is True)
+    if st.session_state.show_upload:
+        with st.expander("📤 PDF 파일 업로드", expanded=True):
+            st.markdown("**업로드할 PDF 파일을 선택하세요** (여러 파일 동시 업로드 가능)")
+
+            uploaded_files = st.file_uploader(
+                "PDF 파일 선택",
+                type=['pdf'],
+                accept_multiple_files=True,
+                label_visibility="collapsed"
+            )
+
+            if uploaded_files:
+                newones_dir = Path("newones")
+                newones_dir.mkdir(exist_ok=True)
+
+                upload_results = []
+
+                for uploaded_file in uploaded_files:
+                    file_path = newones_dir / uploaded_file.name
+
+                    # Check for duplicates
+                    if file_path.exists():
+                        upload_results.append({
+                            'name': uploaded_file.name,
+                            'status': 'duplicate',
+                            'message': f"⚠️ **{uploaded_file.name}**: 이미 존재하는 파일입니다 (덮어쓰기됨)"
+                        })
+                    else:
+                        upload_results.append({
+                            'name': uploaded_file.name,
+                            'status': 'new',
+                            'message': f"✅ **{uploaded_file.name}**: 업로드 완료"
+                        })
+
+                    # Save file
+                    try:
+                        with open(file_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                    except Exception as e:
+                        upload_results[-1]['status'] = 'error'
+                        upload_results[-1]['message'] = f"❌ **{uploaded_file.name}**: 저장 실패 - {str(e)}"
+
+                # Display results
+                st.markdown("---")
+                for result in upload_results:
+                    if result['status'] == 'new':
+                        st.success(result['message'])
+                    elif result['status'] == 'duplicate':
+                        st.warning(result['message'])
+                    else:
+                        st.error(result['message'])
+
+                # Summary message
+                success_count = sum(1 for r in upload_results if r['status'] in ['new', 'duplicate'])
+                if success_count > 0:
+                    st.info(f"ℹ️ **{success_count}개 파일 업로드 완료** - Watch mode가 5초 이내에 처리를 시작합니다")
+
+    # Log viewer expander (shown when show_log is True)
+    if st.session_state.show_log:
+        log_path, log_content = get_latest_log()
+
+        if log_path is None:
+            st.info("📂 로그 파일이 없습니다.")
+        else:
+            with st.expander(f"📋 최신 로그: {log_path.name}", expanded=True):
+                # Strip ANSI color codes
+                clean_log = re.sub(r'\x1b\[[0-9;]*m', '', log_content)
+
+                # Show last 100 lines for performance
+                lines = clean_log.split('\n')
+                if len(lines) > 100:
+                    st.info(f"ℹ️ 총 {len(lines)}줄 중 마지막 100줄만 표시합니다. 전체 로그는 다운로드 버튼을 사용하세요.")
+                    display_lines = lines[-100:]
+                else:
+                    display_lines = lines
+
+                # Display log content in code block
+                st.code('\n'.join(display_lines), language='log')
+
+                # Download button for full log
+                st.download_button(
+                    label="💾 전체 로그 다운로드",
+                    data=log_content,
+                    file_name=log_path.name,
+                    mime="text/plain",
+                    use_container_width=True
+                )
 
     st.markdown("### 변환된 논문 목록")
     st.markdown("---")
@@ -363,10 +493,15 @@ def render_paper_list():
                     # Check available formats
                     files = get_paper_files(paper_path)
                     formats_html = []
-                    if files['html']:
-                        formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
-                    if files['pdf']:
-                        formats_html.append('<span class="format-badge">🇬🇧 English</span>')
+
+                    # Check if paper is being processed (no HTML/PDF yet)
+                    if not files['html'] and not files['pdf']:
+                        formats_html.append('<span class="format-badge" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🔄 처리중</span>')
+                    else:
+                        if files['html']:
+                            formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
+                        if files['pdf']:
+                            formats_html.append('<span class="format-badge">🇬🇧 English</span>')
 
                     # Create a beautiful card using HTML
                     card_html = f'''
