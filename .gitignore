@@ -57,6 +57,9 @@ Thumbs.db
 .env
 .env.local
 
+# Session files
+.paperflow_session
+
 # Streamlit
 .streamlit/
 *.streamlit/

@@ -7,8 +7,62 @@ import streamlit as st
 import os
 import base64
 import re
+import json
 from pathlib import Path
 from streamlit_pdf_viewer import pdf_viewer
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
+
+# Load environment variables
+load_dotenv()
+
+# Session file path
+SESSION_FILE = Path(".paperflow_session")
+
+
+def save_session(username):
+    """Save login session to file"""
+    session_data = {
+        "username": username,
+        "login_time": datetime.now().isoformat(),
+        "expires_at": (datetime.now() + timedelta(days=30)).isoformat()
+    }
+    try:
+        with open(SESSION_FILE, 'w') as f:
+            json.dump(session_data, f)
+    except Exception as e:
+        print(f"Failed to save session: {e}")
+
+
+def load_session():
+    """Load login session from file"""
+    if not SESSION_FILE.exists():
+        return None
+
+    try:
+        with open(SESSION_FILE, 'r') as f:
+            session_data = json.load(f)
+
+        # Check if session is expired
+        expires_at = datetime.fromisoformat(session_data["expires_at"])
+        if datetime.now() > expires_at:
+            # Session expired, delete file
+            delete_session()
+            return None
+
+        return session_data["username"]
+    except Exception as e:
+        print(f"Failed to load session: {e}")
+        return None
+
+
+def delete_session():
+    """Delete login session file"""
+    try:
+        if SESSION_FILE.exists():
+            SESSION_FILE.unlink()
+    except Exception as e:
+        print(f"Failed to delete session: {e}")
 
 
 # Page configuration
@@ -155,6 +209,39 @@ st.markdown("""
     div[data-testid="column"]:last-child .stButton > button {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
     }
+
+    /* Login form styling */
+    .stForm {
+        background: white;
+        padding: 2.5rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+        border: 2px solid rgba(102, 126, 234, 0.1);
+    }
+
+    /* Login input fields */
+    .stTextInput input {
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        padding: 12px;
+        font-size: 0.95rem;
+    }
+
+    .stTextInput input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    /* Login button styling */
+    .stForm .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: 700;
+        font-size: 1rem;
+        padding: 12px;
+        border-radius: 10px;
+        margin-top: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -174,6 +261,53 @@ if 'show_log' not in st.session_state:
     st.session_state.show_log = False
 if 'show_upload' not in st.session_state:
     st.session_state.show_upload = False
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'username' not in st.session_state:
+    st.session_state.username = None
+
+
+def render_login_page():
+    """
+    Render the login page
+    """
+    # Center container
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.title("🔐 PaperFlow")
+        st.markdown("### 로그인이 필요합니다")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Login form
+        with st.form("login_form", clear_on_submit=True):
+            username = st.text_input("아이디", placeholder="아이디를 입력하세요")
+            password = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            submit = st.form_submit_button("🚀 로그인", use_container_width=True)
+
+            if submit:
+                # Get credentials from environment variables
+                correct_id = os.getenv("LOGIN_ID")
+                correct_password = os.getenv("LOGIN_PASSWORD")
+
+                # Check credentials
+                if username == correct_id and password == correct_password:
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+
+                    # Save session to file (expires in 30 days)
+                    save_session(username)
+
+                    st.success("✅ 로그인 성공!")
+                    st.rerun()
+                else:
+                    st.error("❌ 아이디 또는 비밀번호가 올바르지 않습니다")
+
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.info("💡 관리자에게 계정 정보를 문의하세요")
 
 
 def get_latest_log():
@@ -360,8 +494,8 @@ def render_paper_list():
     """
     Render the home screen with list of papers
     """
-    # Header with upload, log, and refresh buttons
-    col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
+    # Header with upload, log, refresh, and logout buttons
+    col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
     with col1:
         st.title("📚 PaperFlow Viewer")
     with col2:
@@ -374,6 +508,13 @@ def render_paper_list():
             st.rerun()
     with col4:
         if st.button("🔄 새로고침", use_container_width=True):
+            st.rerun()
+    with col5:
+        if st.button("🚪 로그아웃", use_container_width=True):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            # Delete session file
+            delete_session()
             st.rerun()
 
     # Upload UI expander (shown when show_upload is True)
@@ -550,6 +691,17 @@ def render_paper_detail():
     with st.sidebar:
         st.markdown("### 📄 논문 뷰어")
 
+        # User info and logout
+        st.markdown(f"**👤 {st.session_state.username}**")
+        if st.button("🚪 로그아웃", use_container_width=True, key="logout_detail"):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            # Delete session file
+            delete_session()
+            st.rerun()
+
+        st.markdown("---")
+
         # Back to list button
         if st.button("⬅️ 목록으로 돌아가기", use_container_width=True):
             st.session_state.view = 'list'
@@ -657,6 +809,19 @@ def main():
     """
     Main application entry point
     """
+    # Check for existing session file (auto-login)
+    if not st.session_state.logged_in:
+        saved_user = load_session()
+        if saved_user:
+            # Auto-login from session file
+            st.session_state.logged_in = True
+            st.session_state.username = saved_user
+
+    # Check login status
+    if not st.session_state.logged_in:
+        render_login_page()
+        return
+
     # Route to appropriate view
     if st.session_state.view == 'list':
         render_paper_list()
