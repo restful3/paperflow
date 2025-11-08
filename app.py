@@ -37,11 +37,15 @@ def get_session_file():
     Get session file path for current session
     Each browser/tab gets its own session file
     """
+    # Create sessions directory if it doesn't exist
+    sessions_dir = Path(".sessions")
+    sessions_dir.mkdir(exist_ok=True)
+
     session_id = get_session_id()
     if session_id:
-        return Path(f".paperflow_session_{session_id}")
+        return sessions_dir / f"session_{session_id}.json"
     # Fallback to default if session ID unavailable
-    return Path(".paperflow_session_default")
+    return sessions_dir / "session_default.json"
 
 
 def save_session(username):

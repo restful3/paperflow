@@ -57,8 +57,8 @@ Thumbs.db
 .env
 .env.local
 
-# Session files (all session variants)
-.paperflow_session*
+# Session files (organized in .sessions/ directory)
+.sessions/
 
 # Streamlit
 .streamlit/
