@@ -302,6 +302,10 @@ if 'confirm_action' not in st.session_state:
     st.session_state.confirm_action = None  # {'action': 'archive'/'restore', 'paper_path': '...', 'paper_name': '...'}
 if 'show_confirm_dialog' not in st.session_state:
     st.session_state.show_confirm_dialog = False
+if 'md_edit_mode' not in st.session_state:
+    st.session_state.md_edit_mode = {}  # {md_path: True/False} - per-file edit mode
+if 'md_original_content' not in st.session_state:
+    st.session_state.md_original_content = {}  # {md_path: original_content} - for restore
 
 
 def render_login_page():
@@ -851,6 +855,22 @@ def display_html(html_path, font_size=100, dual_view=False):
             body > *:first-child, main > *:first-child {{
                 margin-top: 0 !important;
             }}
+
+            /* 전체화면 모드: pull-down-to-exit 차단하면서 스크롤 허용 */
+            :fullscreen,
+            :-webkit-full-screen,
+            :-moz-full-screen,
+            :-ms-fullscreen {{
+                overflow: auto !important;
+            }}
+
+            /* iOS Safari에서 pull-to-exit 제스처 차단 */
+            :fullscreen body,
+            :-webkit-full-screen body {{
+                overscroll-behavior: none !important;
+                -webkit-overflow-scrolling: touch !important;
+                position: relative !important;
+            }}
         </style>
         """
 
@@ -890,7 +910,7 @@ def display_html(html_path, font_size=100, dual_view=False):
                 const root = document.documentElement;
 
                 btn.addEventListener('click', function() {
-                    if (!document.fullscreenElement) {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                         // Enter fullscreen
                         if (root.requestFullscreen) {
                             root.requestFullscreen();
@@ -911,10 +931,72 @@ def display_html(html_path, font_size=100, dual_view=False):
                     }
                 });
 
-                // Update button text based on fullscreen state
-                document.addEventListener('fullscreenchange', updateButton);
-                document.addEventListener('webkitfullscreenchange', updateButton);
-                document.addEventListener('msfullscreenchange', updateButton);
+                // Fullscreen change handler with stronger iOS protection
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+                document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+                document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+                let touchStartY = 0;
+                let preventPullDown = false;
+
+                function handleFullscreenChange() {
+                    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+                    if (isFullscreen) {
+                        // 전체화면 진입: iOS pull-down 제스처 완전 차단
+                        document.documentElement.style.overscrollBehavior = 'none';
+                        document.body.style.overscrollBehavior = 'none';
+
+                        // iOS 디바이스에서 터치 이벤트 직접 제어
+                        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                            preventPullDown = true;
+
+                            // 터치 이벤트 리스너 추가 (passive: false로 preventDefault 가능)
+                            document.addEventListener('touchstart', handleTouchStart, { passive: false });
+                            document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+                            // 추가 스타일 적용
+                            document.body.style.position = 'relative';
+                            document.body.style.touchAction = 'pan-y';
+
+                            // 상단에 작은 패딩 추가 (pull-down 방지)
+                            document.body.style.paddingTop = '1px';
+                        }
+                    } else {
+                        // 전체화면 종료: 모든 리스너와 스타일 정리
+                        preventPullDown = false;
+                        document.removeEventListener('touchstart', handleTouchStart);
+                        document.removeEventListener('touchmove', handleTouchMove);
+
+                        document.documentElement.style.overscrollBehavior = '';
+                        document.body.style.overscrollBehavior = '';
+                        document.body.style.touchAction = '';
+                        document.body.style.position = '';
+                        document.body.style.paddingTop = '';
+                    }
+
+                    updateButton();
+                }
+
+                // 터치 시작 위치 저장
+                function handleTouchStart(e) {
+                    touchStartY = e.touches[0].clientY;
+                }
+
+                // 터치 이동 처리 - 상단에서 아래로 당기는 동작 차단
+                function handleTouchMove(e) {
+                    if (!preventPullDown) return;
+
+                    const touchY = e.touches[0].clientY;
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+                    // 페이지 최상단에서 아래로 당기려는 경우 차단
+                    if (scrollTop <= 0 && touchY > touchStartY) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                }
 
                 function updateButton() {
                     if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
@@ -1032,15 +1114,169 @@ def display_pdf(pdf_path, dual_view=False):
     return pdf_bytes if 'pdf_bytes' in locals() else None
 
 
-def display_markdown(md_path):
+def split_yaml_and_body(md_content):
     """
-    Display markdown file
+    Split markdown content into YAML header and body
+    Returns: (yaml_header, body_content)
+    """
+    if md_content.startswith('---'):
+        # Find the second --- marker
+        end_marker = md_content.find('---', 3)
+        if end_marker != -1:
+            yaml_header = md_content[:end_marker + 3]
+            body_content = md_content[end_marker + 3:].lstrip('\n')
+            return yaml_header, body_content
+
+    return '', md_content
+
+
+def save_markdown(md_path, yaml_header, body_content):
+    """
+    Save edited markdown content back to file
+    Args:
+        md_path: Path to markdown file
+        yaml_header: YAML front matter (can be empty)
+        body_content: Markdown body content
+    Returns: (success: bool, message: str)
     """
     try:
-        with open(md_path, 'r', encoding='utf-8') as f:
-            md_content = f.read()
+        # Combine YAML header and body
+        if yaml_header:
+            full_content = yaml_header + '\n' + body_content
+        else:
+            full_content = body_content
 
-        st.markdown(md_content, unsafe_allow_html=True)
+        # Write to file
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+
+        return True, "✅ 저장되었습니다!"
+    except Exception as e:
+        return False, f"❌ 저장 실패: {str(e)}"
+
+
+def display_markdown(md_path):
+    """
+    Display markdown file with edit/view mode toggle
+    """
+    try:
+        # Read original content (with YAML)
+        with open(md_path, 'r', encoding='utf-8') as f:
+            original_content = f.read()
+
+        # Store original content for restore functionality
+        if md_path not in st.session_state.md_original_content:
+            st.session_state.md_original_content[md_path] = original_content
+
+        # Split YAML and body
+        yaml_header, body_content = split_yaml_and_body(original_content)
+
+        # Initialize edit mode for this file
+        if md_path not in st.session_state.md_edit_mode:
+            st.session_state.md_edit_mode[md_path] = False
+
+        # Mode toggle buttons
+        col1, col2, col3 = st.columns([1, 1, 3])
+        with col1:
+            if st.button(
+                "👁️ 읽기 모드" if not st.session_state.md_edit_mode[md_path] else "👁️ 읽기",
+                use_container_width=True,
+                type="primary" if not st.session_state.md_edit_mode[md_path] else "secondary",
+                key=f"view_mode_{md_path}"
+            ):
+                st.session_state.md_edit_mode[md_path] = False
+                st.rerun()
+        with col2:
+            if st.button(
+                "✏️ 편집" if not st.session_state.md_edit_mode[md_path] else "✏️ 편집 모드",
+                use_container_width=True,
+                type="secondary" if not st.session_state.md_edit_mode[md_path] else "primary",
+                key=f"edit_mode_{md_path}"
+            ):
+                st.session_state.md_edit_mode[md_path] = True
+                st.rerun()
+
+        st.markdown("---")
+
+        # Display based on mode
+        if st.session_state.md_edit_mode[md_path]:
+            # EDIT MODE
+            st.info("💡 **편집 모드**: YAML 헤더는 자동 보존됩니다. 본문만 수정하세요.")
+
+            edited_content = st.text_area(
+                "마크다운 편집",
+                value=body_content,
+                height=600,
+                key=f"editor_{md_path}",
+                label_visibility="collapsed"
+            )
+
+            # Save and restore buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 저장", use_container_width=True, type="primary", key=f"save_{md_path}"):
+                    success, message = save_markdown(md_path, yaml_header, edited_content)
+                    if success:
+                        st.success(message)
+                        # Update original content after save
+                        st.session_state.md_original_content[md_path] = yaml_header + '\n' + edited_content if yaml_header else edited_content
+                        st.rerun()
+                    else:
+                        st.error(message)
+            with col2:
+                if st.button("🔄 원본 복원", use_container_width=True, type="secondary", key=f"restore_{md_path}"):
+                    # Show confirmation
+                    if st.button("⚠️ 정말 원본으로 복원하시겠습니까?", key=f"confirm_restore_{md_path}", type="secondary"):
+                        # Restore from saved original
+                        with open(md_path, 'w', encoding='utf-8') as f:
+                            f.write(st.session_state.md_original_content[md_path])
+                        st.success("✅ 원본으로 복원되었습니다!")
+                        st.rerun()
+
+        else:
+            # VIEW MODE (original rendering logic)
+            # Remove YAML from display
+            md_content = body_content
+
+            # Convert relative image paths to base64
+            md_dir = Path(md_path).parent
+
+            def replace_image_path(match):
+                alt_text = match.group(1)
+                img_filename = match.group(2)
+
+                # Skip if already an absolute path or URL
+                if img_filename.startswith(('http://', 'https://', '/')):
+                    return match.group(0)
+
+                # Convert to absolute path
+                img_path = md_dir / img_filename
+                if img_path.exists():
+                    # Encode image to base64 for inline display
+                    try:
+                        with open(img_path, 'rb') as img_file:
+                            img_data = base64.b64encode(img_file.read()).decode()
+                            # Determine image type from extension
+                            ext = img_path.suffix.lower()
+                            mime_types = {
+                                '.jpg': 'image/jpeg',
+                                '.jpeg': 'image/jpeg',
+                                '.png': 'image/png',
+                                '.gif': 'image/gif',
+                                '.webp': 'image/webp'
+                            }
+                            mime_type = mime_types.get(ext, 'image/jpeg')
+                            return f'![{alt_text}](data:{mime_type};base64,{img_data})'
+                    except:
+                        pass
+
+                return match.group(0)
+
+            # Pattern: ![alt text](image_path)
+            md_content = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', replace_image_path, md_content)
+
+            st.markdown(md_content, unsafe_allow_html=True)
+
     except Exception as e:
         st.error(f"마크다운 파일을 불러올 수 없습니다: {str(e)}")
 
@@ -1334,13 +1570,23 @@ def render_paper_detail():
     # Build format options
     format_options = {}
 
+    # 1. 한국어 HTML (최우선)
     if files['html']:
         format_options['🇰🇷 한국어 (HTML)'] = ('html', files['html'])
 
+    # 2. 영어 PDF
     if files['pdf']:
         format_options['🇬🇧 영어 (PDF)'] = ('pdf', files['pdf'])
-    elif files['md_en']:
-        format_options['🇬🇧 영어 (Markdown)'] = ('md_en', files['md_en'])
+
+    # 3. 분할 보기는 format_names에서 추가됨
+
+    # 4. 한국어 마크다운
+    if files['md_ko']:
+        format_options['📝 한국어 (Markdown)'] = ('md_ko', files['md_ko'])
+
+    # 5. 영어 마크다운 (PDF 여부와 무관하게 항상 추가)
+    if files['md_en']:
+        format_options['📝 영어 (Markdown)'] = ('md_en', files['md_en'])
 
     if not format_options:
         st.error("표시할 파일이 없습니다.")
@@ -1365,14 +1611,28 @@ def render_paper_detail():
         st.markdown("**보기 형식 선택:**")
 
         # Radio buttons for format selection
+        # 순서: 한국어 HTML → 영어 PDF → 분할 보기 → 한국어 MD → 영어 MD
         format_names = []
 
-        # Add individual format options first (한국어, 영어 순서)
-        format_names.extend(list(format_options.keys()))
+        # 1. 한국어 HTML
+        if '🇰🇷 한국어 (HTML)' in format_options:
+            format_names.append('🇰🇷 한국어 (HTML)')
 
-        # Add "분할 보기" option at the end if both HTML and PDF are available
+        # 2. 영어 PDF
+        if '🇬🇧 영어 (PDF)' in format_options:
+            format_names.append('🇬🇧 영어 (PDF)')
+
+        # 3. 분할 보기 (HTML + PDF 둘 다 있을 때만)
         if files['html'] and files['pdf']:
             format_names.append("🔄 분할 보기 (한국어 + 영어)")
+
+        # 4. 한국어 마크다운
+        if '📝 한국어 (Markdown)' in format_options:
+            format_names.append('📝 한국어 (Markdown)')
+
+        # 5. 영어 마크다운
+        if '📝 영어 (Markdown)' in format_options:
+            format_names.append('📝 영어 (Markdown)')
 
         # Initialize selected format if not set
         if st.session_state.selected_format is None:
@@ -1494,6 +1754,8 @@ def render_paper_detail():
             display_html(file_path, st.session_state.html_font_size, dual_view=False)
         elif file_type == 'pdf':
             display_pdf(file_path, dual_view=False)
+        elif file_type == 'md_ko':
+            display_markdown(file_path)
         elif file_type == 'md_en':
             display_markdown(file_path)
 
