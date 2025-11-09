@@ -1367,20 +1367,17 @@ def render_paper_detail():
         # Radio buttons for format selection
         format_names = []
 
-        # Add "분할 보기" option first if both HTML and PDF are available
+        # Add individual format options first (한국어, 영어 순서)
+        format_names.extend(list(format_options.keys()))
+
+        # Add "분할 보기" option at the end if both HTML and PDF are available
         if files['html'] and files['pdf']:
             format_names.append("🔄 분할 보기 (한국어 + 영어)")
 
-        # Then add individual format options
-        format_names.extend(list(format_options.keys()))
-
         # Initialize selected format if not set
         if st.session_state.selected_format is None:
-            # Default to "분할 보기" if both HTML and PDF are available
-            if files['html'] and files['pdf']:
-                st.session_state.selected_format = "🔄 분할 보기 (한국어 + 영어)"
-            else:
-                st.session_state.selected_format = format_names[0]
+            # Default to first option (한국어 HTML if available)
+            st.session_state.selected_format = format_names[0]
 
         selected_format_name = st.radio(
             "형식",
