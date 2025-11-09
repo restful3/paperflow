@@ -92,11 +92,29 @@ Streamlit-based viewing interface:
     - "🗑️ 삭제": Permanently delete paper (shows folder size, requires confirmation)
   - Detail view sidebar: Separate buttons for archive/restore and delete
   - All destructive actions require confirmation dialogs
-- Tabbed viewer: Korean (HTML) and English (PDF) side-by-side
+- **Viewer Features**:
+  - Split view mode: Korean (HTML) + English (PDF) side-by-side with adjustable ratio
+  - Single view mode: Korean HTML, English PDF, or English Markdown
+  - Font size control for HTML content (100-110%)
+  - Screen ratio adjustment for split view (20-80%)
+  - **Fullscreen mode**: Single-view Korean HTML includes fullscreen button (top-right corner)
+    - Click "🔍 전체화면" to enter browser fullscreen (escape iframe constraints)
+    - Click "❌ 전체화면 종료" or press ESC to exit
+    - **Table of Contents (TOC)**: Automatically shows left sidebar TOC only in fullscreen mode
+      - Hidden in normal iframe view (saves space)
+      - Visible in fullscreen (enables quick navigation for long papers)
+      - Uses CSS `:fullscreen` pseudo-class for automatic toggle
+    - Uses JavaScript `Element.requestFullscreen()` API with cross-browser support
+  - **PDF New Tab Mode**: Single-view English PDF includes "새 탭에서 열기" button
+    - Opens PDF in new browser tab using base64 data URI
+    - Enables browser native fullscreen (F11 or browser fullscreen button)
+    - Provides full PDF viewer features (zoom, page navigation, print, etc.)
+    - Button positioned top-right, similar to HTML fullscreen button
 - Uses `streamlit-pdf-viewer` component for PDF rendering
 - Session state management for navigation (list view ↔ detail view)
+- **Session Persistence**: Auto-login with session files stored in `.sessions/`
 - Responsive design with gradient UI styling
-- Login authentication with session persistence
+- Login authentication with username/password validation
 
 ### Batch Processing Pipeline
 
@@ -121,6 +139,10 @@ The pipeline executes 4 stages for each PDF (see `process_single_pdf()` at [main
 #### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:607](main_terminal.py#L607))
 - **Important**: Runs `quarto render {filename}_ko.md` from the output directory (not full path)
 - Quarto config in `header.yaml`: theme, TOC, embedded resources
+- **Automatic Fallback** ([main_terminal.py:625-751](main_terminal.py#L625-L751)): If YAML parsing fails, retries with simplified header
+  - Detects "YAML parse exception" or "Error running Lua" in stderr
+  - Creates temporary file with simple YAML header (no complex CSS)
+  - Ensures HTML is always generated even if custom styling fails
 
 #### 5. Cleanup
 - Moves source PDF from `newones/` to output directory
@@ -132,7 +154,10 @@ Critical configuration files in project root:
 
 - **[config.json](config.json)**: Ollama URL, model name, chunk size, timeout/retries, temperature
 - **[prompt.md](prompt.md)**: Translation prompt enforcing markdown preservation and LaTeX→Typst math conversion
-- **[header.yaml](header.yaml)**: Quarto HTML format (theme: cosmo, TOC, embed-resources: true)
+- **[header.yaml](header.yaml)**: Quarto HTML format
+  - `toc: true` with `toc-location: left` and `toc-depth: 3` (TOC hidden in iframe via CSS, shown only in fullscreen)
+  - `theme: cosmo`, `embed-resources: true` (self-contained HTML)
+  - Custom CSS for layout and styling
 - **[requirements.txt](requirements.txt)**: Python dependencies
 
 ### Runtime Dependencies
@@ -240,6 +265,34 @@ subprocess.run(["quarto", "render", f"{output_dir}/{filename}_ko.md"])
 - Timestamped logs: `logs/paperflow_YYYYMMDD_HHMMSS.log`
 - ANSI color codes preserved in files
 
+**5. Streamlit Session Files** ([app.py:35-48](app.py#L35-L48))
+- Session files stored in `.sessions/` directory (not project root)
+- Format: `.sessions/session_{uuid}.json`
+- Auto-login: Session files checked on app startup for seamless re-login
+- Function `get_session_file()` manages session file paths
+
+**6. Fullscreen Button & TOC Implementation** ([app.py:835-908](app.py#L835-L908))
+- **Fullscreen Button**: Injected into HTML content only for single-view mode (`dual_view=False`)
+  - Fixed position button (top-right, z-index: 9999) to stay visible during scrolling
+  - Cross-browser support: Standard API + `-webkit-` (Safari) + `-ms-` (IE11) prefixes
+  - IIFE (Immediately Invoked Function Expression) to avoid global namespace pollution
+  - Dynamic button text/color changes based on fullscreen state
+  - Inserted before `</body>` tag (or appended if no body tag exists)
+- **TOC Visibility Control** ([app.py:785-817](app.py#L785-L817)):
+  - CSS hides TOC in normal iframe mode (`display: none`)
+  - CSS shows TOC only in fullscreen mode using `:fullscreen` pseudo-class
+  - Cross-browser pseudo-class support: `:-webkit-full-screen`, `:-moz-full-screen`, `:-ms-fullscreen`, `:fullscreen`
+  - Requires `toc: true` in `header.yaml` to generate TOC in HTML
+
+**7. PDF New Tab Button** ([app.py:962-987](app.py#L962-L987))
+- Added for single-view PDF mode (`dual_view=False`)
+- Converts PDF bytes to base64 and creates data URI
+- HTML link with `target="_blank"` and `rel="noopener noreferrer"` for security
+- Styled consistently with HTML fullscreen button (gradient, hover effects)
+- Position: Top-right, above PDF viewer
+- Limitation: Large PDFs (>5MB) may cause browser memory issues with base64 encoding
+- Alternative: Users can use browser's native "Open in new tab" on the PDF viewer itself
+
 ### Translation Configuration
 
 **Chunk Size** (config.json):
@@ -308,6 +361,18 @@ grep "⚠" logs/paperflow_*.log
 grep "GPU memory" logs/paperflow_*.log
 ```
 
+### Known Issues
+
+**PDF Scroll Position Reset on Sidebar Toggle**:
+- **Issue**: In split view mode, toggling the Streamlit sidebar causes the PDF viewer to reset to the first page
+- **Cause**: Streamlit reruns the entire script when sidebar is toggled, causing `streamlit-pdf-viewer` component to re-render from scratch
+- **Component Limitation**: `streamlit-pdf-viewer` does not support `key` parameter for state preservation and does not expose current scroll position
+- **Potential Solutions**:
+  1. Use `@st.fragment` decorator to isolate PDF viewer from sidebar reruns
+  2. Upgrade to newer version of `streamlit-pdf-viewer` (currently `>=0.0.15`, v0.0.23+ has scroll-related fixes)
+  3. Implement manual page tracking with `scroll_to_page` parameter (requires user input)
+- **Workaround**: Avoid toggling sidebar while reading PDFs; use keyboard shortcuts or keep sidebar state consistent
+
 ## Key Architectural Decisions
 
 1. **Two-Component Design**: Separate batch processor and web viewer for flexibility
@@ -335,5 +400,6 @@ PaperFlow/
 ├── newones/               # Input: place PDFs here
 ├── outputs/               # Output: unread papers (to be read)
 ├── archives/              # Output: read papers (archived)
-└── logs/                  # Processing logs
+├── logs/                  # Processing logs (timestamped)
+└── .sessions/             # Streamlit session files (auto-login)
 ```

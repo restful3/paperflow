@@ -782,9 +782,38 @@ def display_html(html_path, font_size=100, dual_view=False):
             body, #quarto-content, .content, #quarto-document-content, p, div, span, li, td, th {{
                 font-size: {font_size}% !important;
             }}
-            /* Hide TOC sidebar */
+            /* Hide TOC sidebar in normal mode */
             #TOC, .sidebar, nav#TOC, #quarto-sidebar, .quarto-sidebar-toggle-contents {{
                 display: none !important;
+            }}
+
+            /* Show TOC sidebar in fullscreen mode (cross-browser support) */
+            :-webkit-full-screen #TOC,
+            :-webkit-full-screen .sidebar,
+            :-webkit-full-screen nav#TOC,
+            :-webkit-full-screen #quarto-sidebar {{
+                display: block !important;
+            }}
+
+            :-moz-full-screen #TOC,
+            :-moz-full-screen .sidebar,
+            :-moz-full-screen nav#TOC,
+            :-moz-full-screen #quarto-sidebar {{
+                display: block !important;
+            }}
+
+            :-ms-fullscreen #TOC,
+            :-ms-fullscreen .sidebar,
+            :-ms-fullscreen nav#TOC,
+            :-ms-fullscreen #quarto-sidebar {{
+                display: block !important;
+            }}
+
+            :fullscreen #TOC,
+            :fullscreen .sidebar,
+            :fullscreen nav#TOC,
+            :fullscreen #quarto-sidebar {{
+                display: block !important;
             }}
             /* Hide title block */
             .quarto-title-block, header.quarto-title-block, header#title-block-header {{
@@ -832,6 +861,81 @@ def display_html(html_path, font_size=100, dual_view=False):
             # If no head tag, add it at the beginning
             html_content = custom_css + html_content
 
+        # Add fullscreen button for single view mode only
+        if not dual_view:
+            fullscreen_button = """
+            <!-- Fullscreen button (fixed position, top-right corner) -->
+            <button id="fullscreenBtn" style="
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                z-index: 9999;
+                padding: 10px 15px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                transition: all 0.3s ease;
+            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                🔍 전체화면
+            </button>
+
+            <script>
+            (function() {
+                const btn = document.getElementById('fullscreenBtn');
+                const root = document.documentElement;
+
+                btn.addEventListener('click', function() {
+                    if (!document.fullscreenElement) {
+                        // Enter fullscreen
+                        if (root.requestFullscreen) {
+                            root.requestFullscreen();
+                        } else if (root.webkitRequestFullscreen) { // Safari
+                            root.webkitRequestFullscreen();
+                        } else if (root.msRequestFullscreen) { // IE11
+                            root.msRequestFullscreen();
+                        }
+                    } else {
+                        // Exit fullscreen
+                        if (document.exitFullscreen) {
+                            document.exitFullscreen();
+                        } else if (document.webkitExitFullscreen) { // Safari
+                            document.webkitExitFullscreen();
+                        } else if (document.msExitFullscreen) { // IE11
+                            document.msExitFullscreen();
+                        }
+                    }
+                });
+
+                // Update button text based on fullscreen state
+                document.addEventListener('fullscreenchange', updateButton);
+                document.addEventListener('webkitfullscreenchange', updateButton);
+                document.addEventListener('msfullscreenchange', updateButton);
+
+                function updateButton() {
+                    if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+                        btn.textContent = '❌ 전체화면 종료';
+                        btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+                    } else {
+                        btn.textContent = '🔍 전체화면';
+                        btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                    }
+                }
+            })();
+            </script>
+            """
+
+            # Insert fullscreen button before closing body tag
+            if '</body>' in html_content:
+                html_content = html_content.replace('</body>', fullscreen_button + '</body>')
+            else:
+                # If no body tag, append at the end
+                html_content += fullscreen_button
+
         # Choose height based on view mode
         # Dual view: fixed height for independent left/right scrolling
         # Single view: very tall height to minimize outer page scroll
@@ -854,6 +958,62 @@ def display_pdf(pdf_path, dual_view=False):
     try:
         with open(pdf_path, 'rb') as f:
             pdf_bytes = f.read()
+
+        # Add "Open in new tab" button for single view mode only
+        if not dual_view:
+            # Encode PDF to base64 for Blob URL approach
+            pdf_base64 = base64.b64encode(pdf_bytes).decode()
+
+            # Create button with JavaScript to open PDF in new tab using Blob
+            open_tab_button = f'''
+            <div style="margin-bottom: 15px; text-align: right;">
+                <button id="openPdfBtn" style="
+                    display: inline-block;
+                    padding: 10px 15px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    🔍 새 탭에서 열기 (전체화면 가능)
+                </button>
+                <script>
+                (function() {{
+                    const pdfData = '{pdf_base64}';
+                    const btn = document.getElementById('openPdfBtn');
+
+                    btn.addEventListener('click', function() {{
+                        try {{
+                            // Convert base64 to binary
+                            const binaryString = atob(pdfData);
+                            const len = binaryString.length;
+                            const bytes = new Uint8Array(len);
+                            for (let i = 0; i < len; i++) {{
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }}
+
+                            // Create Blob and open in new tab
+                            const blob = new Blob([bytes], {{ type: 'application/pdf' }});
+                            const url = URL.createObjectURL(blob);
+                            window.open(url, '_blank');
+
+                            // Clean up blob URL after a delay
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        }} catch (e) {{
+                            console.error('Error opening PDF:', e);
+                            alert('PDF 열기 실패. 파일이 너무 크거나 브라우저가 지원하지 않습니다.');
+                        }}
+                    }});
+                }})();
+                </script>
+            </div>
+            '''
+            st.markdown(open_tab_button, unsafe_allow_html=True)
 
         # Choose height based on view mode
         # Dual view: fixed height for independent left/right scrolling

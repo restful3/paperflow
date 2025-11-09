@@ -2,7 +2,9 @@
 lang: ko
 format:
   html:
-    toc: false
+    toc: true
+    toc-location: left
+    toc-depth: 3
     theme: cosmo
     embed-resources: true
     code-fold: true
