@@ -856,21 +856,6 @@ def display_html(html_path, font_size=100, dual_view=False):
                 margin-top: 0 !important;
             }}
 
-            /* 전체화면 모드: pull-down-to-exit 차단하면서 스크롤 허용 */
-            :fullscreen,
-            :-webkit-full-screen,
-            :-moz-full-screen,
-            :-ms-fullscreen {{
-                overflow: auto !important;
-            }}
-
-            /* iOS Safari에서 pull-to-exit 제스처 차단 */
-            :fullscreen body,
-            :-webkit-full-screen body {{
-                overscroll-behavior: none !important;
-                -webkit-overflow-scrolling: touch !important;
-                position: relative !important;
-            }}
         </style>
         """
 
@@ -919,6 +904,11 @@ def display_html(html_path, font_size=100, dual_view=False):
                         } else if (root.msRequestFullscreen) { // IE11
                             root.msRequestFullscreen();
                         }
+
+                        // iPad 사용자에게 안내 메시지 표시
+                        if (/iPad/.test(navigator.userAgent)) {
+                            showToast('전체화면 종료: 상단 버튼을 클릭하세요');
+                        }
                     } else {
                         // Exit fullscreen
                         if (document.exitFullscreen) {
@@ -931,72 +921,49 @@ def display_html(html_path, font_size=100, dual_view=False):
                     }
                 });
 
-                // Fullscreen change handler with stronger iOS protection
-                document.addEventListener('fullscreenchange', handleFullscreenChange);
-                document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-                document.addEventListener('msfullscreenchange', handleFullscreenChange);
+                // 토스트 메시지 함수
+                function showToast(message) {
+                    const toast = document.createElement('div');
+                    toast.innerHTML = message;
+                    toast.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: rgba(0, 0, 0, 0.9);
+                        color: white;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        z-index: 10000;
+                        animation: slideDown 0.3s ease-out;
+                    `;
 
-                let touchStartY = 0;
-                let preventPullDown = false;
-
-                function handleFullscreenChange() {
-                    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-
-                    if (isFullscreen) {
-                        // 전체화면 진입: iOS pull-down 제스처 완전 차단
-                        document.documentElement.style.overscrollBehavior = 'none';
-                        document.body.style.overscrollBehavior = 'none';
-
-                        // iOS 디바이스에서 터치 이벤트 직접 제어
-                        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                            preventPullDown = true;
-
-                            // 터치 이벤트 리스너 추가 (passive: false로 preventDefault 가능)
-                            document.addEventListener('touchstart', handleTouchStart, { passive: false });
-                            document.addEventListener('touchmove', handleTouchMove, { passive: false });
-
-                            // 추가 스타일 적용
-                            document.body.style.position = 'relative';
-                            document.body.style.touchAction = 'pan-y';
-
-                            // 상단에 작은 패딩 추가 (pull-down 방지)
-                            document.body.style.paddingTop = '1px';
+                    // 애니메이션 추가
+                    const style = document.createElement('style');
+                    style.innerHTML = `
+                        @keyframes slideDown {
+                            from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+                            to { transform: translateX(-50%) translateY(0); opacity: 1; }
                         }
-                    } else {
-                        // 전체화면 종료: 모든 리스너와 스타일 정리
-                        preventPullDown = false;
-                        document.removeEventListener('touchstart', handleTouchStart);
-                        document.removeEventListener('touchmove', handleTouchMove);
+                    `;
+                    document.head.appendChild(style);
 
-                        document.documentElement.style.overscrollBehavior = '';
-                        document.body.style.overscrollBehavior = '';
-                        document.body.style.touchAction = '';
-                        document.body.style.position = '';
-                        document.body.style.paddingTop = '';
-                    }
+                    document.body.appendChild(toast);
 
-                    updateButton();
+                    // 3초 후 제거
+                    setTimeout(() => {
+                        toast.style.animation = 'slideDown 0.3s ease-out reverse';
+                        setTimeout(() => {
+                            document.body.removeChild(toast);
+                        }, 300);
+                    }, 3000);
                 }
 
-                // 터치 시작 위치 저장
-                function handleTouchStart(e) {
-                    touchStartY = e.touches[0].clientY;
-                }
-
-                // 터치 이동 처리 - 상단에서 아래로 당기는 동작 차단
-                function handleTouchMove(e) {
-                    if (!preventPullDown) return;
-
-                    const touchY = e.touches[0].clientY;
-                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-                    // 페이지 최상단에서 아래로 당기려는 경우 차단
-                    if (scrollTop <= 0 && touchY > touchStartY) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        return false;
-                    }
-                }
+                // Simple fullscreen change handler
+                document.addEventListener('fullscreenchange', updateButton);
+                document.addEventListener('webkitfullscreenchange', updateButton);
+                document.addEventListener('msfullscreenchange', updateButton);
 
                 function updateButton() {
                     if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
