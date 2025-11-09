@@ -83,9 +83,15 @@ Streamlit-based viewing interface:
 - **Tab Navigation**: Separate tabs for "읽을 논문" (unread) and "읽은 논문" (archived)
 - Scans `outputs/` and `archives/` directories for papers
 - Grid layout with paper cards showing available formats
-- **Paper Management**: Archive/restore papers with one-click buttons
-  - "✅ 완료" button: Move paper from `outputs/` to `archives/`
-  - "↩️ 복원" button: Move paper from `archives/` to `outputs/`
+- **Paper Management**: Three-button layout with confirmation dialogs
+  - Unread papers: `[📖 보기] [✅ 완료] [🗑️ 삭제]`
+  - Archived papers: `[📖 보기] [↩️ 복원] [🗑️ 삭제]`
+  - Actions:
+    - "✅ 완료": Move paper from `outputs/` to `archives/`
+    - "↩️ 복원": Move paper from `archives/` to `outputs/`
+    - "🗑️ 삭제": Permanently delete paper (shows folder size, requires confirmation)
+  - Detail view sidebar: Separate buttons for archive/restore and delete
+  - All destructive actions require confirmation dialogs
 - Tabbed viewer: Korean (HTML) and English (PDF) side-by-side
 - Uses `streamlit-pdf-viewer` component for PDF rendering
 - Session state management for navigation (list view ↔ detail view)

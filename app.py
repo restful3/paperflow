@@ -559,6 +559,109 @@ def confirm_restore_detail_dialog():
             st.rerun()
 
 
+@st.dialog("⚠️ 논문 삭제 확인")
+def confirm_delete_dialog():
+    """Confirmation dialog for deleting a paper (from list view)"""
+    if st.session_state.confirm_action is None:
+        st.error("오류: 확인할 작업이 없습니다.")
+        return
+
+    action_info = st.session_state.confirm_action
+    paper_path = action_info['paper_path']
+    paper_name = action_info['paper_name']
+
+    # Calculate size
+    try:
+        total_size = sum(f.stat().st_size for f in Path(paper_path).rglob('*') if f.is_file())
+        size_mb = total_size / (1024 * 1024)
+    except:
+        size_mb = 0.0
+
+    st.markdown(f"### 📄 {paper_name}")
+    st.markdown("---")
+    st.error("🚨 이 논문을 **완전히 삭제**합니다")
+    st.warning("⚠️ 삭제된 논문은 복구할 수 없습니다!")
+
+    st.info(f"""
+**📊 삭제될 데이터:**
+- PDF 파일
+- 한국어 HTML/Markdown
+- 영어 Markdown
+- 이미지 파일
+- **총 크기: {size_mb:.1f} MB**
+    """)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ 삭제", use_container_width=True, type="primary"):
+            success, message, _ = delete_paper(paper_path)
+            if success:
+                st.success(message)
+                st.session_state.confirm_action = None
+                st.session_state.show_confirm_dialog = False
+                st.rerun()
+            else:
+                st.error(message)
+    with col2:
+        if st.button("❌ 취소", use_container_width=True):
+            st.session_state.confirm_action = None
+            st.session_state.show_confirm_dialog = False
+            st.rerun()
+
+
+@st.dialog("⚠️ 논문 삭제 확인")
+def confirm_delete_detail_dialog():
+    """Confirmation dialog for deleting a paper (from detail view)"""
+    if st.session_state.confirm_action is None:
+        st.error("오류: 확인할 작업이 없습니다.")
+        return
+
+    action_info = st.session_state.confirm_action
+    paper_path = action_info['paper_path']
+    paper_name = action_info['paper_name']
+
+    # Calculate size
+    try:
+        total_size = sum(f.stat().st_size for f in Path(paper_path).rglob('*') if f.is_file())
+        size_mb = total_size / (1024 * 1024)
+    except:
+        size_mb = 0.0
+
+    st.markdown(f"### 📄 {paper_name}")
+    st.markdown("---")
+    st.error("🚨 이 논문을 **완전히 삭제**합니다")
+    st.warning("⚠️ 삭제된 논문은 복구할 수 없습니다!")
+
+    st.info(f"""
+**📊 삭제될 데이터:**
+- PDF 파일
+- 한국어 HTML/Markdown
+- 영어 Markdown
+- 이미지 파일
+- **총 크기: {size_mb:.1f} MB**
+    """)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ 삭제", use_container_width=True, type="primary"):
+            success, message, _ = delete_paper(paper_path)
+            if success:
+                st.success(message)
+                # Return to list view after deletion
+                st.session_state.view = 'list'
+                st.session_state.selected_paper = None
+                st.session_state.confirm_action = None
+                st.session_state.show_confirm_dialog = False
+                st.rerun()
+            else:
+                st.error(message)
+    with col2:
+        if st.button("❌ 취소", use_container_width=True):
+            st.session_state.confirm_action = None
+            st.session_state.show_confirm_dialog = False
+            st.rerun()
+
+
 def archive_paper(paper_path):
     """
     Move paper from outputs/ to archives/
@@ -617,6 +720,29 @@ def restore_paper(paper_path):
 
     except Exception as e:
         return False, f"❌ 복원 실패: {str(e)}"
+
+
+def delete_paper(paper_path):
+    """
+    Permanently delete a paper folder
+    Returns: (success: bool, message: str, size_mb: float)
+    """
+    try:
+        paper_path = Path(paper_path)
+        paper_name = paper_path.name
+
+        # Calculate folder size before deletion
+        total_size = sum(f.stat().st_size for f in paper_path.rglob('*') if f.is_file())
+        size_mb = total_size / (1024 * 1024)
+
+        # Delete entire folder
+        import shutil
+        shutil.rmtree(str(paper_path))
+
+        return True, f"✓ {paper_name}이(가) 삭제되었습니다. ({size_mb:.1f} MB 확보)", size_mb
+
+    except Exception as e:
+        return False, f"❌ 삭제 실패: {str(e)}", 0.0
 
 
 def get_paper_stats():
@@ -930,7 +1056,7 @@ def render_paper_list():
                             st.markdown(card_html, unsafe_allow_html=True)
 
                             # Buttons row
-                            btn_col1, btn_col2 = st.columns(2, gap="small")
+                            btn_col1, btn_col2, btn_col3 = st.columns(3, gap="small")
                             with btn_col1:
                                 if st.button("📖 보기", key=f"view_unread_{idx}", use_container_width=True):
                                     st.session_state.selected_paper = paper_path
@@ -941,6 +1067,16 @@ def render_paper_list():
                                     # Set confirmation dialog state
                                     st.session_state.confirm_action = {
                                         'action': 'archive',
+                                        'paper_path': paper_path,
+                                        'paper_name': paper_name
+                                    }
+                                    st.session_state.show_confirm_dialog = True
+                                    st.rerun()
+                            with btn_col3:
+                                if st.button("🗑️ 삭제", key=f"delete_unread_{idx}", use_container_width=True, type="secondary"):
+                                    # Set confirmation dialog state for delete
+                                    st.session_state.confirm_action = {
+                                        'action': 'delete',
                                         'paper_path': paper_path,
                                         'paper_name': paper_name
                                     }
@@ -987,7 +1123,7 @@ def render_paper_list():
                             st.markdown(card_html, unsafe_allow_html=True)
 
                             # Buttons row
-                            btn_col1, btn_col2 = st.columns(2, gap="small")
+                            btn_col1, btn_col2, btn_col3 = st.columns(3, gap="small")
                             with btn_col1:
                                 if st.button("📖 보기", key=f"view_archived_{idx}", use_container_width=True):
                                     st.session_state.selected_paper = paper_path
@@ -1003,6 +1139,16 @@ def render_paper_list():
                                     }
                                     st.session_state.show_confirm_dialog = True
                                     st.rerun()
+                            with btn_col3:
+                                if st.button("🗑️ 삭제", key=f"delete_archived_{idx}", use_container_width=True, type="secondary"):
+                                    # Set confirmation dialog state for delete
+                                    st.session_state.confirm_action = {
+                                        'action': 'delete',
+                                        'paper_path': paper_path,
+                                        'paper_name': paper_name
+                                    }
+                                    st.session_state.show_confirm_dialog = True
+                                    st.rerun()
 
     # Show confirmation dialogs if needed
     if st.session_state.show_confirm_dialog and st.session_state.confirm_action:
@@ -1011,6 +1157,8 @@ def render_paper_list():
             confirm_archive_dialog()
         elif action == 'restore':
             confirm_restore_dialog()
+        elif action == 'delete':
+            confirm_delete_dialog()
 
 
 def render_paper_detail():
@@ -1155,6 +1303,18 @@ def render_paper_detail():
                 st.session_state.show_confirm_dialog = True
                 st.rerun()
 
+        # Delete button (always shown, at the very bottom)
+        st.markdown("---")
+        if st.button("🗑️ 논문 삭제", use_container_width=True, key="delete_detail", type="secondary"):
+            # Set confirmation dialog state
+            st.session_state.confirm_action = {
+                'action': 'delete_detail',
+                'paper_path': paper_path,
+                'paper_name': paper_name
+            }
+            st.session_state.show_confirm_dialog = True
+            st.rerun()
+
     # Main content area - display selected format directly without header
     # Check if "분할 보기" mode is selected
     if selected_format_name == "🔄 분할 보기 (한국어 + 영어)":
@@ -1187,6 +1347,8 @@ def render_paper_detail():
             confirm_archive_detail_dialog()
         elif action == 'restore_detail':
             confirm_restore_detail_dialog()
+        elif action == 'delete_detail':
+            confirm_delete_detail_dialog()
 
 
 def main():

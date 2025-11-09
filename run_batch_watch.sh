@@ -78,9 +78,15 @@ processing_pid=""
 while true; do
     # Find all PDF files in newones
     pdf_files=$(find "$NEWONES_DIR" -maxdepth 1 -name "*.pdf" -type f 2>/dev/null)
-    pdf_count=$(echo "$pdf_files" | grep -c "\.pdf$" 2>/dev/null || echo "0")
 
-    if [ $pdf_count -gt 0 ]; then
+    # Count PDF files safely
+    if [ -n "$pdf_files" ]; then
+        pdf_count=$(echo "$pdf_files" | wc -l)
+    else
+        pdf_count=0
+    fi
+
+    if [ "$pdf_count" -gt 0 ]; then
         # PDF files found - process each one separately in new Python process
         log_success "Found $pdf_count PDF file(s) - starting processing"
         echo ""
