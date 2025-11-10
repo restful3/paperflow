@@ -493,74 +493,8 @@ def confirm_restore_dialog():
             st.rerun()
 
 
-@st.dialog("논문 아카이브 확인")
-def confirm_archive_detail_dialog():
-    """Confirmation dialog for archiving from detail view"""
-    if st.session_state.confirm_action is None:
-        st.error("오류: 확인할 작업이 없습니다.")
-        return
-
-    action_info = st.session_state.confirm_action
-    paper_name = action_info['paper_name']
-
-    st.markdown(f"### 📄 {paper_name}")
-    st.markdown("---")
-    st.warning("이 논문을 **읽은 논문**으로 이동하시겠습니까?")
-    st.info("💡 이동 후 목록 화면으로 돌아갑니다.")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("✅ 확인", use_container_width=True, type="primary"):
-            success, message = archive_paper(action_info['paper_path'])
-            if success:
-                st.success(message)
-                # Return to list view
-                st.session_state.view = 'list'
-                st.session_state.selected_paper = None
-                st.session_state.confirm_action = None
-                st.session_state.show_confirm_dialog = False
-                st.rerun()
-            else:
-                st.error(message)
-    with col2:
-        if st.button("❌ 취소", use_container_width=True):
-            st.session_state.confirm_action = None
-            st.session_state.show_confirm_dialog = False
-            st.rerun()
-
-
-@st.dialog("논문 복원 확인")
-def confirm_restore_detail_dialog():
-    """Confirmation dialog for restoring from detail view"""
-    if st.session_state.confirm_action is None:
-        st.error("오류: 확인할 작업이 없습니다.")
-        return
-
-    action_info = st.session_state.confirm_action
-    paper_name = action_info['paper_name']
-
-    st.markdown(f"### 📄 {paper_name}")
-    st.markdown("---")
-    st.info("이 논문을 **읽을 논문**으로 복원하시겠습니까?")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("↩️ 복원", use_container_width=True, type="primary"):
-            success, message = restore_paper(action_info['paper_path'])
-            if success:
-                st.success(message)
-                # Update selected paper path to new location
-                st.session_state.selected_paper = str(Path("outputs") / paper_name)
-                st.session_state.confirm_action = None
-                st.session_state.show_confirm_dialog = False
-                st.rerun()
-            else:
-                st.error(message)
-    with col2:
-        if st.button("❌ 취소", use_container_width=True):
-            st.session_state.confirm_action = None
-            st.session_state.show_confirm_dialog = False
-            st.rerun()
+# Removed: confirm_archive_detail_dialog() - archive/restore actions removed from detail view
+# Removed: confirm_restore_detail_dialog() - archive/restore actions removed from detail view
 
 
 @st.dialog("⚠️ 논문 삭제 확인")
@@ -613,57 +547,7 @@ def confirm_delete_dialog():
             st.rerun()
 
 
-@st.dialog("⚠️ 논문 삭제 확인")
-def confirm_delete_detail_dialog():
-    """Confirmation dialog for deleting a paper (from detail view)"""
-    if st.session_state.confirm_action is None:
-        st.error("오류: 확인할 작업이 없습니다.")
-        return
-
-    action_info = st.session_state.confirm_action
-    paper_path = action_info['paper_path']
-    paper_name = action_info['paper_name']
-
-    # Calculate size
-    try:
-        total_size = sum(f.stat().st_size for f in Path(paper_path).rglob('*') if f.is_file())
-        size_mb = total_size / (1024 * 1024)
-    except:
-        size_mb = 0.0
-
-    st.markdown(f"### 📄 {paper_name}")
-    st.markdown("---")
-    st.error("🚨 이 논문을 **완전히 삭제**합니다")
-    st.warning("⚠️ 삭제된 논문은 복구할 수 없습니다!")
-
-    st.info(f"""
-**📊 삭제될 데이터:**
-- PDF 파일
-- 한국어 HTML/Markdown
-- 영어 Markdown
-- 이미지 파일
-- **총 크기: {size_mb:.1f} MB**
-    """)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🗑️ 삭제", use_container_width=True, type="primary"):
-            success, message, _ = delete_paper(paper_path)
-            if success:
-                st.success(message)
-                # Return to list view after deletion
-                st.session_state.view = 'list'
-                st.session_state.selected_paper = None
-                st.session_state.confirm_action = None
-                st.session_state.show_confirm_dialog = False
-                st.rerun()
-            else:
-                st.error(message)
-    with col2:
-        if st.button("❌ 취소", use_container_width=True):
-            st.session_state.confirm_action = None
-            st.session_state.show_confirm_dialog = False
-            st.rerun()
+# Removed: confirm_delete_detail_dialog() - delete action removed from detail view
 
 
 def archive_paper(paper_path):
@@ -997,82 +881,170 @@ def display_html(html_path, font_size=100, dual_view=False):
     return html_content if 'html_content' in locals() else None
 
 
-def display_pdf(pdf_path, dual_view=False):
+def extract_pdf_toc(pdf_path):
     """
-    Display PDF file using streamlit-pdf-viewer
+    Extract table of contents (bookmarks) from PDF file
+    Returns list of dictionaries with 'title' and 'page' keys
+    """
+    try:
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(pdf_path)
+        outlines = reader.outlines
+
+        if not outlines:
+            return []
+
+        toc_items = []
+
+        def process_outline(outline_list, level=0):
+            """Recursively process nested bookmarks"""
+            for item in outline_list:
+                if isinstance(item, list):
+                    # Nested bookmarks
+                    process_outline(item, level + 1)
+                else:
+                    try:
+                        # Get page number for this bookmark
+                        page_num = reader.get_destination_page_number(item)
+                        if page_num is not None:
+                            toc_items.append({
+                                'title': str(item.title) if item.title else 'Untitled',
+                                'page': page_num + 1,  # Convert to 1-indexed
+                                'level': level
+                            })
+                    except:
+                        # Skip if we can't get the page number
+                        pass
+
+        process_outline(outlines)
+        return toc_items
+
+    except Exception as e:
+        # Return empty list if extraction fails
+        return []
+
+
+def display_pdf(pdf_path, dual_view=False, show_controls_in_sidebar=False):
+    """
+    Display PDF file using streamlit-pdf-viewer with optional TOC
     Args:
         pdf_path: Path to PDF file
         dual_view: If True, use fixed height for side-by-side view (default False)
+        show_controls_in_sidebar: If True, show file info and download in sidebar (default False)
     """
     try:
         with open(pdf_path, 'rb') as f:
             pdf_bytes = f.read()
 
-        # Add "Open in new tab" button for single view mode only
+        file_size_mb = len(pdf_bytes) / (1024 * 1024)
+
+        # Extract TOC for single view mode
+        toc_items = []
         if not dual_view:
-            # Encode PDF to base64 for Blob URL approach
-            pdf_base64 = base64.b64encode(pdf_bytes).decode()
+            toc_items = extract_pdf_toc(pdf_path)
 
-            # Create button with JavaScript to open PDF in new tab using Blob
-            open_tab_button = f'''
-            <div style="margin-bottom: 15px; text-align: right;">
-                <button id="openPdfBtn" style="
-                    display: inline-block;
-                    padding: 10px 15px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-weight: bold;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    cursor: pointer;
-                    transition: all 0.3s ease;
-                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    🔍 새 탭에서 열기 (전체화면 가능)
-                </button>
-                <script>
-                (function() {{
-                    const pdfData = '{pdf_base64}';
-                    const btn = document.getElementById('openPdfBtn');
+        # For single view mode - with TOC support
+        if not dual_view:
+            # Show controls in sidebar if requested
+            if show_controls_in_sidebar:
+                with st.sidebar:
+                    st.markdown("### 📄 PDF 정보")
+                    st.info(f"파일 크기: {file_size_mb:.1f} MB")
 
-                    btn.addEventListener('click', function() {{
-                        try {{
-                            // Convert base64 to binary
-                            const binaryString = atob(pdfData);
-                            const len = binaryString.length;
-                            const bytes = new Uint8Array(len);
-                            for (let i = 0; i < len; i++) {{
-                                bytes[i] = binaryString.charCodeAt(i);
-                            }}
+                    # Simple download button for PDF
+                    import os
+                    pdf_filename = os.path.basename(pdf_path)
 
-                            // Create Blob and open in new tab
-                            const blob = new Blob([bytes], {{ type: 'application/pdf' }});
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, '_blank');
+                    st.download_button(
+                        label="📥 다운로드",
+                        data=pdf_bytes,
+                        file_name=pdf_filename,
+                        mime="application/pdf",
+                        key=f"pdf_download_{pdf_path}",
+                        help="PDF 다운로드",
+                        use_container_width=True
+                    )
 
-                            // Clean up blob URL after a delay
-                            setTimeout(() => URL.revokeObjectURL(url), 1000);
-                        }} catch (e) {{
-                            console.error('Error opening PDF:', e);
-                            alert('PDF 열기 실패. 파일이 너무 크거나 브라우저가 지원하지 않습니다.');
-                        }}
-                    }});
-                }})();
-                </script>
-            </div>
-            '''
-            st.markdown(open_tab_button, unsafe_allow_html=True)
+                    # TOC toggle button if TOC exists
+                    show_toc = False
+                    if toc_items:
+                        st.markdown("---")
+                        show_toc = st.checkbox("📑 목차 표시", value=False, key=f"toc_toggle_{pdf_path}")
+            else:
+                # Original inline display (for backward compatibility)
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    st.info(f"📄 PDF 파일 ({file_size_mb:.1f}MB)")
 
-        # Choose height based on view mode
-        # Dual view: fixed height for independent left/right scrolling
-        # Single view: very tall height to minimize outer page scroll
-        height = 3000 if dual_view else 50000
-        pdf_viewer(
-            pdf_bytes,
-            height=height,
-            render_text=True
-        )
+                with col2:
+                    # TOC toggle button if TOC exists
+                    show_toc = False
+                    if toc_items:
+                        show_toc = st.checkbox("📑 목차", value=False, key=f"toc_toggle_{pdf_path}")
+
+                with col3:
+                    # Simple download button for PDF
+                    import os
+                    pdf_filename = os.path.basename(pdf_path)
+
+                    st.download_button(
+                        label="📥 다운로드",
+                        data=pdf_bytes,
+                        file_name=pdf_filename,
+                        mime="application/pdf",
+                        key=f"pdf_download_{pdf_path}",
+                        help="PDF 다운로드"
+                    )
+
+            # Initialize page to scroll to
+            scroll_to_page = None
+
+            # Show TOC in sidebar if enabled
+            if show_toc and toc_items:
+                with st.sidebar:
+                    st.markdown("### 📑 PDF 목차")
+                    st.markdown("---")
+
+                    # Display TOC items as buttons
+                    for item in toc_items:
+                        # Indent based on level
+                        indent = "　" * item['level']
+
+                        # Create button for each TOC item
+                        if st.button(
+                            f"{indent}📄 {item['title'][:50]}...",
+                            key=f"toc_item_{pdf_path}_{item['page']}",
+                            help=f"페이지 {item['page']}로 이동"
+                        ):
+                            scroll_to_page = item['page']
+                            st.session_state[f'pdf_scroll_page_{pdf_path}'] = item['page']
+
+            # Check if we have a stored scroll position
+            if f'pdf_scroll_page_{pdf_path}' in st.session_state:
+                scroll_to_page = st.session_state[f'pdf_scroll_page_{pdf_path}']
+
+            # Display PDF using standard pdf_viewer with scroll to page
+            if scroll_to_page:
+                pdf_viewer(
+                    pdf_bytes,
+                    height=2000,  # Increased height for better readability
+                    render_text=True,
+                    scroll_to_page=scroll_to_page
+                )
+            else:
+                pdf_viewer(
+                    pdf_bytes,
+                    height=2000,  # Increased height for better readability
+                    render_text=True
+                )
+        else:
+            # Dual view mode - use standard viewer (no TOC)
+            pdf_viewer(
+                pdf_bytes,
+                height=3000,
+                render_text=True
+            )
 
     except Exception as e:
         st.error(f"PDF 파일을 불러올 수 없습니다: {str(e)}")
@@ -1122,9 +1094,12 @@ def save_markdown(md_path, yaml_header, body_content):
         return False, f"❌ 저장 실패: {str(e)}"
 
 
-def display_markdown(md_path):
+def display_markdown(md_path, show_toggle_in_sidebar=False):
     """
     Display markdown file with edit/view mode toggle
+    Args:
+        md_path: Path to markdown file
+        show_toggle_in_sidebar: If True, show edit toggle in sidebar (default False)
     """
     try:
         # Read original content (with YAML)
@@ -1142,28 +1117,46 @@ def display_markdown(md_path):
         if md_path not in st.session_state.md_edit_mode:
             st.session_state.md_edit_mode[md_path] = False
 
-        # Mode toggle buttons
-        col1, col2, col3 = st.columns([1, 1, 3])
-        with col1:
-            if st.button(
-                "👁️ 읽기 모드" if not st.session_state.md_edit_mode[md_path] else "👁️ 읽기",
-                use_container_width=True,
-                type="primary" if not st.session_state.md_edit_mode[md_path] else "secondary",
-                key=f"view_mode_{md_path}"
-            ):
-                st.session_state.md_edit_mode[md_path] = False
-                st.rerun()
-        with col2:
-            if st.button(
-                "✏️ 편집" if not st.session_state.md_edit_mode[md_path] else "✏️ 편집 모드",
-                use_container_width=True,
-                type="secondary" if not st.session_state.md_edit_mode[md_path] else "primary",
-                key=f"edit_mode_{md_path}"
-            ):
-                st.session_state.md_edit_mode[md_path] = True
-                st.rerun()
+        # Mode toggle button
+        current_mode_is_edit = st.session_state.md_edit_mode[md_path]
 
-        st.markdown("---")
+        if current_mode_is_edit:
+            # Currently in edit mode → show "읽기" button to switch to read mode
+            button_label = "👁️ 읽기"
+            button_type = "secondary"
+        else:
+            # Currently in read mode → show "편집" button to switch to edit mode
+            button_label = "✏️ 편집"
+            button_type = "primary"
+
+        if show_toggle_in_sidebar:
+            # Show toggle in sidebar
+            with st.sidebar:
+                st.markdown("### 📝 편집 모드")
+                if st.button(
+                    button_label,
+                    use_container_width=True,
+                    type=button_type,
+                    key=f"toggle_mode_{md_path}"
+                ):
+                    # Toggle mode
+                    st.session_state.md_edit_mode[md_path] = not current_mode_is_edit
+                    st.rerun()
+        else:
+            # Original inline display (for backward compatibility)
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if st.button(
+                    button_label,
+                    use_container_width=True,
+                    type=button_type,
+                    key=f"toggle_mode_{md_path}"
+                ):
+                    # Toggle mode
+                    st.session_state.md_edit_mode[md_path] = not current_mode_is_edit
+                    st.rerun()
+
+            st.markdown("---")
 
         # Display based on mode
         if st.session_state.md_edit_mode[md_path]:
@@ -1657,47 +1650,8 @@ def render_paper_detail():
                         st.session_state.split_ratio -= 10
                         st.rerun()
 
-        # Archive/Restore button at the bottom of sidebar
-        st.markdown("---")
-
-        # Check if paper is in outputs or archives
-        paper_path_obj = Path(paper_path)
-        is_archived = paper_path_obj.parent.name == 'archives'
-
-        if is_archived:
-            # Show restore button for archived papers
-            if st.button("↩️ 읽을 논문으로 복원", use_container_width=True, key="restore_detail"):
-                # Set confirmation dialog state
-                st.session_state.confirm_action = {
-                    'action': 'restore_detail',
-                    'paper_path': paper_path,
-                    'paper_name': paper_name
-                }
-                st.session_state.show_confirm_dialog = True
-                st.rerun()
-        else:
-            # Show archive button for unread papers
-            if st.button("✅ 읽음으로 표시", use_container_width=True, key="archive_detail"):
-                # Set confirmation dialog state
-                st.session_state.confirm_action = {
-                    'action': 'archive_detail',
-                    'paper_path': paper_path,
-                    'paper_name': paper_name
-                }
-                st.session_state.show_confirm_dialog = True
-                st.rerun()
-
-        # Delete button (always shown, at the very bottom)
-        st.markdown("---")
-        if st.button("🗑️ 논문 삭제", use_container_width=True, key="delete_detail", type="secondary"):
-            # Set confirmation dialog state
-            st.session_state.confirm_action = {
-                'action': 'delete_detail',
-                'paper_path': paper_path,
-                'paper_name': paper_name
-            }
-            st.session_state.show_confirm_dialog = True
-            st.rerun()
+        # Removed archive/restore/delete buttons from detail view sidebar
+        # Users can manage papers from the list view instead
 
     # Main content area - display selected format directly without header
     # Check if "분할 보기" mode is selected
@@ -1720,21 +1674,18 @@ def render_paper_detail():
         if file_type == 'html':
             display_html(file_path, st.session_state.html_font_size, dual_view=False)
         elif file_type == 'pdf':
-            display_pdf(file_path, dual_view=False)
+            display_pdf(file_path, dual_view=False, show_controls_in_sidebar=True)
         elif file_type == 'md_ko':
-            display_markdown(file_path)
+            display_markdown(file_path, show_toggle_in_sidebar=True)
         elif file_type == 'md_en':
-            display_markdown(file_path)
+            display_markdown(file_path, show_toggle_in_sidebar=True)
 
-    # Show confirmation dialogs if needed
+    # Show confirmation dialogs if needed (only for list view actions)
+    # Detail view actions have been removed
     if st.session_state.show_confirm_dialog and st.session_state.confirm_action:
         action = st.session_state.confirm_action.get('action')
-        if action == 'archive_detail':
-            confirm_archive_detail_dialog()
-        elif action == 'restore_detail':
-            confirm_restore_detail_dialog()
-        elif action == 'delete_detail':
-            confirm_delete_detail_dialog()
+        # Detail view actions (archive_detail, restore_detail, delete_detail) removed
+        # Only list view actions remain active
 
 
 def main():

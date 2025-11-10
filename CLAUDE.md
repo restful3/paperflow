@@ -83,14 +83,15 @@ Streamlit-based viewing interface:
 - **Tab Navigation**: Separate tabs for "읽을 논문" (unread) and "읽은 논문" (archived)
 - Scans `outputs/` and `archives/` directories for papers
 - Grid layout with paper cards showing available formats
-- **Paper Management**: Three-button layout with confirmation dialogs
+- **Paper Management**: Three-button layout with confirmation dialogs (list view only)
   - Unread papers: `[📖 보기] [✅ 완료] [🗑️ 삭제]`
   - Archived papers: `[📖 보기] [↩️ 복원] [🗑️ 삭제]`
   - Actions:
     - "✅ 완료": Move paper from `outputs/` to `archives/`
     - "↩️ 복원": Move paper from `archives/` to `outputs/`
     - "🗑️ 삭제": Permanently delete paper (shows folder size, requires confirmation)
-  - Detail view sidebar: Separate buttons for archive/restore and delete
+  - Detail view: No management buttons (archive/restore/delete removed from sidebar)
+    - Users return to list view to manage papers
   - All destructive actions require confirmation dialogs
 - **Viewer Features**:
   - Split view mode: Korean (HTML) + English (PDF) side-by-side with adjustable ratio
@@ -100,16 +101,27 @@ Streamlit-based viewing interface:
   - **Fullscreen mode**: Single-view Korean HTML includes fullscreen button (top-right corner)
     - Click "🔍 전체화면" to enter browser fullscreen (escape iframe constraints)
     - Click "❌ 전체화면 종료" or press ESC to exit
+    - **iPad Support**: Shows toast notification on fullscreen entry ("전체화면 종료: 상단 버튼을 클릭하세요")
     - **Table of Contents (TOC)**: Automatically shows left sidebar TOC only in fullscreen mode
       - Hidden in normal iframe view (saves space)
       - Visible in fullscreen (enables quick navigation for long papers)
       - Uses CSS `:fullscreen` pseudo-class for automatic toggle
     - Uses JavaScript `Element.requestFullscreen()` API with cross-browser support
-  - **PDF New Tab Mode**: Single-view English PDF includes "새 탭에서 열기" button
-    - Opens PDF in new browser tab using base64 data URI
-    - Enables browser native fullscreen (F11 or browser fullscreen button)
-    - Provides full PDF viewer features (zoom, page navigation, print, etc.)
-    - Button positioned top-right, similar to HTML fullscreen button
+  - **PDF Viewing**: Uses `streamlit-pdf-viewer` component with TOC support
+    - "📥 다운로드" button for downloading PDF files
+    - "📑 목차" toggle for PDFs with bookmarks (shows TOC in sidebar)
+    - Native PDF viewer controls for zoom, page navigation, search, and print
+    - Height optimized: 2000px (single view), 3000px (dual view)
+    - TOC navigation: Click bookmark to jump to specific page
+  - **Markdown Editing**: Single-view English Markdown includes edit mode toggle
+    - Single toggle button in sidebar: "✏️ 편집" (read mode) or "👁️ 읽기" (edit mode)
+    - "📝 편집 모드" section in sidebar (similar to PDF controls)
+    - Edit mode provides text area for direct markdown modification
+    - **YAML Header Preservation**: Automatically preserves Quarto YAML header during edits
+    - Save button (💾) commits changes to disk
+    - Restore button (🔄) reverts to original content (with confirmation)
+    - Edit state managed per-file in session state
+    - Clean main content area (no top controls)
 - Uses `streamlit-pdf-viewer` component for PDF rendering
 - Session state management for navigation (list view ↔ detail view)
 - **Session Persistence**: Auto-login with session files stored in `.sessions/`
@@ -284,14 +296,67 @@ subprocess.run(["quarto", "render", f"{output_dir}/{filename}_ko.md"])
   - Cross-browser pseudo-class support: `:-webkit-full-screen`, `:-moz-full-screen`, `:-ms-fullscreen`, `:fullscreen`
   - Requires `toc: true` in `header.yaml` to generate TOC in HTML
 
-**7. PDF New Tab Button** ([app.py:962-987](app.py#L962-L987))
-- Added for single-view PDF mode (`dual_view=False`)
-- Converts PDF bytes to base64 and creates data URI
-- HTML link with `target="_blank"` and `rel="noopener noreferrer"` for security
-- Styled consistently with HTML fullscreen button (gradient, hover effects)
-- Position: Top-right, above PDF viewer
-- Limitation: Large PDFs (>5MB) may cause browser memory issues with base64 encoding
-- Alternative: Users can use browser's native "Open in new tab" on the PDF viewer itself
+**7. PDF Viewer with TOC Support** ([app.py:928-1053](app.py#L928-L1053))
+- **Implementation** (Updated 2025-11-10):
+  - Uses `streamlit-pdf-viewer` component for reliable PDF display
+  - Single view mode: height=2000px for comfortable reading (increased from 800px)
+  - Dual view mode: height=3000px for side-by-side comparison
+  - Renders text for searchability (`render_text=True`)
+- **Table of Contents (TOC) Feature** ([app.py:900-925](app.py#L900-L925)):
+  - `extract_pdf_toc()` function extracts bookmarks from PDF using PyPDF2
+  - "📑 목차 표시" checkbox appears only if PDF has bookmarks (in sidebar)
+  - TOC displayed in sidebar with clickable navigation buttons
+  - Supports nested bookmark levels with indentation
+  - Uses `scroll_to_page` parameter to jump to selected page
+  - Session state preserves selected page across reruns
+- **Sidebar Controls** (Single view mode only):
+  - "📄 PDF 정보" section shows file size
+  - "📥 다운로드" button for PDF download (full width)
+  - "📑 목차 표시" toggle for PDFs with bookmarks
+  - All PDF controls consolidated in sidebar for clean main view
+- **User Experience**:
+  - Clean main content area (no controls at top)
+  - Optional TOC navigation for PDFs with bookmarks
+  - Download PDF to view in native PDF reader
+  - In-app viewer with optimized height for comfortable reading
+- **Technical Notes**:
+  - PyPDF2 library handles bookmark extraction
+  - Graceful fallback if PDF has no bookmarks
+  - `show_controls_in_sidebar` parameter controls UI layout
+  - Sidebar controls only in single view mode (dual view shows controls inline)
+
+**8. iPad Toast Notification** ([app.py:908-961](app.py#L908-L961))
+- Detects iPad using `navigator.userAgent` regex: `/iPad/.test(navigator.userAgent)`
+- Shows toast message on fullscreen entry: "전체화면 종료: 상단 버튼을 클릭하세요"
+- Toast implementation:
+  - Fixed position at top center with high z-index (10000)
+  - Slide-down animation on entry, reverse on exit
+  - Auto-dismisses after 3 seconds
+  - Uses CSS `@keyframes` for smooth animation
+- Purpose: iPad browsers don't support ESC key for fullscreen exit, so users need clear guidance
+
+**9. Markdown Editing with YAML Preservation** ([app.py:1097-1200](app.py#L1097-L1200))
+- **Session State Management**:
+  - `st.session_state.md_edit_mode`: Per-file dict storing edit mode status
+  - `st.session_state.md_original_content`: Per-file dict storing original content for restore
+- **YAML Splitting** (`split_yaml_and_body()` at [app.py:1056-1076](app.py#L1056-L1076)):
+  - Detects YAML frontmatter between `---` delimiters
+  - Separates header (YAML) from body (markdown content)
+  - Returns tuple: (yaml_header, body_content)
+- **Save Functionality** (`save_markdown()` at [app.py:1079-1094](app.py#L1079-L1094)):
+  - Recombines YAML header with edited body
+  - Writes to file as UTF-8
+  - Updates `md_original_content` in session state after successful save
+- **UI Implementation** (Updated 2025-11-10):
+  - **Sidebar Toggle**: "📝 편집 모드" section in sidebar (consistent with PDF controls)
+  - **Single toggle button**: "✏️ 편집" (in read mode) or "👁️ 읽기" (in edit mode)
+  - Button type changes: primary (blue) for edit button, secondary (gray) for read button
+  - `show_toggle_in_sidebar` parameter controls UI layout (default False for backward compatibility)
+  - Edit mode shows `st.text_area` with height=600px for markdown editing
+  - Info banner: "💡 **편집 모드**: YAML 헤더는 자동 보존됩니다. 본문만 수정하세요."
+  - Save (💾) and Restore (🔄) buttons in edit mode
+  - Restore requires double-click confirmation to prevent accidental data loss
+  - **Improved UX**: Single button in sidebar, clean main content area
 
 ### Translation Configuration
 
