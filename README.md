@@ -65,7 +65,7 @@ ollama pull qwen3-vl:30b-a3b-instruct
 cp your_paper.pdf newones/
 
 # 실행 (한번만 처리)
-./run_batch_venv.sh
+./run_batch.sh
 ```
 
 #### 방법 2: Watch 모드 (자동 감시) ⭐ 권장
@@ -218,7 +218,7 @@ logs/paperflow_20251108_141325.log
 ```bash
 # 여러 PDF 한번에 처리
 cp paper1.pdf paper2.pdf paper3.pdf newones/
-./run_batch_venv.sh
+./run_batch.sh
 
 # 처리 완료 후 newones는 비어있음 (자동 정리)
 ls newones/  # empty
@@ -250,7 +250,7 @@ cp paper3.pdf newones/  # → 계속 처리
 PaperFlow/
 ├── main_terminal.py       # 메인 프로그램 (PDF 변환)
 ├── app.py                 # Streamlit 웹 뷰어
-├── run_batch_venv.sh      # 배치 처리 실행 (일회성)
+├── run_batch.sh           # 배치 처리 실행 (일회성)
 ├── run_batch_watch.sh     # Watch 모드 실행 (연속) ⭐
 ├── run_app.sh             # 웹 뷰어 실행
 ├── setup_venv.sh          # 설치 스크립트
