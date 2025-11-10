@@ -1,0 +1,9 @@
+{
+  "ollama_url": "http://localhost:11434",
+  "model_name": "qwen3-vl:30b-a3b-instruct",
+  "Chunk_size": 5,
+  "timeout": 400,
+  "retries": 100,
+  "retry_delay": 10,
+  "temperature": 0.2
+}
