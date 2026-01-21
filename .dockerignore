@@ -1,0 +1,14 @@
+.venv
+.git
+.gitignore
+.env
+logs/
+outputs/
+newones/
+archives/
+.sessions/
+__pycache__/
+*.pyc
+.claude/
+prompt copy.md
+config.json.backup

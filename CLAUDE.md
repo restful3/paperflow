@@ -17,6 +17,35 @@ PaperFlow is a Python-based tool that converts PDF documents (especially academi
 
 **Key Feature**: Fully local processing - no external API calls, all processing happens on your machine.
 
+## Quick Reference
+
+**Common Commands**:
+```bash
+# Initial setup
+./setup_venv.sh
+
+# Process PDFs (watch mode - recommended)
+./run_batch_watch.sh
+cp your_paper.pdf newones/  # In another terminal
+
+# Process PDFs (single run)
+cp your_paper.pdf newones/
+./run_batch.sh
+
+# View results
+./run_app.sh
+
+# Debug/development
+source .venv/bin/activate
+python main_terminal.py
+
+# Monitor logs
+tail -f logs/paperflow_*.log
+
+# Check GPU usage
+watch -n 1 nvidia-smi
+```
+
 ## Running the Application
 
 ### Initial Setup
@@ -130,7 +159,7 @@ Streamlit-based viewing interface:
 
 ### Batch Processing Pipeline
 
-The pipeline executes 4 stages for each PDF (see `process_single_pdf()` at [main_terminal.py:648](main_terminal.py#L648)):
+The pipeline executes 4 stages for each PDF (see `process_single_pdf()` at [main_terminal.py:753](main_terminal.py#L753)):
 
 #### 1. PDF → Markdown (`convert_pdf_to_md()` at [main_terminal.py:175](main_terminal.py#L175))
 - **GPU-only mode**: Requires CUDA GPU, checks memory before loading models
@@ -138,20 +167,20 @@ The pipeline executes 4 stages for each PDF (see `process_single_pdf()` at [main
 - Extracts text, images (JPEG), and metadata (JSON-serializable)
 - **Critical VRAM cleanup**: After conversion, deletes models and calls `torch.cuda.empty_cache()` to free ~4-8GB VRAM for next PDF
 
-#### 2. Markdown Chunking (`split_markdown_by_structure()` at [main_terminal.py:367](main_terminal.py#L367))
+#### 2. Markdown Chunking (`split_markdown_by_structure()` at [main_terminal.py:385](main_terminal.py#L385))
 - Primary: Structure-aware splitting using markdown-it-py (preserves headers, code blocks, math)
 - Fallback: Simple token-based splitting if parsing fails
 - Configurable chunk size (default: 5 tokens, recommended: 3-5)
 
-#### 3. Korean Translation (`translate_md_to_korean()` at [main_terminal.py:517](main_terminal.py#L517))
+#### 3. Korean Translation (`translate_md_to_korean()` at [main_terminal.py:535](main_terminal.py#L535))
 - Translates chunks via Ollama API with retry logic
 - Writes incrementally to `*_ko.md` with `header.yaml` prepended
-- **Critical Ollama cleanup** ([main_terminal.py:572-588](main_terminal.py#L572-L588)): Sends `keep_alive: 0` to unload model and free ~22GB VRAM
+- **Critical Ollama cleanup** ([main_terminal.py:590-606](main_terminal.py#L590-L606)): Sends `keep_alive: 0` to unload model and free ~22GB VRAM
 
-#### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:607](main_terminal.py#L607))
+#### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:625](main_terminal.py#L625))
 - **Important**: Runs `quarto render {filename}_ko.md` from the output directory (not full path)
 - Quarto config in `header.yaml`: theme, TOC, embedded resources
-- **Automatic Fallback** ([main_terminal.py:625-751](main_terminal.py#L625-L751)): If YAML parsing fails, retries with simplified header
+- **Automatic Fallback** ([main_terminal.py:672-751](main_terminal.py#L672-L751)): If YAML parsing fails, retries with simplified header
   - Detects "YAML parse exception" or "Error running Lua" in stderr
   - Creates temporary file with simple YAML header (no complex CSS)
   - Ensures HTML is always generated even if custom styling fails
@@ -202,22 +231,24 @@ The HTML file is self-contained with embedded images and CSS (configured via `em
 - Activates `.venv`, checks for PDFs in `newones/`, runs `main_terminal.py` once
 
 **[run_batch_watch.sh](run_batch_watch.sh)**: Continuous watch mode
-- Monitors `newones/` directory using `inotifywait`
+- Monitors `newones/` directory using polling (checks every 5 seconds)
 - Triggers batch processing when new PDFs appear
+- Processes each PDF in a separate Python process to prevent CUDA context pollution
 - Waits for processing to complete before watching again
 - Ideal for automated workflows
 
 **[run_app.sh](run_app.sh)**: Streamlit viewer
 - Activates `.venv`, kills existing Streamlit on port 8501, launches `app.py`
 
-### Multiple PDF Processing
+### PDF Processing Strategy
 
-Main loop at [main_terminal.py:814](main_terminal.py#L814):
-- Processes all PDFs in `newones/` sequentially in a `for` loop
+Main processing at [main_terminal.py:920-926](main_terminal.py#L920-L926):
+- **Single PDF per run**: Processes only the first PDF in `newones/` directory to avoid CUDA context pollution
+- **Watch mode handles multiple PDFs**: `run_batch_watch.sh` calls Python script repeatedly for each PDF
 - **Dual GPU Memory Management** prevents CUDA OOM:
   1. After PDF→MD: Frees ~4-8GB VRAM (marker-pdf models)
   2. After Translation: Frees ~22GB VRAM (Ollama model unload)
-- Critical for processing multiple large PDFs without crashes
+- **Clean process per PDF**: Each PDF processed in fresh Python process prevents memory accumulation
 
 ### GPU Memory Management (Critical for Batch Processing)
 
@@ -225,7 +256,7 @@ Main loop at [main_terminal.py:814](main_terminal.py#L814):
 
 **Two-Stage Cleanup Pattern**:
 
-1. **After PDF→MD** ([main_terminal.py:306-340](main_terminal.py#L306-L340)):
+1. **After PDF→MD** ([main_terminal.py:324-359](main_terminal.py#L324-L359)):
    ```python
    del model_dict, converter, rendered
    gc.collect()
@@ -234,7 +265,7 @@ Main loop at [main_terminal.py:814](main_terminal.py#L814):
    ```
    Frees ~4-8GB VRAM from marker-pdf models
 
-2. **After Translation** ([main_terminal.py:572-588](main_terminal.py#L572-L588)):
+2. **After Translation** ([main_terminal.py:590-606](main_terminal.py#L590-L606)):
    ```python
    requests.post(f"{ollama_url}/api/generate",
                  json={"model": model_name, "keep_alive": 0})
@@ -254,7 +285,7 @@ grep "GPU memory" logs/paperflow_*.log
 
 ### Implementation Gotchas
 
-**1. Quarto Path Handling** ([main_terminal.py:616-624](main_terminal.py#L616-L624))
+**1. Quarto Path Handling** ([main_terminal.py:634-641](main_terminal.py#L634-L641))
 ```python
 # CORRECT: Run from output dir with filename only
 subprocess.run(["quarto", "render", f"{filename}_ko.md"], cwd=output_dir)
@@ -263,16 +294,16 @@ subprocess.run(["quarto", "render", f"{filename}_ko.md"], cwd=output_dir)
 subprocess.run(["quarto", "render", f"{output_dir}/{filename}_ko.md"])
 ```
 
-**2. Image Extraction** ([main_terminal.py:239-244](main_terminal.py#L239-L244))
+**2. Image Extraction** ([main_terminal.py:254-289](main_terminal.py#L254-L289))
 - `rendered.images` dict values can be single `PIL.Image` OR list of Images
 - Must check `isinstance(page_images, list)` and wrap if needed
 - Keys may already be formatted strings like `_page_1_Figure_0.jpeg`
 
-**3. JSON Serialization** ([main_terminal.py:283](main_terminal.py#L283))
+**3. JSON Serialization** ([main_terminal.py:301-317](main_terminal.py#L301-L317))
 - Metadata contains non-serializable objects (PIL Images, etc.)
 - Use recursive `make_serializable()` function to convert to strings
 
-**4. Logging** ([main_terminal.py:758-771](main_terminal.py#L758-L771))
+**4. Logging** ([main_terminal.py:863-876](main_terminal.py#L863-L876))
 - `TeeOutput` class redirects stdout to both console and log file
 - Timestamped logs: `logs/paperflow_YYYYMMDD_HHMMSS.log`
 - ANSI color codes preserved in files
@@ -376,7 +407,7 @@ subprocess.run(["quarto", "render", f"{output_dir}/{filename}_ko.md"])
 
 ### Startup Checks
 
-Before processing, the system checks dependencies (see `check_services()` at [main_terminal.py:710](main_terminal.py#L710)):
+Before processing, the system checks dependencies (see `check_services()` at [main_terminal.py:815](main_terminal.py#L815)):
 - marker-pdf library installed
 - Ollama service reachable at configured URL
 - Translation model available in Ollama
@@ -462,9 +493,15 @@ PaperFlow/
 ├── header.yaml            # Quarto HTML format
 ├── prompt.md              # Translation prompt
 ├── requirements.txt       # Python dependencies
+├── auto_translate.py      # Helper: Standalone translation script
+├── claude_translate.py    # Helper: Alternative translation script
+├── translate_direct.py    # Helper: Direct translation script
+├── translate_full.py      # Helper: Full document translation script
 ├── newones/               # Input: place PDFs here
 ├── outputs/               # Output: unread papers (to be read)
 ├── archives/              # Output: read papers (archived)
 ├── logs/                  # Processing logs (timestamped)
 └── .sessions/             # Streamlit session files (auto-login)
 ```
+
+**Note**: The `*_translate.py` scripts are experimental helpers for alternative translation workflows. The main production pipeline is `main_terminal.py`.

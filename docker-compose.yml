@@ -1,0 +1,28 @@
+services:
+  paperflow-watcher:
+    build: .
+    image: paperflow:latest
+    container_name: paperflow_watcher
+    command: ./run_batch_watch.sh
+    runtime: nvidia
+    volumes:
+      - ./newones:/app/newones
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      - ./config.json:/app/config.json
+      - ./model_cache:/root/.cache/datalab/models
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    restart: unless-stopped
+    # Use host networking or extra_hosts to verify connectivity if host.docker.internal fails on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

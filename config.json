@@ -5,5 +5,10 @@
   "timeout": 400,
   "retries": 100,
   "retry_delay": 10,
-  "temperature": 0.2
+  "temperature": 0.2,
+  "processing_pipeline": {
+    "convert_to_markdown": true,
+    "translate_to_korean": false,
+    "render_to_html": false
+  }
 }

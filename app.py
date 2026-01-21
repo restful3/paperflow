@@ -780,6 +780,9 @@ def display_html(html_path, font_size=100, dual_view=False):
 
                 btn.addEventListener('click', function() {
                     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        // Save current scroll position before entering fullscreen
+                        sessionStorage.setItem('paperflow_scroll_position', window.scrollY.toString());
+
                         // Enter fullscreen
                         if (root.requestFullscreen) {
                             root.requestFullscreen();
@@ -856,6 +859,17 @@ def display_html(html_path, font_size=100, dual_view=False):
                     } else {
                         btn.textContent = '🔍 전체화면';
                         btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+
+                        // Restore scroll position after exiting fullscreen
+                        setTimeout(() => {
+                            const savedPosition = sessionStorage.getItem('paperflow_scroll_position');
+                            if (savedPosition) {
+                                window.scrollTo({
+                                    top: parseInt(savedPosition),
+                                    behavior: 'smooth'
+                                });
+                            }
+                        }, 100);
                     }
                 }
             })();
@@ -1391,14 +1405,19 @@ def render_paper_list():
                             files = get_paper_files(paper_path)
                             formats_html = []
 
-                            # Check if paper is being processed (no HTML/PDF yet)
-                            if not files['html'] and not files['pdf']:
+                            # Check if paper is being processed (no files at all)
+                            if not any([files['html'], files['md_ko'], files['pdf'], files['md_en']]):
                                 formats_html.append('<span class="format-badge" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🔄 처리중</span>')
                             else:
+                                # Show all available file types
                                 if files['html']:
-                                    formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
+                                    formats_html.append('<span class="format-badge">🇰🇷 HTML</span>')
+                                if files['md_ko']:
+                                    formats_html.append('<span class="format-badge">🇰🇷 MD</span>')
                                 if files['pdf']:
-                                    formats_html.append('<span class="format-badge">🇬🇧 English</span>')
+                                    formats_html.append('<span class="format-badge">🇬🇧 PDF</span>')
+                                if files['md_en']:
+                                    formats_html.append('<span class="format-badge">🇬🇧 MD</span>')
 
                             # Create a beautiful card using HTML
                             card_html = f'''
@@ -1462,10 +1481,15 @@ def render_paper_list():
                             files = get_paper_files(paper_path)
                             formats_html = []
 
+                            # Show all available file types
                             if files['html']:
-                                formats_html.append('<span class="format-badge">🇰🇷 한국어</span>')
+                                formats_html.append('<span class="format-badge">🇰🇷 HTML</span>')
+                            if files['md_ko']:
+                                formats_html.append('<span class="format-badge">🇰🇷 MD</span>')
                             if files['pdf']:
-                                formats_html.append('<span class="format-badge">🇬🇧 English</span>')
+                                formats_html.append('<span class="format-badge">🇬🇧 PDF</span>')
+                            if files['md_en']:
+                                formats_html.append('<span class="format-badge">🇬🇧 MD</span>')
 
                             # Create a beautiful card using HTML with archived style
                             card_html = f'''

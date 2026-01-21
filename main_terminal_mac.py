@@ -95,12 +95,6 @@ def load_config():
     except Exception as e:
         print_warning(f"Config load failed, using defaults: {e}")
 
-    # Override with environment variables (Docker support)
-    if os.environ.get("OLLAMA_URL"):
-        default_config["ollama_url"] = os.environ.get("OLLAMA_URL")
-    if os.environ.get("MODEL_NAME"):
-        default_config["model_name"] = os.environ.get("MODEL_NAME")
-
     # Auto-activate dependencies
     pipeline = default_config["processing_pipeline"]
     if pipeline["render_to_html"]:
@@ -210,37 +204,42 @@ def convert_pdf_to_md(pdf_path, output_dir):
 
         # Force GPU mode only - fail if GPU is not available
         import torch
-        if not torch.cuda.is_available():
-            print_error("CUDA is not available. GPU is required for this application.")
-            raise RuntimeError("GPU (CUDA) is required but not available. Please check your PyTorch installation and GPU drivers.")
+        # Check for CUDA (NVIDIA) or MPS (Apple Silicon)
+        if torch.cuda.is_available():
+            device = "cuda"
+            dtype = torch.float16
+            print_success(f"Using CUDA GPU")
 
-        # Check GPU memory with error recovery
-        try:
-            gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)  # GB
-            gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)  # GB
-            print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
-        except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
-            # CUDA context is corrupted, try to reset
-            print_warning(f"GPU memory check failed: {e}")
-            print_info("Attempting to reset CUDA context...")
+            # Check GPU memory with error recovery
             try:
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-                torch.cuda.reset_peak_memory_stats()
-                # Try again after reset
-                gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)
-                gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)
-                print_success("CUDA context reset successful")
+                gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)  # GB
+                gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)  # GB
                 print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
-            except Exception as reset_error:
-                print_error(f"CUDA reset failed: {reset_error}")
-                print_error("GPU is in corrupted state. Please restart Python process or reboot system.")
-                raise RuntimeError("CUDA context is corrupted and cannot be recovered")
-
-        # Always use GPU
-        device = "cuda"
-        dtype = torch.float16
-        print_success(f"Using GPU mode (forced)")
+            except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                # CUDA context is corrupted, try to reset
+                print_warning(f"GPU memory check failed: {e}")
+                print_info("Attempting to reset CUDA context...")
+                try:
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    torch.cuda.reset_peak_memory_stats()
+                    # Try again after reset
+                    gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)
+                    gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)
+                    print_success("CUDA context reset successful")
+                    print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
+                except Exception as reset_error:
+                    print_error(f"CUDA reset failed: {reset_error}")
+                    print_error("GPU is in corrupted state. Please restart Python process or reboot system.")
+                    raise RuntimeError("CUDA context is corrupted and cannot be recovered")
+        elif torch.backends.mps.is_available():
+            device = "mps"
+            dtype = torch.float32  # MPS works better with float32
+            print_success(f"Using Apple Silicon MPS GPU")
+            print_info(f"Note: MPS (Metal Performance Shaders) is used for Apple Silicon Macs")
+        else:
+            print_error("No GPU is available. This application requires CUDA (NVIDIA) or MPS (Apple Silicon).")
+            raise RuntimeError("GPU is required but not available. Please check your PyTorch installation and GPU drivers.")
 
         # Create model dict (this loads the AI models)
         print_info(f"Loading Marker-pdf models on GPU... (this may take a minute)")

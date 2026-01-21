@@ -72,3 +72,6 @@ Thumbs.db
 test*.md
 test*.html
 test*_files/
+
+# Model cache directory
+model_cache/
