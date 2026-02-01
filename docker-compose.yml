@@ -1,8 +1,8 @@
 services:
-  paperflow-watcher:
+  paperflow-converter:
     build: .
-    image: paperflow:latest
-    container_name: paperflow_watcher
+    image: paperflow-converter:latest
+    container_name: paperflow_converter
     command: ./run_batch_watch.sh
     runtime: nvidia
     volumes:
@@ -26,3 +26,22 @@ services:
     # Use host networking or extra_hosts to verify connectivity if host.docker.internal fails on Linux
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  paperflow-viewer:
+    build:
+      context: ./viewer
+      dockerfile: Dockerfile
+    image: paperflow-viewer:latest
+    container_name: paperflow_viewer
+    ports:
+      - "8090:8000"
+    volumes:
+      - ./outputs:/data/outputs
+      - ./archives:/data/archives
+      - ./newones:/data/newones
+      - ./logs:/data/logs
+    env_file:
+      - .env
+    environment:
+      - BASE_DIR=/data
+    restart: unless-stopped

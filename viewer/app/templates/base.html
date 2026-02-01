@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ko" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}PaperFlow{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="h-full bg-gray-50 text-gray-900">
+
+  {% block body %}{% endblock %}
+
+  <!-- Toast notification -->
+  <div x-data="{ toast: { show: false, message: '', type: 'success' } }"
+       @show-toast.window="toast.message = $event.detail.message; toast.type = $event.detail.type || 'success'; toast.show = true; setTimeout(() => toast.show = false, $event.detail.duration || 3000)"
+       class="fixed bottom-6 right-6 z-50">
+    <div x-cloak x-show="toast.show"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         class="max-w-sm rounded-lg px-4 py-3 shadow-lg text-white text-sm font-medium"
+         :class="toast.type === 'error' ? 'bg-red-600' : toast.type === 'warning' ? 'bg-amber-500' : 'bg-emerald-600'">
+      <span x-text="toast.message"></span>
+    </div>
+  </div>
+
+  <script>
+    function showToast(message, type = 'success', duration = 3000) {
+      window.dispatchEvent(new CustomEvent('show-toast', { detail: { message, type, duration } }));
+    }
+
+    async function apiFetch(url, options = {}) {
+      const resp = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+        ...options,
+      });
+      if (resp.status === 401) {
+        window.location.href = '/login';
+        return null;
+      }
+      return resp;
+    }
+  </script>
+</body>
+</html>
