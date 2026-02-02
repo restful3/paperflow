@@ -1,8 +1,22 @@
 # PaperFlow
 
-PDF 학술 논문을 Markdown으로 변환하고, 한국어로 번역한 후, HTML로 렌더링하는 완전 로컬 자동화 파이프라인
+<div align="center">
 
-## 프로젝트 개요
+![Python](https://img.shields.io/badge/Python-3.11%2B%20%7C%203.12%2B-blue?logo=python&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-lightgrey)
+![GPU](https://img.shields.io/badge/GPU-CUDA%20%7C%20Apple%20Silicon-green)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+**PDF 학술 논문을 Markdown으로 변환하고, 한국어로 번역한 후, HTML로 렌더링하는 완전 로컬 자동화 파이프라인**
+
+[📖 프로젝트 개요](#-프로젝트-개요) • [📸 스크린샷](#-스크린샷) • [✨ 주요 기능](#-주요-기능) • [🚀 빠른 시작](#-빠른-시작) • [⚙️ 설정](#%EF%B8%8F-설정) • [🏗️ 아키텍처](#%EF%B8%8F-아키텍처) • [🔧 문제 해결](#-문제-해결)
+
+</div>
+
+---
+
+## 📖 프로젝트 개요
 
 PaperFlow는 세 개의 핵심 컴포넌트로 구성됩니다:
 
@@ -16,7 +30,31 @@ PaperFlow는 세 개의 핵심 컴포넌트로 구성됩니다:
 - **변환**: marker-pdf (PDF→MD), Ollama (로컬 LLM 번역), Quarto (HTML 렌더링)
 - **뷰어**: FastAPI, Jinja2, TailwindCSS (CDN), Alpine.js (CDN), JWT 인증
 
-## 처리 파이프라인
+**✨ 완전 로컬 처리**: 외부 API 호출 없이 모든 처리가 로컬 머신에서 실행됩니다.
+
+## 📸 스크린샷
+
+<details>
+<summary><b>웹 뷰어 UI (클릭하여 펼치기)</b></summary>
+
+### 로그인 페이지
+![Login](.playwright-mcp/login.png)
+
+### 논문 목록 (Unread/Archived 탭)
+![Papers List](.playwright-mcp/papers.png)
+
+### 논문 뷰어 - 단일 보기 (Korean HTML)
+![Viewer Single](.playwright-mcp/viewer.png)
+
+### 논문 뷰어 - 분할 보기 (Korean HTML + English PDF)
+![Viewer Split](.playwright-mcp/viewer-split-fixed.png)
+
+### 다크 모드 + TOC
+![Viewer Dark TOC](.playwright-mcp/viewer-dark-toc.png)
+
+</details>
+
+## 🔄 처리 파이프라인
 
 ```
 PDF (원본)
@@ -38,34 +76,34 @@ HTML (자체 완결형, 이미지/CSS 임베딩)
 3. **한국어 번역** (`translate_md_to_korean()`): Ollama API로 청크 단위 번역. 재시도 로직 포함. 번역 후 `keep_alive: 0`으로 ~22GB VRAM 해제.
 4. **HTML 렌더링** (`render_md_to_html()`): Quarto로 자체 완결형 HTML 생성. YAML 파싱 실패 시 단순화된 헤더로 자동 재시도.
 
-## 주요 기능
+## ✨ 주요 기능
 
-### PDF 변환기
-- **GPU 메모리 관리**: PDF→MD 후 ~4-8GB, 번역 후 ~22GB VRAM 해제하는 2단계 클린업 패턴
-- **Watch 모드**: PDF당 별도 Python 프로세스로 실행해 CUDA 컨텍스트 오염 방지 (5초 간격 폴링)
-- **Quarto 자동 폴백**: YAML 파싱 실패 시 단순화된 헤더로 재시도하여 HTML 생성 보장
-- **구조 인식 청킹**: 마크다운 구조를 파싱해 번역 품질 유지
-- **파이프라인 단계별 제어**: config.json에서 변환/번역/렌더링 개별 활성화 가능
-- **자동 정리**: 처리 완료된 PDF를 `newones/`에서 출력 디렉토리로 자동 이동
+### 🔄 PDF 변환기
+- **🧠 GPU 메모리 관리**: PDF→MD 후 ~4-8GB, 번역 후 ~22GB VRAM 해제하는 2단계 클린업 패턴
+- **👁️ Watch 모드**: PDF당 별도 Python 프로세스로 실행해 CUDA 컨텍스트 오염 방지 (5초 간격 폴링)
+- **🔧 Quarto 자동 폴백**: YAML 파싱 실패 시 단순화된 헤더로 재시도하여 HTML 생성 보장
+- **📐 구조 인식 청킹**: 마크다운 구조를 파싱해 번역 품질 유지
+- **⚙️ 파이프라인 단계별 제어**: config.json에서 변환/번역/렌더링 개별 활성화 가능
+- **🧹 자동 정리**: 처리 완료된 PDF를 `newones/`에서 출력 디렉토리로 자동 이동
 
-### 웹 뷰어 (FastAPI)
-- **모던 UI**: TailwindCSS + Alpine.js 기반 반응형 인터페이스 (빌드 스텝 불필요, CDN 사용)
-- **JWT 인증**: HTTP-only 쿠키 기반 30일 만료 세션, 미인증 시 로그인 페이지 리다이렉트
-- **논문 목록**: 검색 필터링, Unread/Archived 탭 (카운트 표시), 카드 그리드 레이아웃
-- **논문 뷰어**: HTML/PDF/Split 보기 전환, 전체 화면 iframe 렌더링
-- **논문 관리**: 아카이브/복원/삭제 (확인 모달 포함), 용량 표시
-- **PDF 업로드**: 드래그 앤 드롭 지원, `newones/`에 자동 저장
-- **처리 로그**: 접이식 터미널 스타일 로그 뷰어
-- **토스트 알림**: 성공/에러/경고 자동 소멸 알림
-- **Docker 지원**: python:3.12-slim 경량 이미지, GPU 불필요
+### 🌐 웹 뷰어 (FastAPI)
+- **🎨 모던 UI**: TailwindCSS + Alpine.js 기반 반응형 인터페이스 (빌드 스텝 불필요, CDN 사용)
+- **🔐 JWT 인증**: HTTP-only 쿠키 기반 30일 만료 세션, 미인증 시 로그인 페이지 리다이렉트
+- **📚 논문 목록**: 검색 필터링, Unread/Archived 탭 (카운트 표시), 카드 그리드 레이아웃
+- **📖 논문 뷰어**: HTML/PDF/Split 보기 전환, 전체 화면 iframe 렌더링
+- **📁 논문 관리**: 아카이브/복원/삭제 (확인 모달 포함), 용량 표시
+- **📤 PDF 업로드**: 드래그 앤 드롭 지원, `newones/`에 자동 저장
+- **📝 처리 로그**: 접이식 터미널 스타일 로그 뷰어
+- **💬 토스트 알림**: 성공/에러/경고 자동 소멸 알림
+- **🐳 Docker 지원**: python:3.12-slim 경량 이미지, GPU 불필요
 
-## 요구사항
+## 📋 요구사항
 
 ### 필수
 - **Python 3.12+** (Linux), **Python 3.11+** (Mac)
-- **CUDA GPU** (Linux) 또는 **Apple Silicon** (Mac) - CPU 폴백 없음 (변환기만 해당)
-- **Ollama** - 로컬 LLM 서버 ([설치](https://ollama.com/))
-- **Quarto** - 문서 변환 도구 ([설치](https://quarto.org/docs/get-started/))
+- **CUDA GPU** (Linux) 또는 **Apple Silicon** (Mac) - ⚠️ CPU 폴백 없음 (변환기만 해당)
+- **Ollama** - 로컬 LLM 서버 ([설치 가이드](https://ollama.com/))
+- **Quarto** - 문서 변환 도구 ([설치 가이드](https://quarto.org/docs/get-started/))
 
 ### Python 패키지 (자동 설치)
 
@@ -90,9 +128,9 @@ HTML (자체 완결형, 이미지/CSS 임베딩)
 | Mac (Apple Silicon) | MPS | >=1.10.0 | `run_batch_mac.sh`, `setup_venv_mac.sh` |
 | Docker | NVIDIA CUDA 12.1 | >=0.2.17 | `docker-compose.yml` |
 
-## 빠른 시작
+## 🚀 빠른 시작
 
-### 1. 설치
+### 1️⃣ 설치
 
 ```bash
 git clone <repository-url>
@@ -103,14 +141,14 @@ cd PaperFlow
 ./setup_venv_mac.sh      # Mac
 ```
 
-### 2. Ollama 모델 설치
+### 2️⃣ Ollama 모델 설치
 
 ```bash
 ollama serve                              # 서비스 시작
 ollama pull qwen3-vl:30b-a3b-instruct     # 번역 모델 다운로드 (다른 터미널에서)
 ```
 
-### 3. PDF 변환 실행
+### 3️⃣ PDF 변환 실행
 
 **Watch 모드 (권장)** - 새 PDF 자동 감지 및 처리:
 ```bash
@@ -127,9 +165,9 @@ cp your_paper.pdf newones/
 ./run_batch.sh
 ```
 
-### 4. 결과 확인
+### 4️⃣ 결과 확인
 
-**웹 뷰어 (권장)**:
+**웹 뷰어 (권장)** 🌟:
 ```bash
 cd viewer
 pip install -r requirements.txt
@@ -142,7 +180,7 @@ uvicorn app.main:app --reload --port 8090
 firefox outputs/your_paper/your_paper_ko.html
 ```
 
-### Docker 실행 (권장)
+### 🐳 Docker 실행 (권장)
 
 `.env` 파일 설정:
 ```env
@@ -167,7 +205,7 @@ Docker Compose는 두 서비스를 동시에 실행합니다:
 
 Ollama는 호스트에서 실행되어야 하며, 변환 컨테이너는 `host.docker.internal:11434`로 접속합니다.
 
-## 출력 구조
+## 📦 출력 구조
 
 ```
 outputs/your_paper/
@@ -183,7 +221,7 @@ archives/                      # "Archive" 버튼으로 이동된 논문 (동일
 
 HTML 파일은 이미지와 CSS가 내장된 자체 완결형 파일입니다 (`embed-resources: true`).
 
-## 설정
+## ⚙️ 설정
 
 ### config.json
 
@@ -235,7 +273,7 @@ JWT_SECRET_KEY=your-random-secret-key
 - **prompt.md**: 번역 프롬프트 (LaTeX→Typst 수식 변환, 마크다운 구조 보존 규칙)
 - **header.yaml**: Quarto HTML 포맷 (테마: cosmo, TOC: 왼쪽 사이드바, embed-resources)
 
-## 아키텍처
+## 🏗️ 아키텍처
 
 ### 시스템 구성
 
@@ -330,7 +368,7 @@ quarto render filename_ko.md  (커스텀 YAML 헤더)
             └─ 성공 → filename_ko.html 생성 (스타일링 축소)
 ```
 
-## 프로젝트 구조
+## 📁 프로젝트 구조
 
 ```
 PaperFlow/
@@ -378,7 +416,7 @@ PaperFlow/
 └── logs/                    # 처리 로그 (타임스탬프)
 ```
 
-## 문제 해결
+## 🔧 문제 해결
 
 ### Ollama 연결 실패
 ```bash
@@ -420,12 +458,39 @@ ports:
   - "원하는포트:8000"
 ```
 
-## 라이선스
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+
+## 🙏 Acknowledgments
 
 이 프로젝트는 다음 오픈소스 도구를 활용합니다:
-- [Marker-pdf](https://github.com/datalab-to/marker) - PDF to Markdown
-- [Ollama](https://ollama.com/) - Local LLM
-- [Quarto](https://quarto.org/) - Document rendering
-- [FastAPI](https://fastapi.tiangolo.com/) - Web framework
-- [TailwindCSS](https://tailwindcss.com/) - CSS framework
-- [Alpine.js](https://alpinejs.dev/) - Lightweight JS framework
+- [Marker-pdf](https://github.com/datalab-to/marker) - PDF to Markdown 변환
+- [Ollama](https://ollama.com/) - 로컬 LLM 서버
+- [Quarto](https://quarto.org/) - 문서 렌더링
+- [FastAPI](https://fastapi.tiangolo.com/) - 웹 프레임워크
+- [TailwindCSS](https://tailwindcss.com/) - CSS 프레임워크
+- [Alpine.js](https://alpinejs.dev/) - 경량 JS 프레임워크
+
+## 🤝 Contributing
+
+기여를 환영합니다! 다음과 같은 방법으로 기여할 수 있습니다:
+
+1. **이슈 제보**: 버그 발견 시 [GitHub Issues](https://github.com/your-repo/paperflow/issues)에 제보
+2. **기능 제안**: 새로운 기능에 대한 아이디어 공유
+3. **코드 기여**:
+   - Fork 생성
+   - Feature 브랜치 생성 (`git checkout -b feature/AmazingFeature`)
+   - 변경사항 커밋 (`git commit -m 'Add some AmazingFeature'`)
+   - 브랜치에 Push (`git push origin feature/AmazingFeature`)
+   - Pull Request 생성
+
+## 📧 Contact
+
+프로젝트 관련 문의나 제안이 있으시면 이슈를 생성해 주세요.
+
+---
+
+<div align="center">
+Made with ❤️ for researchers and paper readers
+</div>

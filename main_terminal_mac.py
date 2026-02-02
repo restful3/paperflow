@@ -191,6 +191,27 @@ def json_to_markdown(json_data, output_md_file, images_dir='img'):
 
     return output_md_file
 
+def fix_author_code_blocks(markdown_text):
+    """
+    Remove code blocks that contain <sup> tags (author affiliations).
+    marker-pdf sometimes wraps author sections in code blocks, which causes
+    HTML tags to render as literal text instead of being processed.
+    """
+    import re
+    # Pattern to match code blocks containing <sup> tags
+    pattern = r'```\n([\s\S]*?<sup>[\s\S]*?)\n```'
+
+    def replace_code_block(match):
+        # Extract content inside code block
+        content = match.group(1)
+        # Return content without code block markers
+        return content
+
+    # Replace all matching code blocks
+    fixed_text = re.sub(pattern, replace_code_block, markdown_text)
+    return fixed_text
+
+
 def convert_pdf_to_md(pdf_path, output_dir):
     """Convert PDF to MD using Marker-pdf library"""
     if not MARKER_AVAILABLE:
@@ -267,6 +288,10 @@ def convert_pdf_to_md(pdf_path, output_dir):
         print_info(f"Rendered has images attr: {hasattr(rendered, 'images')}")
         if hasattr(rendered, 'images'):
             print_info(f"Rendered.images type: {type(rendered.images)}")
+
+        # Fix author sections wrapped in code blocks
+        print_info("Post-processing markdown (removing code blocks around author sections)...")
+        full_text = fix_author_code_blocks(full_text)
 
         # Save markdown
         md_path = os.path.join(output_dir, os.path.basename(pdf_path).replace('.pdf', '.md'))

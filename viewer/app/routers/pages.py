@@ -43,13 +43,19 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
 
     has_html = info["formats"]["html"] if info else False
     has_pdf = info["formats"]["pdf"] if info else False
+    has_md_ko = info["formats"]["md_ko"] if info else False
+    has_md_en = info["formats"]["md_en"] if info else False
     location = info["location"] if info else "outputs"
 
-    # Default view priority: html > pdf
+    # Default view priority: html > md_ko > pdf > md_en
     if has_html:
         default_view = "html"
+    elif has_md_ko:
+        default_view = "md-ko"
     elif has_pdf:
         default_view = "pdf"
+    elif has_md_en:
+        default_view = "md-en"
     else:
         default_view = "html"
 
@@ -59,6 +65,8 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "paper_name_encoded": quote(name, safe=""),
         "has_html": has_html,
         "has_pdf": has_pdf,
+        "has_md_ko": has_md_ko,
+        "has_md_en": has_md_en,
         "location": location,
         "default_view": default_view,
     })

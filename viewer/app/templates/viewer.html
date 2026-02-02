@@ -3,55 +3,195 @@
 {% block title %}{{ paper_name }} - PaperFlow{% endblock %}
 
 {% block head %}
+<!-- Marked.js for markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 <style>
   .viewer-frame { height: calc(100vh - 3.5rem); }
+  [x-cloak] { display: none !important; }
+  /* Markdown container styles */
+  .markdown-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+    overflow-y: auto;
+    height: 100%;
+  }
+  .markdown-container.dark {
+    background-color: #1a1b2e;
+    color: #d1d5db;
+  }
+  .markdown-container h1, .markdown-container h2, .markdown-container h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+  .markdown-container h1 { font-size: 2rem; }
+  .markdown-container h2 { font-size: 1.5rem; }
+  .markdown-container h3 { font-size: 1.25rem; }
+  .markdown-container p { margin-bottom: 1rem; line-height: 1.6; }
+  .markdown-container pre {
+    background-color: #f3f4f6;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+  }
+  .markdown-container.dark pre {
+    background-color: #1e293b;
+  }
+  .markdown-container code {
+    background-color: #f3f4f6;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+  }
+  .markdown-container.dark code {
+    background-color: #1e293b;
+  }
+  .markdown-container pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+  .markdown-container a { color: #3b82f6; text-decoration: underline; }
+  .markdown-container.dark a { color: #93c5fd; }
+  .markdown-container ul, .markdown-container ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+  }
+  .markdown-container table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+  .markdown-container th, .markdown-container td {
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem;
+    text-align: left;
+  }
+  .markdown-container.dark th, .markdown-container.dark td {
+    border-color: #374151;
+  }
+  .markdown-container th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+  }
+  .markdown-container.dark th {
+    background-color: #1e293b;
+  }
 </style>
 {% endblock %}
 
 {% block body %}
-<div x-data="viewerApp()" class="h-full flex flex-col">
+<div x-data="viewerApp()" class="h-full flex flex-col transition-colors duration-200"
+     :class="$store.darkMode.on && 'bg-gray-900'">
 
   <!-- Top bar -->
-  <div class="h-14 shrink-0 bg-white border-b border-gray-200 flex items-center px-4 space-x-3 shadow-sm">
+  <div class="h-14 shrink-0 flex items-center px-4 space-x-2 shadow-sm border-b transition-colors duration-200"
+       :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+
     <!-- Back -->
-    <a href="/papers" class="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition" title="Back to list">
+    <a href="/papers" class="p-1.5 rounded-lg transition"
+       :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'"
+       title="Back to list">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
       </svg>
     </a>
 
     <!-- Title -->
-    <h1 class="flex-1 text-sm font-semibold text-gray-900 truncate">{{ paper_name }}</h1>
+    <h1 class="flex-1 text-sm font-semibold truncate min-w-0"
+        :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'">{{ paper_name }}</h1>
 
     <!-- View toggle -->
-    <div class="flex bg-gray-100 rounded-lg p-0.5">
+    <div class="flex rounded-lg p-0.5 shrink-0"
+         :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-100'">
       <template x-if="hasHtml">
-        <button @click="view = 'html'"
-                :class="view === 'html' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'"
+        <button @click="switchView('html')"
+                :class="view === 'html'
+                  ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
                 class="px-3 py-1 rounded-md text-xs font-medium transition">
           HTML
         </button>
       </template>
+      <template x-if="hasMdKo">
+        <button @click="switchView('md-ko')"
+                :class="view === 'md-ko'
+                  ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+                class="px-3 py-1 rounded-md text-xs font-medium transition">
+          MD-KO
+        </button>
+      </template>
+      <template x-if="hasMdEn">
+        <button @click="switchView('md-en')"
+                :class="view === 'md-en'
+                  ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+                class="px-3 py-1 rounded-md text-xs font-medium transition">
+          MD-EN
+        </button>
+      </template>
       <template x-if="hasPdf">
-        <button @click="view = 'pdf'"
-                :class="view === 'pdf' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'"
+        <button @click="switchView('pdf')"
+                :class="view === 'pdf'
+                  ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
                 class="px-3 py-1 rounded-md text-xs font-medium transition">
           PDF
         </button>
       </template>
       <template x-if="hasHtml && hasPdf">
-        <button @click="view = 'split'"
-                :class="view === 'split' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'"
+        <button @click="switchView('split')"
+                :class="view === 'split'
+                  ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
                 class="px-3 py-1 rounded-md text-xs font-medium transition">
           Split
         </button>
       </template>
     </div>
 
+    <!-- Separator -->
+    <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
+
+    <!-- TOC toggle (HTML views only) -->
+    <button x-show="hasHtml && (view === 'html' || view === 'split')"
+            @click="toggleToc()"
+            class="p-1.5 rounded-lg transition shrink-0"
+            :class="tocVisible
+              ? ($store.darkMode.on ? 'text-indigo-400 bg-gray-700' : 'text-indigo-600 bg-indigo-50')
+              : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100')"
+            :title="tocVisible ? 'Hide Table of Contents' : 'Show Table of Contents'">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7"/>
+      </svg>
+    </button>
+
+    <!-- Dark mode toggle -->
+    <button @click="$store.darkMode.toggle()"
+            class="p-1.5 rounded-lg transition shrink-0"
+            :class="$store.darkMode.on ? 'text-yellow-400 hover:text-yellow-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
+            :title="$store.darkMode.on ? 'Light mode' : 'Dark mode'">
+      <!-- Sun icon (light mode) -->
+      <svg x-show="!$store.darkMode.on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <!-- Moon icon (dark mode) -->
+      <svg x-show="$store.darkMode.on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+    </button>
+
+    <!-- Separator -->
+    <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
+
     <!-- Actions -->
     <template x-if="location === 'outputs'">
       <button @click="doAction('archive')"
-              class="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition" title="Archive">
+              class="p-1.5 rounded-lg transition shrink-0"
+              :class="$store.darkMode.on ? 'text-gray-400 hover:text-emerald-400 hover:bg-gray-700' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'"
+              title="Archive">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
         </svg>
@@ -59,14 +199,18 @@
     </template>
     <template x-if="location === 'archives'">
       <button @click="doAction('restore')"
-              class="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition" title="Restore">
+              class="p-1.5 rounded-lg transition shrink-0"
+              :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'"
+              title="Restore">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
         </svg>
       </button>
     </template>
     <button @click="doAction('delete')"
-            class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Delete">
+            class="p-1.5 rounded-lg transition shrink-0"
+            :class="$store.darkMode.on ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'"
+            title="Delete">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
       </svg>
@@ -74,7 +218,10 @@
 
     <!-- PDF Download -->
     <template x-if="hasPdf">
-      <a :href="pdfUrl" download class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Download PDF">
+      <a :href="pdfUrl" download
+         class="p-1.5 rounded-lg transition shrink-0"
+         :class="$store.darkMode.on ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'"
+         title="Download PDF">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
@@ -86,7 +233,17 @@
   <div class="flex-1 overflow-hidden flex">
     <!-- HTML view -->
     <template x-if="view === 'html'">
-      <iframe :src="htmlUrl" class="w-full h-full border-0"></iframe>
+      <iframe :src="htmlUrl" @load="onIframeLoad($event.target)" class="w-full h-full border-0"></iframe>
+    </template>
+
+    <!-- Markdown Korean view -->
+    <template x-if="view === 'md-ko'">
+      <div class="markdown-container" :class="$store.darkMode.on && 'dark'" x-html="mdKoContent"></div>
+    </template>
+
+    <!-- Markdown English view -->
+    <template x-if="view === 'md-en'">
+      <div class="markdown-container" :class="$store.darkMode.on && 'dark'" x-html="mdEnContent"></div>
     </template>
 
     <!-- PDF view -->
@@ -97,14 +254,17 @@
     <!-- Split view -->
     <template x-if="view === 'split'">
       <div class="flex w-full h-full">
-        <iframe :src="htmlUrl" class="h-full border-0 border-r border-gray-200" style="width: 50%"></iframe>
-        <iframe :src="pdfUrl" class="h-full border-0" style="width: 50%"></iframe>
+        <iframe :src="htmlUrl" @load="onIframeLoad($event.target)"
+                class="h-full border-0"
+                :style="'width:50%;' + ($store.darkMode.on ? 'border-right:1px solid #374151' : 'border-right:1px solid #e5e7eb')"></iframe>
+        <iframe :src="pdfUrl" class="h-full border-0" style="width:50%"></iframe>
       </div>
     </template>
 
     <!-- No content -->
-    <template x-if="!hasHtml && !hasPdf">
-      <div class="flex-1 flex items-center justify-center text-gray-400 text-sm">
+    <template x-if="!hasHtml && !hasPdf && !hasMdKo && !hasMdEn">
+      <div class="flex-1 flex items-center justify-center text-sm"
+           :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">
         No viewable files found for this paper.
       </div>
     </template>
@@ -112,16 +272,22 @@
 
   <!-- Confirm modal -->
   <div x-cloak x-show="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/40" @click="modal.show = false"></div>
-    <div class="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
+    <div class="absolute inset-0 bg-black/50" @click="modal.show = false"></div>
+    <div class="relative rounded-2xl shadow-xl max-w-sm w-full p-6"
+         :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-white'"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0 scale-95"
          x-transition:enter-end="opacity-100 scale-100">
-      <h3 class="text-lg font-semibold text-gray-900 mb-2" x-text="modal.title"></h3>
-      <p class="text-sm text-gray-500 mb-5" x-text="modal.message"></p>
+      <h3 class="text-lg font-semibold mb-2"
+          :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
+          x-text="modal.title"></h3>
+      <p class="text-sm mb-5"
+         :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+         x-text="modal.message"></p>
       <div class="flex justify-end space-x-3">
         <button @click="modal.show = false"
-                class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition">
+                class="px-4 py-2 rounded-lg text-sm font-medium transition"
+                :class="$store.darkMode.on ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'">
           Cancel
         </button>
         <button @click="executeModalAction()"
@@ -138,14 +304,297 @@
 <script>
 function viewerApp() {
   const name = '{{ paper_name_encoded }}';
+
+  const DARK_CSS = `
+    /* Base */
+    html, body, .page-columns, #quarto-content {
+      background-color: #1a1b2e !important;
+      color: #d1d5db !important;
+    }
+    main.content, #quarto-document-content {
+      background-color: #1a1b2e !important;
+      color: #d1d5db !important;
+    }
+    /* Headings */
+    h1, h2, h3, h4, h5, h6 { color: #e5e7eb !important; }
+    /* Text */
+    p, li, dd, dt, figcaption, .caption, span, label { color: #d1d5db !important; }
+    strong, b, em { color: #e5e7eb !important; }
+    /* Links */
+    a { color: #93c5fd !important; }
+    a:hover { color: #bfdbfe !important; }
+    /* Code */
+    pre {
+      background-color: #1e293b !important;
+      border-color: #334155 !important;
+      border: 1px solid #334155 !important;
+      border-radius: 6px !important;
+    }
+    code { color: #e2e8f0 !important; background-color: #1e293b !important; }
+    pre code { background-color: transparent !important; }
+    .sourceCode { background-color: #1e293b !important; }
+    /* Syntax highlighting */
+    .sourceCode .kw { color: #c792ea !important; }
+    .sourceCode .dt { color: #ffcb6b !important; }
+    .sourceCode .st { color: #c3e88d !important; }
+    .sourceCode .co { color: #676e95 !important; }
+    .sourceCode .dv, .sourceCode .fl, .sourceCode .bn { color: #f78c6c !important; }
+    .sourceCode .fu { color: #82aaff !important; }
+    .sourceCode .op { color: #89ddff !important; }
+    .sourceCode .ch, .sourceCode .sc { color: #c3e88d !important; }
+    .sourceCode .al, .sourceCode .er { color: #ff5370 !important; }
+    .sourceCode .at { color: #ffcb6b !important; }
+    .sourceCode .va, .sourceCode .bu { color: #f78c6c !important; }
+    .sourceCode .cf { color: #c792ea !important; }
+    .sourceCode .cn { color: #f78c6c !important; }
+    .sourceCode .im { color: #c792ea !important; }
+    /* Tables */
+    table { border-color: #374151 !important; }
+    th {
+      background-color: #1e293b !important;
+      color: #e5e7eb !important;
+      border-color: #374151 !important;
+    }
+    td {
+      color: #d1d5db !important;
+      border-color: #374151 !important;
+    }
+    tr { background-color: #1a1b2e !important; }
+    tr:nth-child(even) { background-color: #1e1e38 !important; }
+    thead { border-color: #374151 !important; }
+    /* TOC sidebar */
+    #quarto-sidebar-toc-left {
+      background-color: #111827 !important;
+      border-right: 1px solid #1f2937 !important;
+    }
+    #TOC { background-color: #111827 !important; }
+    #TOC a, .nav-link { color: #9ca3af !important; }
+    #TOC a:hover, .nav-link:hover { color: #d1d5db !important; }
+    #TOC a.active, .nav-link.active {
+      color: #93c5fd !important;
+      border-left-color: #93c5fd !important;
+    }
+    #toc-title { color: #e5e7eb !important; }
+    /* Blockquote */
+    blockquote {
+      border-left-color: #4b5563 !important;
+      color: #9ca3af !important;
+      background-color: #1e1e38 !important;
+      padding: 0.5em 1em !important;
+      border-radius: 0 6px 6px 0 !important;
+    }
+    /* HR */
+    hr { border-color: #374151 !important; }
+    /* Callouts */
+    .callout {
+      background-color: #1e293b !important;
+      border-color: #374151 !important;
+      color: #d1d5db !important;
+    }
+    .callout-title { color: #e5e7eb !important; }
+    /* Quarto UI elements */
+    .quarto-title-block { color: #e5e7eb !important; }
+    .code-tools-button {
+      color: #9ca3af !important;
+      border-color: #374151 !important;
+    }
+    .code-tools-button:hover { color: #d1d5db !important; }
+    /* Figures */
+    figure { background-color: transparent !important; }
+    figcaption { color: #9ca3af !important; }
+    /* Math - inherit color */
+    .MathJax, .katex { color: #d1d5db !important; }
+    .MathJax svg { color: #d1d5db !important; }
+    /* Scrollbar */
+    ::-webkit-scrollbar-track { background: #1a1b2e !important; }
+    ::-webkit-scrollbar-thumb { background: #4b5563 !important; border-radius: 3px !important; }
+    ::-webkit-scrollbar-thumb:hover { background: #6b7280 !important; }
+    /* Margin sidebar */
+    #quarto-margin-sidebar { background-color: #1a1b2e !important; }
+    /* Misc */
+    .sidebar-toggle, .quarto-sidebar-toggle {
+      background-color: #1e293b !important;
+      color: #9ca3af !important;
+    }
+  `;
+
   return {
     view: '{{ default_view }}',
     hasHtml: {{ 'true' if has_html else 'false' }},
     hasPdf: {{ 'true' if has_pdf else 'false' }},
+    hasMdKo: {{ 'true' if has_md_ko else 'false' }},
+    hasMdEn: {{ 'true' if has_md_en else 'false' }},
     location: '{{ location }}',
     htmlUrl: '/api/papers/' + name + '/html',
     pdfUrl: '/api/papers/' + name + '/pdf',
+    mdKoUrl: '/api/papers/' + name + '/md-ko',
+    mdEnUrl: '/api/papers/' + name + '/md-en',
+    mdKoContent: '',
+    mdEnContent: '',
+    tocVisible: localStorage.getItem('pf-toc') !== 'hidden',
     modal: { show: false, action: '', title: '', message: '' },
+
+    async init() {
+      // Pre-load markdown if default view is markdown
+      if (this.view === 'md-ko' && this.hasMdKo && !this.mdKoContent) {
+        await this.loadMarkdown('md-ko');
+      } else if (this.view === 'md-en' && this.hasMdEn && !this.mdEnContent) {
+        await this.loadMarkdown('md-en');
+      }
+
+      // Watch for global darkMode changes to update iframes
+      window.addEventListener('darkModeChanged', (e) => {
+        this.applyToAllHtmlIframes();
+      });
+    },
+
+    async switchView(v) {
+      this.view = v;
+      // Load markdown content when switching to markdown view
+      if (v === 'md-ko' && this.hasMdKo && !this.mdKoContent) {
+        await this.loadMarkdown('md-ko');
+      } else if (v === 'md-en' && this.hasMdEn && !this.mdEnContent) {
+        await this.loadMarkdown('md-en');
+      }
+    },
+
+    async loadMarkdown(type) {
+      const url = type === 'md-ko' ? this.mdKoUrl : this.mdEnUrl;
+      try {
+        const resp = await apiFetch(url);
+        if (resp && resp.ok) {
+          let text = await resp.text();
+
+          // Remove YAML frontmatter (between --- delimiters)
+          const yamlPattern = /^---\s*\n[\s\S]*?\n---\s*\n/;
+          text = text.replace(yamlPattern, '');
+
+          // Fix author sections: Remove code blocks that contain <sup> tags (author affiliations)
+          // This handles cases where author info is incorrectly wrapped in code blocks
+          text = text.replace(/```\n([\s\S]*?<sup>[\s\S]*?)\n```/g, (match, content) => {
+            // If the code block contains <sup> tags, it's likely author info, so unwrap it
+            return content;
+          });
+
+          const html = marked.parse(text);
+          if (type === 'md-ko') {
+            this.mdKoContent = html;
+          } else {
+            this.mdEnContent = html;
+          }
+        } else {
+          const errorMsg = `<p style="color: red;">Failed to load markdown file.</p>`;
+          if (type === 'md-ko') {
+            this.mdKoContent = errorMsg;
+          } else {
+            this.mdEnContent = errorMsg;
+          }
+        }
+      } catch (e) {
+        console.error('Error loading markdown:', e);
+        const errorMsg = `<p style="color: red;">Error loading markdown: ${e.message}</p>`;
+        if (type === 'md-ko') {
+          this.mdKoContent = errorMsg;
+        } else {
+          this.mdEnContent = errorMsg;
+        }
+      }
+    },
+
+    toggleToc() {
+      this.tocVisible = !this.tocVisible;
+      localStorage.setItem('pf-toc', this.tocVisible ? 'visible' : 'hidden');
+      this.applyToAllHtmlIframes();
+    },
+
+
+    onIframeLoad(iframe) {
+      // Delay slightly to ensure iframe DOM is fully ready
+      setTimeout(() => this.applySettings(iframe), 50);
+    },
+
+    applyToAllHtmlIframes() {
+      document.querySelectorAll('iframe').forEach(iframe => {
+        try {
+          if (iframe.src && iframe.src.includes('/html')) {
+            this.applySettings(iframe);
+          }
+        } catch(e) {}
+      });
+    },
+
+    applySettings(iframe) {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!doc || !doc.body) return;
+
+        // ── TOC toggle (always hide in split view to save space) ──
+        const showToc = this.tocVisible && this.view !== 'split';
+        const toc = doc.getElementById('quarto-sidebar-toc-left');
+        if (toc) {
+          toc.style.display = showToc ? '' : 'none';
+        }
+
+        // Override Quarto grid layout when TOC is hidden
+        let layoutStyle = doc.getElementById('pf-layout-override');
+        const isSplit = this.view === 'split';
+        if (!showToc) {
+          if (!layoutStyle) {
+            layoutStyle = doc.createElement('style');
+            layoutStyle.id = 'pf-layout-override';
+            doc.head.appendChild(layoutStyle);
+          }
+          if (isSplit) {
+            // Split view: use full width for compact layout
+            layoutStyle.textContent = `
+              #quarto-content.page-columns {
+                display: block !important;
+                grid-template-columns: none !important;
+              }
+              #quarto-margin-sidebar { display: none !important; }
+              main.content, #quarto-document-content {
+                max-width: 100% !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 1.5em !important;
+              }
+            `;
+          } else {
+            // HTML single view: centered content with readable width
+            layoutStyle.textContent = `
+              #quarto-content.page-columns {
+                display: block !important;
+                grid-template-columns: none !important;
+              }
+              #quarto-margin-sidebar { display: none !important; }
+              main.content, #quarto-document-content {
+                max-width: 900px !important;
+                margin: 0 auto !important;
+                padding: 0 2em !important;
+              }
+            `;
+          }
+        } else {
+          if (layoutStyle) layoutStyle.remove();
+        }
+
+        // ── Dark mode ──
+        let darkStyle = doc.getElementById('pf-dark-mode');
+        const isDark = Alpine.store('darkMode').on;
+        if (isDark) {
+          if (!darkStyle) {
+            darkStyle = doc.createElement('style');
+            darkStyle.id = 'pf-dark-mode';
+            doc.head.appendChild(darkStyle);
+          }
+          darkStyle.textContent = DARK_CSS;
+        } else {
+          if (darkStyle) darkStyle.remove();
+        }
+      } catch(e) {
+        console.warn('Could not access iframe content:', e);
+      }
+    },
 
     doAction(action) {
       this.modal.action = action;

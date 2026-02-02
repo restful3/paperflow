@@ -95,6 +95,28 @@ def get_pdf_path(name: str) -> Path | None:
     return None
 
 
+def get_md_ko_path(name: str) -> Path | None:
+    """Get Korean markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    for f in paper_dir.iterdir():
+        if f.name.endswith("_ko.md"):
+            return f
+    return None
+
+
+def get_md_en_path(name: str) -> Path | None:
+    """Get English markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    for f in paper_dir.iterdir():
+        if f.name.endswith(".md") and not f.name.endswith("_ko.md"):
+            return f
+    return None
+
+
 def archive_paper(name: str) -> tuple[bool, str]:
     src = settings.outputs_dir / name
     if not src.is_dir():

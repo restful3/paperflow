@@ -6,7 +6,6 @@
   <title>{% block title %}PaperFlow{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
     /* Custom scrollbar */
@@ -14,10 +13,40 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    /* Dark mode scrollbar */
+    .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
   </style>
+  <!-- Global dark mode initialization -->
+  <script>
+    // Initialize dark mode before page renders to prevent flash
+    if (localStorage.getItem('pf-dark') === 'true') {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+  <!-- Alpine.js with global store -->
+  <script>
+    document.addEventListener('alpine:init', () => {
+      // Global dark mode store
+      Alpine.store('darkMode', {
+        on: localStorage.getItem('pf-dark') === 'true',
+
+        toggle() {
+          this.on = !this.on;
+          localStorage.setItem('pf-dark', this.on ? 'true' : 'false');
+          document.documentElement.classList.toggle('dark', this.on);
+          // Dispatch event for iframe sync
+          window.dispatchEvent(new CustomEvent('darkModeChanged', { detail: { darkMode: this.on } }));
+        }
+      });
+    });
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="h-full bg-gray-50 text-gray-900">
+<body class="h-full transition-colors duration-200"
+      x-data
+      :class="$store.darkMode.on ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'">
 
   {% block body %}{% endblock %}
 
