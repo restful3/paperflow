@@ -66,16 +66,8 @@ def print_progress(current, total, text=""):
 def load_config():
     """Load config.json or return defaults"""
     default_config = {
-        "ollama_url": "http://localhost:11434",
-        "Chunk_size": 5,
-        "timeout": 200,
-        "retries": 100,
-        "retry_delay": 10,
-        "temperature": 0.3,
-        "model_name": "qwen3-vl:30b-a3b-instruct",
         "processing_pipeline": {
             "convert_to_markdown": True,
-            "translate_to_korean": True,
             "render_to_html": True
         }
     }
@@ -95,19 +87,10 @@ def load_config():
     except Exception as e:
         print_warning(f"Config load failed, using defaults: {e}")
 
-    # Override with environment variables (Docker support)
-    if os.environ.get("OLLAMA_URL"):
-        default_config["ollama_url"] = os.environ.get("OLLAMA_URL")
-    if os.environ.get("MODEL_NAME"):
-        default_config["model_name"] = os.environ.get("MODEL_NAME")
-
     # Auto-activate dependencies
     pipeline = default_config["processing_pipeline"]
     if pipeline["render_to_html"]:
-        # HTML rendering requires Korean translation
-        pipeline["translate_to_korean"] = True
-    if pipeline["translate_to_korean"]:
-        # Translation requires markdown conversion
+        # HTML rendering requires markdown conversion
         pipeline["convert_to_markdown"] = True
 
     return default_config
@@ -544,145 +527,17 @@ def split_text_simple(text, max_tokens=800):
 
     return chunks
 
-def translate_chunk(chunk, ollama_url, model_name, prompt, timeout, retries, retry_delay, temperature):
-    """Translate single chunk"""
-    for attempt in range(retries):
-        try:
-            response = requests.post(
-                f"{ollama_url}/api/generate",
-                json={
-                    "model": model_name,
-                    "prompt": f"{prompt}\n\n{chunk}",
-                    "stream": False,
-                    "options": {"temperature": temperature}
-                },
-                timeout=timeout
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                return result.get('response', '').strip()
-
-        except requests.exceptions.Timeout:
-            print_warning(f"Timeout (attempt {attempt + 1}/{retries}): {timeout}s exceeded")
-            if attempt < retries - 1:
-                print_info(f"Retrying in {retry_delay}s...")
-                time.sleep(retry_delay)
-            else:
-                print_error("Max retries exceeded")
-                return None
-        except Exception as e:
-            print_warning(f"Translation error (attempt {attempt + 1}/{retries}): {e}")
-            if attempt < retries - 1:
-                print_info(f"Retrying in {retry_delay}s...")
-                time.sleep(retry_delay)
-            else:
-                print_error("Max retries exceeded")
-                return None
-
-    return None
-
-def translate_md_to_korean(md_path, output_dir, config, prompt):
-    """Translate MD to Korean"""
-    try:
-        with open(md_path, 'r', encoding='utf-8') as f:
-            md_content = f.read()
-
-        # Split content
-        try:
-            chunks = split_markdown_by_structure(md_content, max_tokens=config["Chunk_size"])
-            print_info(f"Structure-based splitting: {len(chunks)} chunks (size: {config['Chunk_size']} tokens)")
-        except Exception as e:
-            print_warning(f"Structure split failed, using simple split: {e}")
-            chunks = split_text_simple(md_content, max_tokens=config["Chunk_size"])
-            print_info(f"Simple splitting: {len(chunks)} chunks (size: {config['Chunk_size']} tokens)")
-
-        # Create output file with header
-        ko_md_path = md_path.replace('.md', '_ko.md')
-
-        with open(ko_md_path, 'w', encoding='utf-8') as f:
-            try:
-                header_path = Path("header.yaml")
-                if header_path.exists():
-                    with open(header_path, 'r', encoding='utf-8') as hf:
-                        header = hf.read()
-                    f.write(header.rstrip() + '\n\n')
-            except Exception as e:
-                print_warning(f"header.yaml load failed: {e}")
-
-        # Translate chunks
-        for i, chunk in enumerate(chunks, 1):
-            print_progress(i-1, len(chunks), f"Translating chunk {i}/{len(chunks)}")
-
-            translated = None
-            while not translated:
-                translated = translate_chunk(
-                    chunk,
-                    config["ollama_url"],
-                    config["model_name"],
-                    prompt,
-                    config["timeout"],
-                    config["retries"],
-                    config["retry_delay"],
-                    config["temperature"]
-                )
-                if translated:
-                    with open(ko_md_path, 'a', encoding='utf-8') as f:
-                        f.write(translated + '\n\n')
-                        f.flush()
-                    print_progress(i, len(chunks), f"Chunk {i}/{len(chunks)} completed")
-                else:
-                    print_warning(f"Chunk {i}/{len(chunks)} failed. Retrying in {config['retry_delay']}s...")
-                    time.sleep(config["retry_delay"])
-
-        print()  # New line after progress
-
-        # Unload Ollama model to free GPU memory for next PDF
-        try:
-            print_info("Unloading Ollama model to free GPU memory...")
-            unload_response = requests.post(
-                f"{config['ollama_url']}/api/generate",
-                json={
-                    "model": config["model_name"],
-                    "keep_alive": 0  # Unload immediately
-                },
-                timeout=10
-            )
-            if unload_response.status_code == 200:
-                print_success("Ollama model unloaded successfully")
-            else:
-                print_warning(f"Ollama unload returned status {unload_response.status_code}")
-        except Exception as e:
-            print_warning(f"Failed to unload Ollama model: {e}")
-
-        return ko_md_path
-
-    except Exception as e:
-        print_error(f"MD translation error: {e}")
-
-        # Try to unload model even on error
-        try:
-            requests.post(
-                f"{config['ollama_url']}/api/generate",
-                json={"model": config["model_name"], "keep_alive": 0},
-                timeout=5
-            )
-        except:
-            pass
-
-        return None
-
-def render_md_to_html(ko_md_path):
+def render_md_to_html(md_path):
     """Render MD to HTML using Quarto with fallback for YAML parsing issues"""
     try:
         print_info(f"Running Quarto to render HTML...")
 
-        # Use absolute path for ko_md_path
-        ko_md_path_abs = os.path.abspath(ko_md_path)
-        output_dir = os.path.dirname(ko_md_path_abs)
+        # Use absolute path for md_path
+        md_path_abs = os.path.abspath(md_path)
+        output_dir = os.path.dirname(md_path_abs)
 
         # Quarto needs just the filename when running in the directory
-        md_filename = os.path.basename(ko_md_path_abs)
+        md_filename = os.path.basename(md_path_abs)
         cmd = ["quarto", "render", md_filename]
 
         print_info(f"Command: {' '.join(cmd)}")
@@ -692,7 +547,7 @@ def render_md_to_html(ko_md_path):
         result = subprocess.run(cmd, cwd=output_dir, capture_output=True, text=True)
 
         if result.returncode == 0:
-            html_output = ko_md_path.replace('_ko.md', '_ko.html')
+            html_output = md_path.replace('.md', '.html')
             if os.path.exists(html_output):
                 print_success(f"HTML file created: {os.path.getsize(html_output) / 1024:.2f} KB")
             return html_output
@@ -700,7 +555,7 @@ def render_md_to_html(ko_md_path):
             # Check if it's a YAML parsing error
             if "YAML parse exception" in result.stderr or "Error running Lua" in result.stderr:
                 print_warning(f"YAML parsing error detected. Trying with simplified header...")
-                return _render_with_simple_header(ko_md_path_abs, output_dir, md_filename)
+                return _render_with_simple_header(md_path_abs, output_dir, md_filename)
             else:
                 print_error(f"Quarto rendering failed (exit code: {result.returncode})")
                 print_error(f"STDERR: {result.stderr}")
@@ -719,11 +574,11 @@ def render_md_to_html(ko_md_path):
         return None
 
 
-def _render_with_simple_header(ko_md_path_abs, output_dir, md_filename):
+def _render_with_simple_header(md_path_abs, output_dir, md_filename):
     """Fallback: Replace complex YAML header with simple one and retry rendering"""
     try:
         # Read the markdown file
-        with open(ko_md_path_abs, 'r', encoding='utf-8') as f:
+        with open(md_path_abs, 'r', encoding='utf-8') as f:
             content = f.read()
 
         # Extract body (everything after second ---)
@@ -749,7 +604,7 @@ format:
 '''
 
         # Create temporary file with simple header
-        temp_filename = md_filename.replace('_ko.md', '_ko_temp.md')
+        temp_filename = md_filename.replace('.md', '_temp.md')
         temp_path = os.path.join(output_dir, temp_filename)
 
         with open(temp_path, 'w', encoding='utf-8') as f:
@@ -763,8 +618,8 @@ format:
 
         if result.returncode == 0:
             # Move the generated HTML to the original filename
-            temp_html = temp_path.replace('_ko_temp.md', '_ko_temp.html')
-            final_html = ko_md_path_abs.replace('_ko.md', '_ko.html')
+            temp_html = temp_path.replace('_temp.md', '_temp.html')
+            final_html = md_path_abs.replace('.md', '.html')
 
             if os.path.exists(temp_html):
                 import shutil
@@ -776,7 +631,7 @@ format:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
                 # Clean up quarto-generated temp directories
-                temp_files_dir = temp_path.replace('_ko_temp.md', '_ko_temp_files')
+                temp_files_dir = temp_path.replace('_temp.md', '_temp_files')
                 if os.path.exists(temp_files_dir):
                     shutil.rmtree(temp_files_dir)
 
@@ -812,15 +667,13 @@ def process_single_pdf(pdf_path, config, prompt):
         # Get pipeline configuration
         pipeline = config.get("processing_pipeline", {
             "convert_to_markdown": True,
-            "translate_to_korean": True,
             "render_to_html": True
         })
 
         # Display pipeline configuration
         print_info("Pipeline configuration:")
         print_info(f"  • PDF → Markdown: {'Enabled' if pipeline['convert_to_markdown'] else 'Disabled'}")
-        print_info(f"  • Markdown → Korean: {'Enabled' if pipeline['translate_to_korean'] else 'Disabled'}")
-        print_info(f"  • Korean → HTML: {'Enabled' if pipeline['render_to_html'] else 'Disabled'}")
+        print_info(f"  • Markdown → HTML: {'Enabled' if pipeline['render_to_html'] else 'Disabled'}")
         print()
 
         # Create output directory
@@ -834,7 +687,6 @@ def process_single_pdf(pdf_path, config, prompt):
         # Track processing results
         results = {
             "markdown": None,
-            "translation": None,
             "html": None
         }
 
@@ -864,43 +716,13 @@ def process_single_pdf(pdf_path, config, prompt):
                 print_warning(f"Markdown conversion disabled and no existing file found")
                 results["markdown"] = "skipped"
 
-        # Step 2: Translate to Korean (conditional)
-        ko_md_path = None
-        if pipeline["translate_to_korean"]:
-            if md_path and os.path.exists(md_path):
-                print_info(f"Step 2: Translating to Korean...")
-                try:
-                    ko_md_path = translate_md_to_korean(md_path, output_dir, config, prompt)
-                    if ko_md_path:
-                        print_success(f"Korean translation complete: {ko_md_path}")
-                        results["translation"] = "success"
-                    else:
-                        print_error(f"Korean translation failed")
-                        results["translation"] = "failed"
-                except Exception as e:
-                    print_error(f"Translation error: {e}")
-                    results["translation"] = "failed"
-            else:
-                print_warning(f"Translation skipped: no markdown file available")
-                results["translation"] = "skipped"
-        else:
-            # Check if Korean markdown already exists
-            expected_ko_md = os.path.join(output_dir, base_name + "_ko.md")
-            if os.path.exists(expected_ko_md):
-                ko_md_path = expected_ko_md
-                print_info(f"Using existing Korean markdown: {ko_md_path}")
-                results["translation"] = "skipped"
-            else:
-                print_warning(f"Translation disabled and no existing file found")
-                results["translation"] = "skipped"
-
-        # Step 3: Render to HTML (conditional)
+        # Step 2: Render to HTML (conditional)
         html_output = None
         if pipeline["render_to_html"]:
-            if ko_md_path and os.path.exists(ko_md_path):
-                print_info(f"Step 3: Rendering to HTML...")
+            if md_path and os.path.exists(md_path):
+                print_info(f"Step 2: Rendering to HTML...")
                 try:
-                    html_output = render_md_to_html(ko_md_path)
+                    html_output = render_md_to_html(md_path)
                     if html_output:
                         print_success(f"HTML rendering complete: {html_output}")
                         results["html"] = "success"
@@ -911,13 +733,13 @@ def process_single_pdf(pdf_path, config, prompt):
                     print_error(f"HTML rendering error: {e}")
                     results["html"] = "failed"
             else:
-                print_warning(f"HTML rendering skipped: no Korean markdown available")
+                print_warning(f"HTML rendering skipped: no markdown available")
                 results["html"] = "skipped"
         else:
             print_info(f"HTML rendering disabled")
             results["html"] = "skipped"
 
-        # Step 4: Move processed PDF to output directory
+        # Step 3: Move processed PDF to output directory
         print_info(f"Moving source PDF to output directory...")
         dest_pdf = os.path.join(output_dir, pdf_name)
         try:
@@ -960,31 +782,6 @@ def check_services(config):
     else:
         print_success("marker-pdf library is installed")
 
-    # Check Ollama
-    try:
-        response = requests.get(f"{config['ollama_url']}/api/tags", timeout=5)
-        if response.status_code == 200:
-            print_success(f"Ollama service is reachable at {config['ollama_url']}")
-            # Check if model exists
-            data = response.json()
-            models = [m['name'] for m in data.get('models', [])]
-            if config['model_name'] in models:
-                print_success(f"Model '{config['model_name']}' is available")
-            else:
-                print_warning(f"Model '{config['model_name']}' not found in Ollama")
-                print_info(f"Available models: {', '.join(models[:5])}")
-        else:
-            print_warning(f"Ollama service returned status {response.status_code}")
-    except requests.exceptions.Timeout:
-        print_warning(f"Ollama service at {config['ollama_url']} is slow to respond")
-    except requests.exceptions.ConnectionError:
-        print_error(f"Cannot connect to Ollama at {config['ollama_url']}")
-        print_error("Please check if Ollama service is running")
-        print_info("Start Ollama with: ollama serve")
-        return False
-    except Exception as e:
-        print_warning(f"Ollama check failed: {e}")
-
     return True
 
 def main():
@@ -1011,18 +808,12 @@ def main():
     original_stdout = sys.stdout
     sys.stdout = TeeOutput(original_stdout, log_handle)
 
-    print_header("PaperFlow - PDF to Korean Markdown Converter")
+    print_header("PaperFlow - PDF to Markdown/HTML Converter")
     print_info(f"Log file: {log_file}")
 
     # Load configuration
     config = load_config()
-    prompt = load_prompt()
-
-    print_info(f"Ollama URL: {config['ollama_url']}")
-    print_info(f"Model: {config['model_name']}")
-    print_info(f"Chunk size: {config['Chunk_size']}")
-    print_info(f"Temperature: {config['temperature']}")
-    print()
+    prompt = None  # No longer used (translation removed)
 
     # Check services
     if not check_services(config):
