@@ -4,18 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PaperFlow is a Python-based tool that converts PDF documents (especially academic papers) to Markdown, translates them to Korean, and renders them as HTML. It consists of two main components:
+PaperFlow is a Python-based tool that converts PDF documents (especially academic papers) to Markdown and renders them as HTML with a web-based viewer. It consists of two main components:
 
-1. **Batch Processor** ([main_terminal.py](main_terminal.py)) - Converts PDFs to Korean HTML
-2. **Web Viewer** ([app.py](app.py)) - Streamlit app for viewing converted papers
+1. **Batch Processor** ([main_terminal.py](main_terminal.py)) - Converts PDFs to HTML
+2. **FastAPI Viewer** (viewer/app/) - Web interface for viewing and managing papers
 
 **Technology Stack**:
 - **marker-pdf library**: Local Python library for PDF to Markdown conversion with OCR capabilities
-- **Ollama**: Local LLM server for Korean translation
-- **Quarto**: Renders translated Markdown to HTML format
-- **Streamlit**: Web interface for viewing results
+- **Quarto**: Renders Markdown to HTML format
+- **FastAPI**: Web API and viewer interface with Alpine.js frontend
 
-**Key Feature**: Fully local processing - no external API calls, all processing happens on your machine.
+**Key Feature**: Fully local processing with GPU acceleration for PDF conversion.
 
 ## Quick Reference
 
@@ -33,7 +32,7 @@ cp your_paper.pdf newones/
 ./run_batch.sh
 
 # View results
-./run_app.sh
+cd viewer && uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Debug/development
 source .venv/bin/activate
@@ -82,16 +81,17 @@ python main_terminal.py
 
 ### Viewing Results
 
-**Web Viewer (Recommended)**:
+**FastAPI Viewer (Recommended)**:
 ```bash
-./run_app.sh
-# Opens browser at http://localhost:8501
-# View Korean (HTML) and English (PDF) versions side-by-side
+cd viewer
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Opens browser at http://localhost:8000
+# View HTML and PDF versions with paper management
 ```
 
 **Direct file access**:
 ```bash
-firefox outputs/your_paper/your_paper_ko.html
+firefox outputs/your_paper/your_paper.html
 ```
 
 ## Architecture
@@ -107,106 +107,71 @@ Terminal-based PDF conversion pipeline:
 - **Auto-cleanup**: Moves processed PDFs from `newones/` to output directories
 - **GPU memory management**: Explicit VRAM cleanup between PDFs for batch processing
 
-#### 2. Web Viewer ([app.py](app.py))
-Streamlit-based viewing interface:
-- **Tab Navigation**: Separate tabs for "읽을 논문" (unread) and "읽은 논문" (archived)
-- Scans `outputs/` and `archives/` directories for papers
-- Grid layout with paper cards showing available formats
-- **Paper Management**: Three-button layout with confirmation dialogs (list view only)
-  - Unread papers: `[📖 보기] [✅ 완료] [🗑️ 삭제]`
-  - Archived papers: `[📖 보기] [↩️ 복원] [🗑️ 삭제]`
-  - Actions:
-    - "✅ 완료": Move paper from `outputs/` to `archives/`
-    - "↩️ 복원": Move paper from `archives/` to `outputs/`
-    - "🗑️ 삭제": Permanently delete paper (shows folder size, requires confirmation)
-  - Detail view: No management buttons (archive/restore/delete removed from sidebar)
-    - Users return to list view to manage papers
-  - All destructive actions require confirmation dialogs
-- **Viewer Features**:
-  - Split view mode: Korean (HTML) + English (PDF) side-by-side with adjustable ratio
-  - Single view mode: Korean HTML, English PDF, or English Markdown
-  - Font size control for HTML content (100-110%)
-  - Screen ratio adjustment for split view (20-80%)
-  - **Fullscreen mode**: Single-view Korean HTML includes fullscreen button (top-right corner)
-    - Click "🔍 전체화면" to enter browser fullscreen (escape iframe constraints)
-    - Click "❌ 전체화면 종료" or press ESC to exit
-    - **iPad Support**: Shows toast notification on fullscreen entry ("전체화면 종료: 상단 버튼을 클릭하세요")
-    - **Table of Contents (TOC)**: Automatically shows left sidebar TOC only in fullscreen mode
-      - Hidden in normal iframe view (saves space)
-      - Visible in fullscreen (enables quick navigation for long papers)
-      - Uses CSS `:fullscreen` pseudo-class for automatic toggle
-    - Uses JavaScript `Element.requestFullscreen()` API with cross-browser support
-  - **PDF Viewing**: Uses `streamlit-pdf-viewer` component with TOC support
-    - "📥 다운로드" button for downloading PDF files
-    - "📑 목차" toggle for PDFs with bookmarks (shows TOC in sidebar)
-    - Native PDF viewer controls for zoom, page navigation, search, and print
-    - Height optimized: 2000px (single view), 3000px (dual view)
-    - TOC navigation: Click bookmark to jump to specific page
-  - **Markdown Editing**: Single-view English Markdown includes edit mode toggle
-    - Single toggle button in sidebar: "✏️ 편집" (read mode) or "👁️ 읽기" (edit mode)
-    - "📝 편집 모드" section in sidebar (similar to PDF controls)
-    - Edit mode provides text area for direct markdown modification
-    - **YAML Header Preservation**: Automatically preserves Quarto YAML header during edits
-    - Save button (💾) commits changes to disk
-    - Restore button (🔄) reverts to original content (with confirmation)
-    - Edit state managed per-file in session state
-    - Clean main content area (no top controls)
-- Uses `streamlit-pdf-viewer` component for PDF rendering
-- Session state management for navigation (list view ↔ detail view)
-- **Session Persistence**: Auto-login with session files stored in `.sessions/`
-- Responsive design with gradient UI styling
-- Login authentication with username/password validation
+#### 2. FastAPI Viewer (viewer/app/)
+Alpine.js-based web interface:
+- **JWT Authentication**: HTTPOnly cookies with login/logout
+- **Paper Management**:
+  - Lists papers from `outputs/` (unread) and `archives/` (read)
+  - Archive, restore, and delete operations with confirmation
+  - Paper metadata display (title, size, dates)
+- **Viewing Modes**:
+  - HTML viewer: iframe display of rendered papers
+  - PDF viewer: iframe display of source PDFs
+  - Markdown viewer: Marked.js client-side rendering
+  - Split view: Side-by-side HTML + PDF comparison
+- **Dark Mode**: CSS injection for theme switching
+- **TOC Toggle**: Show/hide table of contents
+- **No AI Agent**: AI features removed in PaperFlow v2.0
+- Clean, responsive UI with Alpine.js reactive components
+- RESTful API backend with Jinja2 templates
 
 ### Batch Processing Pipeline
 
-The pipeline executes 4 stages for each PDF (see `process_single_pdf()` at [main_terminal.py:753](main_terminal.py#L753)):
+The pipeline executes 2 stages for each PDF (see `process_single_pdf()` in [main_terminal.py](main_terminal.py)):
 
-#### 1. PDF → Markdown (`convert_pdf_to_md()` at [main_terminal.py:175](main_terminal.py#L175))
+#### 1. PDF → Markdown (`convert_pdf_to_md()`)
 - **GPU-only mode**: Requires CUDA GPU, checks memory before loading models
 - Uses marker-pdf library with `PdfConverter` (device="cuda", dtype=torch.float16)
 - Extracts text, images (JPEG), and metadata (JSON-serializable)
-- **Critical VRAM cleanup**: After conversion, deletes models and calls `torch.cuda.empty_cache()` to free ~4-8GB VRAM for next PDF
+- **Critical VRAM cleanup**: After conversion, deletes models and calls `torch.cuda.empty_cache()` to free ~4-8GB VRAM
 
-#### 2. Markdown Chunking (`split_markdown_by_structure()` at [main_terminal.py:385](main_terminal.py#L385))
-- Primary: Structure-aware splitting using markdown-it-py (preserves headers, code blocks, math)
-- Fallback: Simple token-based splitting if parsing fails
-- Configurable chunk size (default: 5 tokens, recommended: 3-5)
-
-#### 3. Korean Translation (`translate_md_to_korean()` at [main_terminal.py:535](main_terminal.py#L535))
-- Translates chunks via Ollama API with retry logic
-- Writes incrementally to `*_ko.md` with `header.yaml` prepended
-- **Critical Ollama cleanup** ([main_terminal.py:590-606](main_terminal.py#L590-L606)): Sends `keep_alive: 0` to unload model and free ~22GB VRAM
-
-#### 4. HTML Rendering (`render_md_to_html()` at [main_terminal.py:625](main_terminal.py#L625))
-- **Important**: Runs `quarto render {filename}_ko.md` from the output directory (not full path)
+#### 2. Markdown → HTML (`render_md_to_html()`)
+- **Important**: Runs `quarto render {filename}.md` from the output directory (not full path)
+- Direct English markdown rendering (no translation)
 - Quarto config in `header.yaml`: theme, TOC, embedded resources
-- **Automatic Fallback** ([main_terminal.py:672-751](main_terminal.py#L672-L751)): If YAML parsing fails, retries with simplified header
+- **Automatic Fallback**: If YAML parsing fails, retries with simplified header
   - Detects "YAML parse exception" or "Error running Lua" in stderr
   - Creates temporary file with simple YAML header (no complex CSS)
   - Ensures HTML is always generated even if custom styling fails
 
-#### 5. Cleanup
+#### 3. Cleanup
 - Moves source PDF from `newones/` to output directory
 - Leaves `newones/` empty for next batch (or watch mode detection)
+
+**Removed Stages** (PaperFlow v2.0):
+- ~~Markdown chunking~~ (no longer needed without translation)
+- ~~Korean translation~~ (removed entirely)
 
 ### Configuration Files
 
 Critical configuration files in project root:
 
-- **[config.json](config.json)**: Ollama URL, model name, chunk size, timeout/retries, temperature
-- **[prompt.md](prompt.md)**: Translation prompt enforcing markdown preservation and LaTeX→Typst math conversion
+- **[config.json](config.json)**: Pipeline configuration (convert_to_markdown, render_to_html)
 - **[header.yaml](header.yaml)**: Quarto HTML format
-  - `toc: true` with `toc-location: left` and `toc-depth: 3` (TOC hidden in iframe via CSS, shown only in fullscreen)
+  - `toc: true` with `toc-location: left` and `toc-depth: 3`
   - `theme: cosmo`, `embed-resources: true` (self-contained HTML)
   - Custom CSS for layout and styling
 - **[requirements.txt](requirements.txt)**: Python dependencies
+- **[.env](.env)**: FastAPI viewer authentication (LOGIN_ID, LOGIN_PASSWORD, JWT_SECRET_KEY)
 
 ### Runtime Dependencies
 
 Must be available at runtime:
-- **Ollama service**: Running at `http://localhost:11434` with model downloaded (e.g., `ollama pull qwen3-vl:30b-a3b-instruct`)
 - **Quarto CLI**: System-wide installation for HTML rendering
 - **CUDA GPU**: Required for marker-pdf (no CPU fallback)
+
+**Removed** (PaperFlow v2.0):
+- ~~Ollama service~~ (no longer needed)
 
 ### Output Structure
 
@@ -216,10 +181,13 @@ outputs/example/
   ├── example.pdf           # Original PDF (moved from newones/)
   ├── example.json          # Metadata from marker-pdf
   ├── example.md            # English markdown
-  ├── example_ko.md         # Korean translated markdown
-  ├── example_ko.html       # Rendered Korean HTML ⭐
+  ├── example.html          # Rendered HTML ⭐
   └── *.jpeg                # Extracted images
 ```
+
+**Changed** (PaperFlow v2.0):
+- `example_ko.md` → removed (no translation)
+- `example_ko.html` → `example.html` (English HTML rendering)
 
 The HTML file is self-contained with embedded images and CSS (configured via `embed-resources: true` in header.yaml).
 
@@ -237,42 +205,39 @@ The HTML file is self-contained with embedded images and CSS (configured via `em
 - Waits for processing to complete before watching again
 - Ideal for automated workflows
 
-**[run_app.sh](run_app.sh)**: Streamlit viewer
-- Activates `.venv`, kills existing Streamlit on port 8501, launches `app.py`
+**FastAPI Viewer**: Manual startup
+```bash
+cd viewer
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Or with hot reload: uvicorn app.main:app --reload
+```
 
 ### PDF Processing Strategy
 
-Main processing at [main_terminal.py:920-926](main_terminal.py#L920-L926):
+Main processing in [main_terminal.py](main_terminal.py):
 - **Single PDF per run**: Processes only the first PDF in `newones/` directory to avoid CUDA context pollution
 - **Watch mode handles multiple PDFs**: `run_batch_watch.sh` calls Python script repeatedly for each PDF
-- **Dual GPU Memory Management** prevents CUDA OOM:
-  1. After PDF→MD: Frees ~4-8GB VRAM (marker-pdf models)
-  2. After Translation: Frees ~22GB VRAM (Ollama model unload)
+- **GPU Memory Management** prevents CUDA OOM:
+  - After PDF→MD: Frees ~4-8GB VRAM (marker-pdf models)
 - **Clean process per PDF**: Each PDF processed in fresh Python process prevents memory accumulation
 
-### GPU Memory Management (Critical for Batch Processing)
+### GPU Memory Management
 
 **Why This Matters**: Processing multiple PDFs requires careful VRAM management to prevent CUDA OOM errors.
 
-**Two-Stage Cleanup Pattern**:
+**Cleanup Pattern**:
 
-1. **After PDF→MD** ([main_terminal.py:324-359](main_terminal.py#L324-L359)):
-   ```python
-   del model_dict, converter, rendered
-   gc.collect()
-   torch.cuda.empty_cache()
-   torch.cuda.synchronize()
-   ```
-   Frees ~4-8GB VRAM from marker-pdf models
+**After PDF→MD** (in `convert_pdf_to_md()`):
+```python
+del model_dict, converter, rendered
+gc.collect()
+torch.cuda.empty_cache()
+torch.cuda.synchronize()
+```
+Frees ~4-8GB VRAM from marker-pdf models
 
-2. **After Translation** ([main_terminal.py:590-606](main_terminal.py#L590-L606)):
-   ```python
-   requests.post(f"{ollama_url}/api/generate",
-                 json={"model": model_name, "keep_alive": 0})
-   ```
-   Sends `keep_alive: 0` to unload Ollama model, freeing ~22GB VRAM
-
-**Result**: Total ~26-30GB freed per PDF cycle, enabling sequential processing of multiple large PDFs.
+**Removed** (PaperFlow v2.0):
+- ~~Ollama model unload~~ (translation removed)
 
 **Debug Commands**:
 ```bash
@@ -389,46 +354,21 @@ subprocess.run(["quarto", "render", f"{output_dir}/{filename}_ko.md"])
   - Restore requires double-click confirmation to prevent accidental data loss
   - **Improved UX**: Single button in sidebar, clean main content area
 
-### Translation Configuration
-
-**Chunk Size** (config.json):
-- Recommended: 3-5 tokens per chunk
-- Above 10: Performance degradation and context loss
-
-**Temperature** (config.json):
-- Recommended: 0.2-0.4 for consistent translations
-
-**Model Recommendations** (tested):
-1. `qwen3-vl:30b-a3b-instruct` ⭐ - Best quality, fast, stable
-2. `gpt-oss:20b` - Fast and stable, occasionally incomplete
-3. `qwen3:30b` - Good quality but slower
-
 ## Troubleshooting
 
 ### Startup Checks
 
-Before processing, the system checks dependencies (see `check_services()` at [main_terminal.py:815](main_terminal.py#L815)):
+Before processing, the system checks dependencies (see `check_services()` in [main_terminal.py](main_terminal.py)):
 - marker-pdf library installed
-- Ollama service reachable at configured URL
-- Translation model available in Ollama
+
+**Removed** (PaperFlow v2.0):
+- ~~Ollama service check~~ (translation removed)
 
 ### Common Issues
 
-**Ollama Connection Failed**:
-```bash
-# Start Ollama service
-ollama serve
-
-# Download model (in another terminal)
-ollama pull qwen3-vl:30b-a3b-instruct
-
-# Verify model is available
-ollama list
-```
-
 **GPU Memory Issues**:
 - Application requires CUDA GPU (no CPU fallback)
-- VRAM automatically released between PDFs (see GPU Memory Management section)
+- VRAM automatically released after PDF→MD conversion
 - Check competing GPU processes: `nvidia-smi`
 
 **Quarto Not Found**:
@@ -439,11 +379,6 @@ sudo apt install quarto
 # Or download from https://quarto.org/
 which quarto  # Verify installation
 ```
-
-**Translation Failures**:
-- Increase `timeout` and `retries` in config.json
-- Reduce `Chunk_size` for smaller sections
-- Try smaller/faster model
 
 ### Log Analysis
 
@@ -472,36 +407,45 @@ grep "GPU memory" logs/paperflow_*.log
 ## Key Architectural Decisions
 
 1. **Two-Component Design**: Separate batch processor and web viewer for flexibility
-2. **Library over API**: marker-pdf used as Python library for better control and offline operation
-3. **GPU-Only Mode**: Requires CUDA GPU (no CPU fallback) for performance
-4. **Explicit VRAM Management**: Two-stage memory cleanup enables batch processing of multiple large PDFs
-5. **Auto-cleanup**: Moves processed PDFs from `newones/` to output dirs to prevent re-processing
-6. **Watch Mode**: Continuous monitoring for automated workflows
-7. **Self-contained HTML**: Embedded images and CSS for portability
+2. **2-Stage Pipeline**: Simplified from 4-stage (PDF → MD → HTML, no translation)
+3. **Library over API**: marker-pdf used as Python library for better control and offline operation
+4. **GPU-Only Mode**: Requires CUDA GPU (no CPU fallback) for performance
+5. **Explicit VRAM Management**: GPU cleanup after PDF→MD conversion enables batch processing
+6. **Auto-cleanup**: Moves processed PDFs from `newones/` to output dirs to prevent re-processing
+7. **Watch Mode**: Continuous monitoring for automated workflows
+8. **Self-contained HTML**: Embedded images and CSS for portability
+9. **FastAPI + Alpine.js**: Modern web stack with JWT authentication (replaced Streamlit)
 
 ## Project Structure
 
 ```
 PaperFlow/
-├── main_terminal.py       # Batch processor (PDF → Korean HTML)
-├── app.py                 # Streamlit web viewer
+├── main_terminal.py       # Batch processor (PDF → HTML)
 ├── run_batch.sh           # One-time batch processing
 ├── run_batch_watch.sh     # Continuous watch mode
-├── run_app.sh             # Launch Streamlit viewer
 ├── setup_venv.sh          # Setup script (creates .venv)
-├── config.json            # Ollama/model configuration
+├── config.json            # Pipeline configuration
 ├── header.yaml            # Quarto HTML format
-├── prompt.md              # Translation prompt
 ├── requirements.txt       # Python dependencies
-├── auto_translate.py      # Helper: Standalone translation script
-├── claude_translate.py    # Helper: Alternative translation script
-├── translate_direct.py    # Helper: Direct translation script
-├── translate_full.py      # Helper: Full document translation script
+├── .env                   # FastAPI viewer authentication
+├── viewer/                # FastAPI web viewer
+│   ├── app/               # FastAPI application
+│   │   ├── main.py        # Application entry point
+│   │   ├── routers/       # API routes
+│   │   ├── templates/     # Jinja2 HTML templates
+│   │   └── services/      # Business logic
+│   └── requirements.txt   # Viewer dependencies
 ├── newones/               # Input: place PDFs here
 ├── outputs/               # Output: unread papers (to be read)
 ├── archives/              # Output: read papers (archived)
-├── logs/                  # Processing logs (timestamped)
-└── .sessions/             # Streamlit session files (auto-login)
+└── logs/                  # Processing logs (timestamped)
 ```
 
-**Note**: The `*_translate.py` scripts are experimental helpers for alternative translation workflows. The main production pipeline is `main_terminal.py`.
+**Removed** (PaperFlow v2.0):
+- ~~app.py~~ (Streamlit viewer)
+- ~~prompt.md~~ (translation prompt)
+- ~~agent/~~ (AI agent directory)
+- ~~.sessions/~~ (Streamlit session files)
+- ~~run_app.sh~~ (Streamlit launcher)
+- ~~*_translate.py scripts~~ (experimental translation helpers)
+- ~~Mac support files~~ (*_mac.sh, main_terminal_mac.py)
