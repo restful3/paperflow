@@ -67,33 +67,60 @@
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="flex space-x-1 mb-5 rounded-xl p-1 max-w-md transition-colors"
-         :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
-      <button @click="switchTab('unread')"
-              :class="tab === 'unread'
-                ? ($store.darkMode.on ? 'bg-gray-700 shadow text-indigo-400 font-semibold' : 'bg-white shadow text-indigo-700 font-semibold')
-                : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-              class="flex-1 px-4 py-2 rounded-lg text-sm transition">
-        Unread
-        <span class="ml-1 text-xs rounded-full px-2 py-0.5"
-              :class="tab === 'unread'
-                ? ($store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
-                : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
-              x-text="stats.unread"></span>
-      </button>
-      <button @click="switchTab('archived')"
-              :class="tab === 'archived'
-                ? ($store.darkMode.on ? 'bg-gray-700 shadow text-indigo-400 font-semibold' : 'bg-white shadow text-indigo-700 font-semibold')
-                : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-              class="flex-1 px-4 py-2 rounded-lg text-sm transition">
-        Archived
-        <span class="ml-1 text-xs rounded-full px-2 py-0.5"
-              :class="tab === 'archived'
-                ? ($store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
-                : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
-              x-text="stats.archived"></span>
-      </button>
+    <!-- Tabs + View toggle -->
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex space-x-1 rounded-xl p-1 max-w-md transition-colors"
+           :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
+        <button @click="switchTab('unread')"
+                :class="tab === 'unread'
+                  ? ($store.darkMode.on ? 'bg-gray-700 shadow text-indigo-400 font-semibold' : 'bg-white shadow text-indigo-700 font-semibold')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+                class="flex-1 px-4 py-2 rounded-lg text-sm transition">
+          Unread
+          <span class="ml-1 text-xs rounded-full px-2 py-0.5"
+                :class="tab === 'unread'
+                  ? ($store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
+                  : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
+                x-text="stats.unread"></span>
+        </button>
+        <button @click="switchTab('archived')"
+                :class="tab === 'archived'
+                  ? ($store.darkMode.on ? 'bg-gray-700 shadow text-indigo-400 font-semibold' : 'bg-white shadow text-indigo-700 font-semibold')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
+                class="flex-1 px-4 py-2 rounded-lg text-sm transition">
+          Archived
+          <span class="ml-1 text-xs rounded-full px-2 py-0.5"
+                :class="tab === 'archived'
+                  ? ($store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
+                  : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
+                x-text="stats.archived"></span>
+        </button>
+      </div>
+      <!-- View mode toggle -->
+      <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
+           :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
+        <button @click="viewMode = 'card'; localStorage.setItem('pf-view', 'card')"
+                class="p-1.5 rounded-md transition"
+                :class="viewMode === 'card'
+                  ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                  : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                title="Card view">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </button>
+        <button @click="viewMode = 'list'; localStorage.setItem('pf-view', 'list')"
+                class="p-1.5 rounded-md transition"
+                :class="viewMode === 'list'
+                  ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                  : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                title="List view">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Upload panel (collapsible) -->
@@ -144,32 +171,24 @@
     </div>
 
     <!-- Paper cards grid -->
-    <div x-show="!loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div x-show="!loading && viewMode === 'card'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <template x-for="paper in filtered" :key="paper.name">
         <div class="card-enter rounded-xl shadow-sm border transition-all overflow-hidden"
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:shadow-lg hover:border-indigo-500' : 'bg-white border-gray-100 hover:shadow-md hover:border-indigo-200'">
-          <!-- Card body - clickable -->
           <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="block p-4">
             <h3 class="font-semibold text-sm leading-snug mb-2 line-clamp-2 transition-colors"
                 :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
                 x-text="paper.name"></h3>
-            <!-- Format badges -->
             <div class="flex flex-wrap gap-1.5 mb-2">
-              <span x-show="paper.formats.html"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">HTML</span>
-              <span x-show="paper.formats.md_ko"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">MD-KO</span>
-              <span x-show="paper.formats.md_en"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">MD-EN</span>
-              <span x-show="paper.formats.pdf"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">PDF</span>
+              <span x-show="paper.formats.html" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">HTML</span>
+              <span x-show="paper.formats.md_ko" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">MD-KO</span>
+              <span x-show="paper.formats.md_en" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">MD-EN</span>
+              <span x-show="paper.formats.pdf" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">PDF</span>
             </div>
             <p class="text-xs transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></p>
           </a>
-          <!-- Action buttons -->
           <div class="border-t px-4 py-2 flex justify-end space-x-1 transition-colors"
                :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-50'">
-            <!-- Archive (unread only) -->
             <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
                     class="p-1.5 rounded-lg transition"
                     :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400 hover:bg-gray-700' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'"
@@ -178,7 +197,6 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
               </svg>
             </button>
-            <!-- Restore (archived only) -->
             <button x-show="tab === 'archived'" @click.prevent="confirmAction('restore', paper)"
                     class="p-1.5 rounded-lg transition"
                     :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'"
@@ -187,12 +205,60 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
               </svg>
             </button>
-            <!-- Delete -->
             <button @click.prevent="confirmAction('delete', paper)"
                     class="p-1.5 rounded-lg transition"
                     :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'"
                     title="Delete">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Paper list view -->
+    <div x-show="!loading && viewMode === 'list'" class="space-y-1">
+      <template x-for="paper in filtered" :key="paper.name">
+        <div class="card-enter flex items-center rounded-lg border px-4 py-2.5 transition-all"
+             :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'">
+          <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="flex-1 min-w-0 flex items-center gap-4">
+            <h3 class="font-medium text-sm truncate transition-colors flex-1 min-w-0"
+                :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
+                x-text="paper.name"></h3>
+            <div class="flex gap-1 shrink-0">
+              <span x-show="paper.formats.html" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">HTML</span>
+              <span x-show="paper.formats.md_ko" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">KO</span>
+              <span x-show="paper.formats.md_en" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">EN</span>
+              <span x-show="paper.formats.pdf" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">PDF</span>
+            </div>
+            <span class="text-xs w-14 text-right shrink-0 transition-colors"
+                  :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                  x-text="paper.size_mb + ' MB'"></span>
+          </a>
+          <div class="flex items-center space-x-1 ml-3 shrink-0">
+            <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
+                    class="p-1 rounded transition"
+                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400' : 'text-gray-400 hover:text-emerald-600'"
+                    title="Archive">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+            </button>
+            <button x-show="tab === 'archived'" @click.prevent="confirmAction('restore', paper)"
+                    class="p-1 rounded transition"
+                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600'"
+                    title="Restore">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+              </svg>
+            </button>
+            <button @click.prevent="confirmAction('delete', paper)"
+                    class="p-1 rounded transition"
+                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-600'"
+                    title="Delete">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
               </svg>
             </button>
@@ -210,18 +276,19 @@
       <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="search ? 'No papers match your search.' : 'No papers yet. Upload a PDF to get started.'"></p>
     </div>
 
-    <!-- Log viewer (collapsible) -->
-    <div class="mt-8" x-data="{ open: false }">
-      <button @click="open = !open; if(open) loadLog()"
+    <!-- Log viewer (collapsible with auto-refresh) -->
+    <div class="mt-8">
+      <button @click="toggleLog()"
               class="flex items-center space-x-2 text-sm transition mb-2"
               :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400' : 'text-gray-500 hover:text-indigo-600'">
-        <svg class="w-4 h-4 transition-transform" :class="open && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 transition-transform" :class="logOpen && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
         </svg>
         <span>Processing Log</span>
+        <span x-show="logOpen" class="ml-1 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
       </button>
-      <div x-show="open" x-collapse x-cloak>
-        <div class="bg-gray-900 rounded-xl p-4 max-h-80 overflow-y-auto log-box text-gray-300 whitespace-pre-wrap"
+      <div x-show="logOpen" x-collapse x-cloak>
+        <div x-ref="logBox" class="bg-gray-900 rounded-xl p-4 max-h-80 overflow-y-auto log-box text-gray-300 whitespace-pre-wrap"
              x-text="logContent || 'Loading...'">
         </div>
       </div>
@@ -266,6 +333,9 @@ function papersApp() {
     uploading: false,
     stats: { unread: 0, archived: 0 },
     logContent: '',
+    logOpen: false,
+    logInterval: null,
+    viewMode: localStorage.getItem('pf-view') || 'card',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
 
     async init() {
@@ -383,12 +453,27 @@ function papersApp() {
       }
     },
 
+    toggleLog() {
+      this.logOpen = !this.logOpen;
+      if (this.logOpen) {
+        this.loadLog();
+        this.logInterval = setInterval(() => this.loadLog(), 3000);
+      } else {
+        clearInterval(this.logInterval);
+        this.logInterval = null;
+      }
+    },
+
     async loadLog() {
       try {
         const resp = await apiFetch('/api/logs/latest');
         if (resp) {
           const data = await resp.json();
           this.logContent = data.content || 'No logs found.';
+          this.$nextTick(() => {
+            const box = this.$refs.logBox;
+            if (box) box.scrollTop = box.scrollHeight;
+          });
         }
       } catch (e) {
         this.logContent = 'Failed to load logs.';

@@ -75,3 +75,10 @@ test*_files/
 
 # Model cache directory
 model_cache/
+
+# Playwright MCP screenshots
+.playwright-mcp/
+
+# Translation outputs
+translations/
+sample_pdf/

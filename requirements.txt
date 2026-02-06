@@ -2,8 +2,6 @@
 # Python >= 3.9 required (CUDA version)
 
 # Core dependencies
-requests>=2.32.5
-markdown-it-py>=3.0.0
 python-dotenv>=1.0.0
 pypdf2>=3.0.0
 

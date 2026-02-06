@@ -1,5 +1,8 @@
+import re
 import shutil
 from pathlib import Path
+
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
 from ..config import settings
 
@@ -16,6 +19,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
     """Build info dict for a single paper directory."""
     files: dict[str, bool] = {
         "html": False,
+        "html_ko": False,
         "pdf": False,
         "md_ko": False,
         "md_en": False,
@@ -24,6 +28,9 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         if not f.is_file():
             continue
         if f.name.endswith("_ko.html"):
+            files["html_ko"] = True
+            files["html"] = True  # backward compat: at least one HTML exists
+        elif f.name.endswith(".html") and not f.name.endswith("_ko.html"):
             files["html"] = True
         elif f.name.endswith(".pdf"):
             files["pdf"] = True
@@ -76,13 +83,18 @@ def _resolve_paper_dir(name: str) -> Path | None:
 
 
 def get_html_path(name: str) -> Path | None:
+    """Get HTML file path. Prefers _ko.html, falls back to .html."""
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
+    ko_html = None
+    en_html = None
     for f in paper_dir.iterdir():
         if f.name.endswith("_ko.html"):
-            return f
-    return None
+            ko_html = f
+        elif f.name.endswith(".html"):
+            en_html = f
+    return ko_html or en_html
 
 
 def get_pdf_path(name: str) -> Path | None:
@@ -114,6 +126,17 @@ def get_md_en_path(name: str) -> Path | None:
     for f in paper_dir.iterdir():
         if f.name.endswith(".md") and not f.name.endswith("_ko.md"):
             return f
+    return None
+
+
+def get_asset_path(name: str, filename: str) -> Path | None:
+    """Get path to an asset (image) in a paper directory."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    asset = paper_dir / filename
+    if asset.is_file() and paper_dir in asset.resolve().parents:
+        return asset
     return None
 
 
@@ -172,7 +195,7 @@ def get_latest_log() -> dict | None:
         content = latest.read_text(encoding="utf-8", errors="replace")
         # Return last 200 lines to keep response size reasonable
         lines = content.splitlines()
-        tail = "\n".join(lines[-200:])
+        tail = _ANSI_RE.sub("", "\n".join(lines[-200:]))
         return {"filename": latest.name, "content": tail, "total_lines": len(lines)}
     except Exception:
         return None

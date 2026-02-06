@@ -476,6 +476,11 @@ function viewerApp() {
             return content;
           });
 
+          // Rewrite relative image paths to API asset URLs
+          text = text.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (match, alt, src) => {
+            return `![${alt}](/api/papers/${name}/assets/${encodeURIComponent(src)})`;
+          });
+
           const html = marked.parse(text);
           if (type === 'md-ko') {
             this.mdKoContent = html;

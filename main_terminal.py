@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+import gc
 import json
 import os
+import re
 import subprocess
-import requests
 import time
 from pathlib import Path
-from markdown_it import MarkdownIt
 import base64
 from datetime import datetime
 import sys
@@ -72,10 +72,9 @@ def load_config():
             "render_to_html": True
         },
         "translation": {
-            "chunk_size_tokens": 800,
             "max_retries": 3,
             "retry_delay_seconds": 2,
-            "timeout_seconds": 120,
+            "timeout_seconds": 300,
             "preserve_english_html": True
         }
     }
@@ -108,40 +107,30 @@ def load_config():
     return default_config
 
 def load_prompt():
-    """Load prompt.md or return default"""
-    default_prompt = """I am a professional technical translator who converts English Markdown documents into Korean.
+    """Load prompt.md or return default translation prompt"""
+    default_prompt = """You are a professional academic translator. Translate the given English Markdown text into Korean.
 
-**Translation Rules:**
+**Core Rules:**
+- Use formal Korean academic writing style (합니다체).
+- **Strictly preserve all Markdown structure**: headers (#, ##, ###), bold/italics, lists, tables, links, image references.
+- **Preserve all mathematical equations** ($...$, $$...$$, LaTeX) exactly as-is. Do NOT modify or convert any math notation.
+- **Preserve all code blocks** (```...```) exactly as-is.
+- **Preserve all citations** ([1], (Smith et al., 2023), <sup>1</sup>) unchanged.
+- Translate table cell text only; preserve all table delimiters (|, ---).
+- Fix incorrect table syntax during translation if needed.
 
-- Accurately translate English sentences into clear and natural Korean.
-- **Strictly maintain the original Markdown structure.**
-- Do not change headers (`#`, `##`, `###`), bold/italics (`**`, `*`, `_`), lists (`-`, `*`), tables (`|`, `---`), or links/image URLs.
-- Translate only internal text, captions, and descriptions.
-- Structure the table format accurately so it can be rendered correctly.
--- **If the table syntax is incorrect, correct it during conversion.**
-- For all mathematical equations enclosed in `$`, `$$`:
--- **Preserves mathematical content intact.**
--- **Converts LaTeX syntax to Typst-compatible mathematical syntax** while preserving the intent of the equation (e.g., `$ frac{a}{b}$` → `$ a / b $`, inline; `$$x^2$$` → `$ x^2 $`, single line with spaces; matrices and special functions should be converted to their Typst-equivalent syntax).
--- **Translates only the text surrounding equations.**
--- **If the LaTeX syntax is incorrect, correct it during conversion.**
-- **Translates only the text content inside tables.** Preserves all markers and delimiters.
-- **Special terms (e.g., API, motor, bearing) and proper nouns must be followed by the original English text in parentheses.**
-- In cases of ambiguity, a natural and contextual translation is preferred over a literal translation.
-- Leave blank lines for untranslatable parts. Never include the original English text or apologies/explanations.
-- **Only the translated Korean text is output.** No explanations, commentaries, or original English text are included.
-- **The original English text or other languages are never output.**
-- If the input is already in Korean or another language, it is passed on as is without modification.
+**Terminology:**
+- On first occurrence of a technical term, use format: 한국어 번역 (English term)
+  - Example: 머신러닝 (machine learning), 신경망 (neural network)
+- After first occurrence, use the Korean term consistently.
+- Keep widely-used English terms as-is: API, GPU, CPU, CUDA, REST, HTTP, JSON, etc.
 
-**Additional Guidelines for Mathematical Equations:**
+**Style:**
+- Prefer natural, contextual Korean over literal translation.
+- Output ONLY the translated Korean text. No explanations, comments, or original English.
+- If input is already Korean, pass through unchanged.
 
-- **LaTeX → Typst Conversion:**
-- Replace LaTeX commands with their Typst equivalents (e.g., `frac{a}{b}` → `a / b` for inline commands, `frac(a, b)` for display commands, following Typst conventions).
--- Adjust delimiters ($...$, $$...$$ → $ ... $, or $$ ... $$).
-- Preserve function names and variables.
-- Map matrices, arrays, and special functions to Typst's built-in functions.
-- When in doubt, use Typst's math mode syntax for readability and logical consistency.
-
-Translate this English Markdown text into Korean, following the rules above."""
+Translate the following Markdown text into Korean:"""
 
     try:
         if os.path.exists("prompt.md"):
@@ -427,166 +416,289 @@ def convert_pdf_to_md(pdf_path, output_dir):
 
         return None
 
-def split_markdown_by_structure(content, max_tokens=800):
-    """Split markdown by structure"""
-    md = MarkdownIt()
-    tokens = md.parse(content)
+##############################################################################
+# Translation Pipeline
+# MD → [YAML분리] → [OCR정리] → [섹션분류] → [수식보호] → [번역] → [복원/결합]
+##############################################################################
 
-    chunks = []
-    current_chunk = []
-    current_token_count = 0
-    heading_level = None
+def split_yaml_and_body(content):
+    """Separate YAML frontmatter from markdown body.
 
-    for token in tokens:
-        if token.type == 'heading_open':
-            if current_chunk and current_token_count > max_tokens * 0.8:
-                chunk_text = ' '.join(current_chunk)
-                chunks.append(chunk_text)
-                current_chunk = []
-                current_token_count = 0
+    Returns:
+        (yaml_header, body) - yaml_header is empty string if none found
+    """
+    if content.startswith('---'):
+        end = content.find('---', 3)
+        if end != -1:
+            end += 3
+            yaml_header = content[:end]
+            body = content[end:].lstrip('\n')
+            return yaml_header, body
+    return '', content
 
-            try:
-                heading_level = int(token.tag[1])
-            except Exception:
-                heading_level = 1
+
+def clean_ocr_artifacts(text):
+    """Clean common OCR artifacts from marker-pdf output."""
+    import re
+    lines = text.split('\n')
+    cleaned = []
+
+    for line in lines:
+        stripped = line.strip()
+        # Skip standalone page numbers
+        if re.match(r'^[-–—]?\s*\d{1,4}\s*[-–—]?$', stripped):
+            continue
+        # Skip "Page N" / "Page N of M"
+        if re.match(r'^Page\s+\d+(\s+of\s+\d+)?$', stripped, re.IGNORECASE):
+            continue
+        # Skip copyright lines
+        if re.match(r'^[©®]\s*\d{4}', stripped):
+            continue
+        # Skip standalone DOI
+        if re.match(r'^(DOI|doi)\s*:\s*10\.', stripped):
+            continue
+        cleaned.append(line)
+
+    text = '\n'.join(cleaned)
+
+    # Fix hyphenation across lines: "compu-\nter" → "computer"
+    text = re.sub(r'(\w)-\n(\w)', r'\1\2', text)
+
+    # Fix marker-pdf author code block bug: ``` wrapping <sup> tags
+    text = re.sub(
+        r'```\n((?:.*?<sup>.*?</sup>.*?\n?)+)```',
+        r'\1',
+        text,
+        flags=re.DOTALL
+    )
+
+    return text
+
+
+def protect_special_blocks(text):
+    """Replace code blocks and math with placeholders before translation.
+
+    Returns:
+        (protected_text, placeholders_dict)
+    """
+    import re
+    placeholders = {}
+    counter = [0]
+
+    def _replace(match, prefix):
+        key = f"<<{prefix}_{counter[0]}>>"
+        placeholders[key] = match.group(0)
+        counter[0] += 1
+        return key
+
+    # Fenced code blocks (```...```)
+    text = re.sub(
+        r'```[\s\S]*?```',
+        lambda m: _replace(m, 'CODE_BLOCK'),
+        text
+    )
+
+    # Display math ($$...$$)
+    text = re.sub(
+        r'\$\$[\s\S]*?\$\$',
+        lambda m: _replace(m, 'MATH_BLOCK'),
+        text
+    )
+
+    # Inline math ($...$) - avoid matching dollar signs in text
+    text = re.sub(
+        r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)',
+        lambda m: _replace(m, 'INLINE_MATH'),
+        text
+    )
+
+    return text, placeholders
+
+
+def restore_special_blocks(text, placeholders):
+    """Restore placeholders back to original content."""
+    for key, value in placeholders.items():
+        text = text.replace(key, value)
+    return text
+
+
+# Section header translations for skip targets
+_SKIP_SECTION_HEADERS = {
+    'references': '참고문헌 (References)',
+    'bibliography': '참고문헌 (Bibliography)',
+    'appendix': '부록 (Appendix)',
+    'appendices': '부록 (Appendices)',
+    'supplementary material': '보충 자료 (Supplementary Material)',
+    'acknowledgements': '감사의 글 (Acknowledgements)',
+    'acknowledgments': '감사의 글 (Acknowledgments)',
+    'acknowledgement': '감사의 글 (Acknowledgement)',
+    'acknowledgment': '감사의 글 (Acknowledgment)',
+}
+
+
+def classify_sections(body):
+    """Split body by headings and classify each section.
+
+    Returns:
+        list of (section_text, should_translate: bool)
+    """
+    import re
+    # Split on markdown headings, keeping the heading with its content
+    parts = re.split(r'(^#{1,4}\s+.+$)', body, flags=re.MULTILINE)
+
+    sections = []
+    current_heading = None
+    current_body_parts = []
+
+    for part in parts:
+        if re.match(r'^#{1,4}\s+', part):
+            # Save previous section
+            if current_heading is not None or current_body_parts:
+                section_text = (current_heading + '\n' if current_heading else '') + '\n'.join(current_body_parts)
+                sections.append(section_text.strip())
+            current_heading = part
+            current_body_parts = []
+        else:
+            current_body_parts.append(part)
+
+    # Save last section
+    if current_heading is not None or current_body_parts:
+        section_text = (current_heading + '\n' if current_heading else '') + '\n'.join(current_body_parts)
+        sections.append(section_text.strip())
+
+    # Classify each section
+    classified = []
+    skip_remaining = False
+
+    for section in sections:
+        if not section:
             continue
 
-        if token.type == 'inline':
-            text_content = token.content
+        first_line = section.split('\n')[0]
+        heading_text = re.sub(r'^#{1,4}\s+', '', first_line).strip()
+        heading_lower = heading_text.lower().strip()
 
-            if heading_level is not None:
-                heading_markup = '#' * heading_level
-                line = f"{heading_markup} {text_content}"
-                token_count = len(text_content.split()) + heading_level
+        # Check if this section should be skipped
+        should_skip = skip_remaining
+        for skip_key in _SKIP_SECTION_HEADERS:
+            if skip_key in heading_lower:
+                should_skip = True
+                # Once we hit References, skip everything after
+                if skip_key in ('references', 'bibliography'):
+                    skip_remaining = True
+                break
 
-                if current_token_count + token_count > max_tokens and current_chunk:
-                    chunk_text = ' '.join(current_chunk)
-                    chunks.append(chunk_text)
-                    current_chunk = []
-                    current_token_count = 0
+        if should_skip:
+            # Translate only the heading, keep body as-is
+            heading_match = re.match(r'^(#{1,4})\s+(.+)$', first_line)
+            if heading_match:
+                level = heading_match.group(1)
+                original_title = heading_match.group(2).strip()
+                title_lower = original_title.lower()
+                # Find matching translation
+                translated_title = original_title
+                for skip_key, ko_title in _SKIP_SECTION_HEADERS.items():
+                    if skip_key in title_lower:
+                        translated_title = ko_title
+                        break
+                rest = section[len(first_line):]
+                section = f"{level} {translated_title}{rest}"
 
-                current_chunk.append(line)
-                current_token_count += token_count
-                heading_level = None
-            else:
-                token_count = len(text_content.split())
-
-                if current_token_count + token_count > max_tokens and current_chunk:
-                    chunk_text = ' '.join(current_chunk)
-                    chunks.append(chunk_text)
-                    current_chunk = []
-                    current_token_count = 0
-
-                current_chunk.append(text_content)
-                current_token_count += token_count
-
-        elif token.type in ['paragraph_open', 'bullet_list_open', 'ordered_list_open']:
-            if current_chunk and current_token_count > max_tokens * 0.8:
-                chunk_text = ' '.join(current_chunk)
-                chunks.append(chunk_text)
-                current_chunk = []
-                current_token_count = 0
-
-    if current_chunk:
-        chunk_text = ' '.join(current_chunk)
-        chunks.append(chunk_text)
-
-    # Refine chunks
-    refined_chunks = []
-    for chunk in chunks:
-        token_count = len(chunk.split())
-        if token_count > max_tokens:
-            paragraphs = chunk.split('\n\n')
-            sub_chunk = []
-            sub_token_count = 0
-
-            for para in paragraphs:
-                para_tokens = len(para.split())
-                if sub_token_count + para_tokens > max_tokens and sub_chunk:
-                    refined_chunks.append('\n\n'.join(sub_chunk))
-                    sub_chunk = []
-                    sub_token_count = 0
-
-                sub_chunk.append(para)
-                sub_token_count += para_tokens
-
-            if sub_chunk:
-                refined_chunks.append('\n\n'.join(sub_chunk))
+            classified.append((section, False))
         else:
-            refined_chunks.append(chunk)
+            classified.append((section, True))
 
-    return refined_chunks
+    return classified
 
-def split_text_simple(text, max_tokens=800):
-    """Simple text splitting (fallback)"""
-    tokens = text.split()
-    chunks = []
-    current_chunk = []
-    current_token_count = 0
 
-    for token in tokens:
-        if current_token_count + 1 > max_tokens:
-            if current_chunk:
-                chunks.append(' '.join(current_chunk))
-                current_chunk = []
-                current_token_count = 0
+def estimate_tokens(text):
+    """Rough token estimate. English words * 1.3 approximation."""
+    return int(len(text.split()) * 1.3)
 
-        current_chunk.append(token)
-        current_token_count += 1
 
-    if current_chunk:
-        chunks.append(' '.join(current_chunk))
+def _call_translation_api(client, model, system_prompt, content, config):
+    """Call OpenAI-compatible API with streaming and retry logic.
 
-    return chunks
+    Returns:
+        translated text or None on failure
+    """
+    import time
+
+    max_retries = config.get("translation", {}).get("max_retries", 3)
+    retry_delay = config.get("translation", {}).get("retry_delay_seconds", 2)
+    timeout = config.get("translation", {}).get("timeout_seconds", 300)
+    temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "0.3"))
+    max_tokens = int(os.getenv("TRANSLATION_MAX_TOKENS", "16384"))
+
+    for attempt in range(max_retries):
+        try:
+            print_info(f"Calling API... (attempt {attempt+1}/{max_retries}, timeout={timeout}s)")
+            start_time = time.time()
+            stream = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": content}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+                stream=True
+            )
+
+            chunks = []
+            char_count = 0
+            last_report = 0
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    text = chunk.choices[0].delta.content
+                    chunks.append(text)
+                    char_count += len(text)
+                    # Report progress every 1000 chars
+                    if char_count - last_report >= 1000:
+                        elapsed = time.time() - start_time
+                        print(f"\r{Colors.OKCYAN}  ↳ Receiving: {char_count:,} chars ({elapsed:.0f}s){Colors.ENDC}", end="", flush=True)
+                        last_report = char_count
+
+            elapsed = time.time() - start_time
+            print(f"\r{Colors.OKCYAN}  ↳ Received: {char_count:,} chars in {elapsed:.1f}s{Colors.ENDC}          ")
+            return ''.join(chunks)
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = retry_delay * (attempt + 1)
+                print_warning(f"API call failed (attempt {attempt+1}/{max_retries}): {e}")
+                print_info(f"Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                print_error(f"API call failed after {max_retries} attempts: {e}")
+                return None
+
 
 def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
-    """
-    Translate English markdown to Korean using OpenAI-compatible API
+    """Translate English markdown to Korean using OpenAI-compatible API.
 
-    Args:
-        md_path: Path to source English markdown file
-        output_dir: Output directory for Korean markdown
-        config: Translation configuration dict
-        system_prompt: Translation instructions
+    Pipeline: YAML分離 → OCR정리 → 수식보호 → 섹션분류 → 번역 → 복원/결합
 
     Returns:
         Path to Korean markdown file (*_ko.md) or None on failure
     """
-    import time
     from pathlib import Path
     from dotenv import load_dotenv
 
     try:
-        # Load environment variables
         load_dotenv()
 
         api_base = os.getenv("OPENAI_BASE_URL")
         api_key = os.getenv("OPENAI_API_KEY")
         model = os.getenv("TRANSLATION_MODEL", "gpt-4o")
 
-        # Validate API configuration
         if not api_base or not api_key:
             print_error("OPENAI_BASE_URL or OPENAI_API_KEY not set in .env")
             return None
 
-        print_info(f"Using translation model: {model}")
+        print_info(f"Translation model: {model}")
         print_info(f"API endpoint: {api_base}")
-
-        # Read source markdown
-        with open(md_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Chunk content (reuse existing function)
-        chunk_size = config.get("translation", {}).get("chunk_size_tokens", 800)
-        print_info(f"Chunking markdown (max {chunk_size} tokens per chunk)...")
-
-        try:
-            chunks = split_markdown_by_structure(content, max_tokens=chunk_size)
-            print_success(f"Structure-aware chunking: {len(chunks)} chunks")
-        except Exception as e:
-            print_warning(f"Structure-aware chunking failed, using simple fallback: {e}")
-            chunks = split_text_simple(content, max_tokens=chunk_size)
-            print_success(f"Simple chunking: {len(chunks)} chunks")
 
         # Initialize OpenAI client
         try:
@@ -596,81 +708,119 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
             print_error(f"Failed to initialize OpenAI client: {e}")
             return None
 
-        # Prepare output file with YAML header
+        # Read source markdown
+        with open(md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Step 1: Separate YAML frontmatter
+        _, body = split_yaml_and_body(content)
+        print_info("YAML frontmatter separated (will use header.yaml for output)")
+
+        # Step 2: Clean OCR artifacts
+        body = clean_ocr_artifacts(body)
+        print_success("OCR artifacts cleaned")
+
+        # Step 3: Protect code blocks and math
+        body, placeholders = protect_special_blocks(body)
+        if placeholders:
+            print_info(f"Protected {len(placeholders)} special block(s) (code/math)")
+
+        # Step 4: Classify sections
+        sections = classify_sections(body)
+        translatable = [(s, t) for s, t in sections if t]
+        skipped = [(s, t) for s, t in sections if not t]
+        print_info(f"Sections: {len(translatable)} to translate, {len(skipped)} to skip")
+
+        # Step 5: Translate
+        total_tokens = estimate_tokens(' '.join(s for s, _ in translatable))
+        print_info(f"Estimated tokens: ~{total_tokens:,}")
+
+        translated_sections = []
+
+        if total_tokens < 60000:
+            # Strategy A: Full document translation (single API call)
+            print_info("Strategy: Full document translation (single API call)")
+            translatable_body = '\n\n'.join(s for s, _ in sections if _)
+
+            result = _call_translation_api(client, model, system_prompt, translatable_body, config)
+            if not result:
+                print_error("Full document translation failed")
+                return None
+
+            # Reconstruct: insert translated content and skipped sections in order
+            # For full translation, the result contains all translatable sections
+            # We need to interleave with skipped sections
+            translated_parts = []
+            skip_idx = 0
+            translate_done = False
+
+            for section_text, should_translate in sections:
+                if should_translate and not translate_done:
+                    # Insert the full translation result at the position of first translatable section
+                    translated_parts.append(result)
+                    translate_done = True
+                elif should_translate:
+                    # Already included in full translation
+                    continue
+                else:
+                    translated_parts.append(section_text)
+
+            final_body = '\n\n'.join(translated_parts)
+            print_success("Full document translation complete")
+
+        else:
+            # Strategy B: Section-by-section translation
+            print_info(f"Strategy: Section-by-section translation ({len(sections)} sections)")
+            prev_context = ""
+            translated_parts = []
+
+            for i, (section_text, should_translate) in enumerate(sections, 1):
+                if should_translate:
+                    print_progress(i, len(sections), f"Translating section {i}/{len(sections)}")
+
+                    # Add context from previous translation
+                    prompt_with_context = system_prompt
+                    if prev_context:
+                        prompt_with_context += f"\n\n[Previous section context for terminology consistency: {prev_context}]"
+
+                    result = _call_translation_api(client, model, prompt_with_context, section_text, config)
+                    if not result:
+                        print_error(f"Section {i} translation failed")
+                        return None
+
+                    translated_parts.append(result)
+                    # Keep last 200 chars as context for next section
+                    prev_context = result[-200:] if len(result) > 200 else result
+                else:
+                    translated_parts.append(section_text)
+
+            final_body = '\n\n'.join(translated_parts)
+            print_success("Section-by-section translation complete")
+
+        # Step 6: Restore protected blocks
+        final_body = restore_special_blocks(final_body, placeholders)
+
+        # Step 7: Write output with header.yaml
         base_name = os.path.basename(md_path).replace('.md', '')
         ko_md_path = os.path.join(output_dir, f"{base_name}_ko.md")
 
-        # Prepend header.yaml
         header_path = Path("header.yaml")
+        header = ''
         if header_path.exists():
             with open(header_path, 'r', encoding='utf-8') as f:
                 header = f.read()
-
-            with open(ko_md_path, 'w', encoding='utf-8') as f:
-                f.write(header)
-                if not header.endswith('\n'):
-                    f.write('\n')
-                f.write('\n')
         else:
-            print_warning("header.yaml not found, skipping YAML header")
-            # Create empty file
-            with open(ko_md_path, 'w', encoding='utf-8') as f:
-                pass
+            print_warning("header.yaml not found, using minimal header")
+            header = '---\nlang: ko\nformat:\n  html:\n    toc: true\n    embed-resources: true\n    theme: cosmo\n---'
 
-        # Translate chunks incrementally
-        total_chunks = len(chunks)
-        max_retries = config.get("translation", {}).get("max_retries", 3)
-        retry_delay = config.get("translation", {}).get("retry_delay_seconds", 2)
-        timeout = config.get("translation", {}).get("timeout_seconds", 120)
-        temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "0.3"))
-        max_tokens = int(os.getenv("TRANSLATION_MAX_TOKENS", "4096"))
+        with open(ko_md_path, 'w', encoding='utf-8') as f:
+            f.write(header)
+            if not header.endswith('\n'):
+                f.write('\n')
+            f.write('\n')
+            f.write(final_body)
 
-        print_info(f"Starting translation...")
-        print_info(f"Settings: max_retries={max_retries}, timeout={timeout}s, temperature={temperature}")
-
-        for i, chunk in enumerate(chunks, 1):
-            print_progress(i, total_chunks, f"Translating chunk {i}/{total_chunks}")
-
-            # Retry logic
-            translated = None
-            for attempt in range(max_retries):
-                try:
-                    response = client.chat.completions.create(
-                        model=model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": chunk}
-                        ],
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        timeout=timeout
-                    )
-
-                    translated = response.choices[0].message.content
-
-                    # Append incrementally (crash recovery)
-                    with open(ko_md_path, 'a', encoding='utf-8') as f:
-                        f.write(translated)
-                        f.write('\n\n')
-                        f.flush()  # Force write to disk
-
-                    break  # Success
-
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (attempt + 1)  # Exponential backoff
-                        print_warning(f"Translation failed (attempt {attempt+1}/{max_retries}): {e}")
-                        print_info(f"Retrying in {wait_time} seconds...")
-                        time.sleep(wait_time)
-                    else:
-                        print_error(f"Translation failed after {max_retries} attempts: {e}")
-                        return None
-
-            if not translated:
-                print_error(f"Failed to translate chunk {i}/{total_chunks}")
-                return None
-
-        print_success(f"Translation complete: {ko_md_path}")
+        print_success(f"Translation saved: {ko_md_path}")
         return ko_md_path
 
     except Exception as e:

@@ -5,10 +5,9 @@
     "render_to_html": true
   },
   "translation": {
-    "chunk_size_tokens": 800,
     "max_retries": 3,
     "retry_delay_seconds": 2,
-    "timeout_seconds": 120,
+    "timeout_seconds": 300,
     "preserve_english_html": true
   }
 }

@@ -113,6 +113,19 @@ async def serve_md_en(name: str, _user: str = Depends(get_current_user_api)):
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
+@router.get("/papers/{name:path}/assets/{filename}")
+async def serve_asset(name: str, filename: str, _user: str = Depends(get_current_user_api)):
+    name = unquote(name)
+    filename = unquote(filename)
+    path = paper_svc.get_asset_path(name, filename)
+    if not path:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    # Guess media type from extension
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    media_types = {"jpeg": "image/jpeg", "jpg": "image/jpeg", "png": "image/png", "gif": "image/gif", "svg": "image/svg+xml"}
+    return FileResponse(path, media_type=media_types.get(ext, "application/octet-stream"))
+
+
 # ── Upload ──────────────────────────────────────────────────────────────────
 
 @router.post("/upload")

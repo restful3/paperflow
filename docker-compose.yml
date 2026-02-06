@@ -11,10 +11,12 @@ services:
       - ./logs:/app/logs
       - ./config.json:/app/config.json
       - ./model_cache:/root/.cache/datalab/models
+    env_file:
+      - .env
     environment:
-      - OLLAMA_URL=http://host.docker.internal:11434
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - OPENAI_BASE_URL=http://host.docker.internal:8317/v1
     deploy:
       resources:
         reservations:
