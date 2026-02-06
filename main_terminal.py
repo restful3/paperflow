@@ -68,7 +68,15 @@ def load_config():
     default_config = {
         "processing_pipeline": {
             "convert_to_markdown": True,
+            "translate_to_korean": False,
             "render_to_html": True
+        },
+        "translation": {
+            "chunk_size_tokens": 800,
+            "max_retries": 3,
+            "retry_delay_seconds": 2,
+            "timeout_seconds": 120,
+            "preserve_english_html": True
         }
     }
 
@@ -91,6 +99,10 @@ def load_config():
     pipeline = default_config["processing_pipeline"]
     if pipeline["render_to_html"]:
         # HTML rendering requires markdown conversion
+        pipeline["convert_to_markdown"] = True
+
+    if pipeline.get("translate_to_korean", False):
+        # Translation requires markdown conversion
         pipeline["convert_to_markdown"] = True
 
     return default_config
@@ -527,6 +539,146 @@ def split_text_simple(text, max_tokens=800):
 
     return chunks
 
+def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
+    """
+    Translate English markdown to Korean using OpenAI-compatible API
+
+    Args:
+        md_path: Path to source English markdown file
+        output_dir: Output directory for Korean markdown
+        config: Translation configuration dict
+        system_prompt: Translation instructions
+
+    Returns:
+        Path to Korean markdown file (*_ko.md) or None on failure
+    """
+    import time
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    try:
+        # Load environment variables
+        load_dotenv()
+
+        api_base = os.getenv("OPENAI_BASE_URL")
+        api_key = os.getenv("OPENAI_API_KEY")
+        model = os.getenv("TRANSLATION_MODEL", "gpt-4o")
+
+        # Validate API configuration
+        if not api_base or not api_key:
+            print_error("OPENAI_BASE_URL or OPENAI_API_KEY not set in .env")
+            return None
+
+        print_info(f"Using translation model: {model}")
+        print_info(f"API endpoint: {api_base}")
+
+        # Read source markdown
+        with open(md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Chunk content (reuse existing function)
+        chunk_size = config.get("translation", {}).get("chunk_size_tokens", 800)
+        print_info(f"Chunking markdown (max {chunk_size} tokens per chunk)...")
+
+        try:
+            chunks = split_markdown_by_structure(content, max_tokens=chunk_size)
+            print_success(f"Structure-aware chunking: {len(chunks)} chunks")
+        except Exception as e:
+            print_warning(f"Structure-aware chunking failed, using simple fallback: {e}")
+            chunks = split_text_simple(content, max_tokens=chunk_size)
+            print_success(f"Simple chunking: {len(chunks)} chunks")
+
+        # Initialize OpenAI client
+        try:
+            from openai import OpenAI
+            client = OpenAI(base_url=api_base, api_key=api_key)
+        except Exception as e:
+            print_error(f"Failed to initialize OpenAI client: {e}")
+            return None
+
+        # Prepare output file with YAML header
+        base_name = os.path.basename(md_path).replace('.md', '')
+        ko_md_path = os.path.join(output_dir, f"{base_name}_ko.md")
+
+        # Prepend header.yaml
+        header_path = Path("header.yaml")
+        if header_path.exists():
+            with open(header_path, 'r', encoding='utf-8') as f:
+                header = f.read()
+
+            with open(ko_md_path, 'w', encoding='utf-8') as f:
+                f.write(header)
+                if not header.endswith('\n'):
+                    f.write('\n')
+                f.write('\n')
+        else:
+            print_warning("header.yaml not found, skipping YAML header")
+            # Create empty file
+            with open(ko_md_path, 'w', encoding='utf-8') as f:
+                pass
+
+        # Translate chunks incrementally
+        total_chunks = len(chunks)
+        max_retries = config.get("translation", {}).get("max_retries", 3)
+        retry_delay = config.get("translation", {}).get("retry_delay_seconds", 2)
+        timeout = config.get("translation", {}).get("timeout_seconds", 120)
+        temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "0.3"))
+        max_tokens = int(os.getenv("TRANSLATION_MAX_TOKENS", "4096"))
+
+        print_info(f"Starting translation...")
+        print_info(f"Settings: max_retries={max_retries}, timeout={timeout}s, temperature={temperature}")
+
+        for i, chunk in enumerate(chunks, 1):
+            print_progress(i, total_chunks, f"Translating chunk {i}/{total_chunks}")
+
+            # Retry logic
+            translated = None
+            for attempt in range(max_retries):
+                try:
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": chunk}
+                        ],
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        timeout=timeout
+                    )
+
+                    translated = response.choices[0].message.content
+
+                    # Append incrementally (crash recovery)
+                    with open(ko_md_path, 'a', encoding='utf-8') as f:
+                        f.write(translated)
+                        f.write('\n\n')
+                        f.flush()  # Force write to disk
+
+                    break  # Success
+
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delay * (attempt + 1)  # Exponential backoff
+                        print_warning(f"Translation failed (attempt {attempt+1}/{max_retries}): {e}")
+                        print_info(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                    else:
+                        print_error(f"Translation failed after {max_retries} attempts: {e}")
+                        return None
+
+            if not translated:
+                print_error(f"Failed to translate chunk {i}/{total_chunks}")
+                return None
+
+        print_success(f"Translation complete: {ko_md_path}")
+        return ko_md_path
+
+    except Exception as e:
+        print_error(f"Translation error: {e}")
+        import traceback
+        print_error(traceback.format_exc())
+        return None
+
 def render_md_to_html(md_path):
     """Render MD to HTML using Quarto with fallback for YAML parsing issues"""
     try:
@@ -673,6 +825,7 @@ def process_single_pdf(pdf_path, config, prompt):
         # Display pipeline configuration
         print_info("Pipeline configuration:")
         print_info(f"  • PDF → Markdown: {'Enabled' if pipeline['convert_to_markdown'] else 'Disabled'}")
+        print_info(f"  • Translation (Korean): {'Enabled' if pipeline.get('translate_to_korean', False) else 'Disabled'}")
         print_info(f"  • Markdown → HTML: {'Enabled' if pipeline['render_to_html'] else 'Disabled'}")
         print()
 
@@ -687,7 +840,9 @@ def process_single_pdf(pdf_path, config, prompt):
         # Track processing results
         results = {
             "markdown": None,
-            "html": None
+            "translation": None,
+            "html_en": None,
+            "html_ko": None
         }
 
         # Step 1: PDF to MD (conditional)
@@ -716,30 +871,72 @@ def process_single_pdf(pdf_path, config, prompt):
                 print_warning(f"Markdown conversion disabled and no existing file found")
                 results["markdown"] = "skipped"
 
-        # Step 2: Render to HTML (conditional)
-        html_output = None
-        if pipeline["render_to_html"]:
+        # Step 2: Translation (optional)
+        ko_md_path = None
+        if pipeline.get("translate_to_korean", False):
             if md_path and os.path.exists(md_path):
-                print_info(f"Step 2: Rendering to HTML...")
+                print_info(f"Step 2: Translating to Korean...")
                 try:
-                    html_output = render_md_to_html(md_path)
-                    if html_output:
-                        print_success(f"HTML rendering complete: {html_output}")
-                        results["html"] = "success"
+                    ko_md_path = translate_md_to_korean_openai(
+                        md_path, output_dir, config, prompt
+                    )
+                    if ko_md_path:
+                        print_success(f"Translation complete: {ko_md_path}")
+                        results["translation"] = "success"
                     else:
-                        print_warning(f"HTML rendering failed (markdown is still available)")
-                        results["html"] = "failed"
+                        print_warning(f"Translation failed (English files remain available)")
+                        results["translation"] = "failed"
                 except Exception as e:
-                    print_error(f"HTML rendering error: {e}")
-                    results["html"] = "failed"
+                    print_error(f"Translation error: {e}")
+                    results["translation"] = "failed"
             else:
-                print_warning(f"HTML rendering skipped: no markdown available")
-                results["html"] = "skipped"
+                print_warning(f"Translation skipped: no markdown available")
+                results["translation"] = "skipped"
+        else:
+            results["translation"] = "skipped"
+
+        # Step 3: Render to HTML (conditional)
+        if pipeline["render_to_html"]:
+            # Step 3a: Render English HTML
+            preserve_en = config.get("translation", {}).get("preserve_english_html", True)
+            if md_path and os.path.exists(md_path) and (preserve_en or not pipeline.get("translate_to_korean", False)):
+                print_info(f"Step 3a: Rendering English HTML...")
+                try:
+                    html_en = render_md_to_html(md_path)
+                    if html_en:
+                        print_success(f"English HTML complete: {html_en}")
+                        results["html_en"] = "success"
+                    else:
+                        print_warning(f"English HTML rendering failed")
+                        results["html_en"] = "failed"
+                except Exception as e:
+                    print_error(f"English HTML rendering error: {e}")
+                    results["html_en"] = "failed"
+            else:
+                results["html_en"] = "skipped"
+
+            # Step 3b: Render Korean HTML
+            if ko_md_path and os.path.exists(ko_md_path):
+                print_info(f"Step 3b: Rendering Korean HTML...")
+                try:
+                    html_ko = render_md_to_html(ko_md_path)
+                    if html_ko:
+                        print_success(f"Korean HTML complete: {html_ko}")
+                        results["html_ko"] = "success"
+                    else:
+                        print_warning(f"Korean HTML rendering failed")
+                        results["html_ko"] = "failed"
+                except Exception as e:
+                    print_error(f"Korean HTML rendering error: {e}")
+                    results["html_ko"] = "failed"
+            else:
+                results["html_ko"] = "skipped"
         else:
             print_info(f"HTML rendering disabled")
-            results["html"] = "skipped"
+            results["html_en"] = "skipped"
+            results["html_ko"] = "skipped"
 
-        # Step 3: Move processed PDF to output directory
+        # Step 4: Move processed PDF to output directory
         print_info(f"Moving source PDF to output directory...")
         dest_pdf = os.path.join(output_dir, pdf_name)
         try:
@@ -813,7 +1010,7 @@ def main():
 
     # Load configuration
     config = load_config()
-    prompt = None  # No longer used (translation removed)
+    prompt = load_prompt()
 
     # Check services
     if not check_services(config):

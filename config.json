@@ -1,6 +1,14 @@
 {
   "processing_pipeline": {
     "convert_to_markdown": true,
+    "translate_to_korean": true,
     "render_to_html": true
+  },
+  "translation": {
+    "chunk_size_tokens": 800,
+    "max_retries": 3,
+    "retry_delay_seconds": 2,
+    "timeout_seconds": 120,
+    "preserve_english_html": true
   }
 }
