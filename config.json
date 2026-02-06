@@ -19,6 +19,11 @@
     "max_retries": 3,
     "retry_delay_seconds": 2,
     "timeout_seconds": 300,
-    "preserve_english_html": true
+    "preserve_english_html": true,
+    "max_section_chars": 3000,
+    "verify_translation": true,
+    "enable_parallel_translation": true,
+    "parallel_max_workers": 3,
+    "parallel_min_chunks": 2
   }
 }

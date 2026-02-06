@@ -47,17 +47,17 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     has_md_en = info["formats"]["md_en"] if info else False
     location = info["location"] if info else "outputs"
 
-    # Default view priority: html > md_ko > pdf > md_en
-    if has_html:
-        default_view = "html"
-    elif has_md_ko:
+    # Default view priority: md_ko > md_en > html > pdf
+    if has_md_ko:
         default_view = "md-ko"
-    elif has_pdf:
-        default_view = "pdf"
     elif has_md_en:
         default_view = "md-en"
-    else:
+    elif has_html:
         default_view = "html"
+    elif has_pdf:
+        default_view = "pdf"
+    else:
+        default_view = "md-ko"
 
     paper_title = info.get("title") if info else None
     paper_title_ko = info.get("title_ko") if info else None

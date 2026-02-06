@@ -86,7 +86,12 @@ def load_config():
             "max_retries": 3,
             "retry_delay_seconds": 2,
             "timeout_seconds": 300,
-            "preserve_english_html": True
+            "preserve_english_html": True,
+            "max_section_chars": 3000,
+            "verify_translation": True,
+            "enable_parallel_translation": True,
+            "parallel_max_workers": 3,
+            "parallel_min_chunks": 2
         }
     }
 
@@ -123,6 +128,14 @@ def load_config():
 def load_prompt():
     """Load prompt.md or return default translation prompt"""
     default_prompt = """You are a professional academic translator. Translate the given English Markdown text into Korean.
+
+**Critical - Completeness:**
+- Translate EVERY sentence completely. Do NOT skip, omit, summarize, or condense any content.
+- The translation must cover 100% of the source text. Every paragraph, every sentence must appear in the output.
+- If the input has N paragraphs, the output MUST also have N paragraphs.
+- Do NOT add any content that is not in the original text.
+- Never replace content with "..." or "(이하 생략)" or similar.
+- Translate figure/table captions and footnotes fully.
 
 **Core Rules:**
 - Use formal Korean academic writing style (합니다체).
@@ -295,6 +308,10 @@ def convert_pdf_to_md(pdf_path, output_dir):
         # Save markdown
         md_path = os.path.join(output_dir, os.path.basename(pdf_path).replace('.pdf', '.md'))
         print_info(f"Saving markdown to: {md_path}")
+        # Ensure output directory exists (guards against Docker bind mount sync issues)
+        if not os.path.isdir(output_dir):
+            print_warning(f"Output directory missing, recreating: {output_dir}")
+            os.makedirs(output_dir, exist_ok=True)
         with open(md_path, 'w', encoding='utf-8') as f:
             f.write(full_text)
 
@@ -720,11 +737,11 @@ def clean_ocr_artifacts(text):
     text = re.sub(r'(\w)-\n(\w)', r'\1\2', text)
 
     # Fix marker-pdf author code block bug: ``` wrapping <sup> tags
+    # Use [^\n]* instead of .*? with DOTALL to prevent catastrophic backtracking
     text = re.sub(
-        r'```\n((?:.*?<sup>.*?</sup>.*?\n?)+)```',
+        r'```\n((?:[^\n]*<sup>[^\n]*</sup>[^\n]*\n)+)```',
         r'\1',
-        text,
-        flags=re.DOTALL
+        text
     )
 
     return text
@@ -866,13 +883,80 @@ def classify_sections(body):
     return classified
 
 
+def _split_long_section(section_text, max_chars=5000):
+    """Split a long section into chunks at paragraph boundaries.
+
+    Returns:
+        list of text chunks, each <= max_chars (best effort)
+    """
+    if len(section_text) <= max_chars:
+        return [section_text]
+
+    paragraphs = section_text.split('\n\n')
+    chunks = []
+    current_chunk = []
+    current_len = 0
+
+    for para in paragraphs:
+        para_len = len(para) + 2  # +2 for \n\n separator
+        if current_len + para_len > max_chars and current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+            current_chunk = [para]
+            current_len = para_len
+        else:
+            current_chunk.append(para)
+            current_len += para_len
+
+    if current_chunk:
+        chunks.append('\n\n'.join(current_chunk))
+
+    return chunks if chunks else [section_text]
+
+
+def _verify_translation(source_text, translated_text):
+    """Verify translation completeness by comparing structural metrics.
+
+    Returns:
+        (is_ok: bool, reason: str)
+    """
+    source_len = len(source_text)
+    trans_len = len(translated_text)
+
+    if source_len == 0:
+        return True, "ok"
+
+    ratio = trans_len / source_len
+
+    # Korean is typically 0.5~1.2x the length of English
+    if ratio < 0.4:
+        return False, f"too short ({ratio:.0%} of source)"
+
+    # Compare markdown heading counts
+    source_headings = len(re.findall(r'^#{1,4}\s+', source_text, re.MULTILINE))
+    trans_headings = len(re.findall(r'^#{1,4}\s+', translated_text, re.MULTILINE))
+    if source_headings > 0 and trans_headings < source_headings * 0.5:
+        return False, f"headings missing ({trans_headings}/{source_headings})"
+
+    # Compare paragraph counts
+    source_paras = len([p for p in source_text.split('\n\n') if p.strip()])
+    trans_paras = len([p for p in translated_text.split('\n\n') if p.strip()])
+    if source_paras > 3 and trans_paras < source_paras * 0.5:
+        return False, f"paragraphs missing ({trans_paras}/{source_paras})"
+
+    return True, "ok"
+
+
 def estimate_tokens(text):
     """Rough token estimate. English words * 1.3 approximation."""
     return int(len(text.split()) * 1.3)
 
 
-def _call_translation_api(client, model, system_prompt, content, config):
-    """Call OpenAI-compatible API with streaming and retry logic.
+def _call_translation_api(client, model, system_prompt, content, config, source_chars=0, max_tokens_override=0):
+    """Call OpenAI-compatible API with streaming, progress bar, and retry logic.
+
+    Args:
+        source_chars: Length of source text for progress estimation (0 = no progress bar)
+        max_tokens_override: Dynamic max_tokens value (0 = use env/default)
 
     Returns:
         translated text or None on failure
@@ -883,7 +967,18 @@ def _call_translation_api(client, model, system_prompt, content, config):
     retry_delay = config.get("translation", {}).get("retry_delay_seconds", 2)
     timeout = config.get("translation", {}).get("timeout_seconds", 300)
     temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "0.3"))
-    max_tokens = int(os.getenv("TRANSLATION_MAX_TOKENS", "16384"))
+
+    # Dynamic max_tokens: use override, then env, then calculate from source
+    if max_tokens_override > 0:
+        max_tokens = max_tokens_override
+    else:
+        env_max = int(os.getenv("TRANSLATION_MAX_TOKENS", "0"))
+        if env_max > 0:
+            max_tokens = env_max
+        else:
+            # Auto-calculate: Korean tokens ~1.8x English source tokens
+            source_token_est = estimate_tokens(content)
+            max_tokens = max(int(source_token_est * 1.8), 4096)
 
     for attempt in range(max_retries):
         try:
@@ -909,14 +1004,23 @@ def _call_translation_api(client, model, system_prompt, content, config):
                     text = chunk.choices[0].delta.content
                     chunks.append(text)
                     char_count += len(text)
-                    # Report progress every 1000 chars
-                    if char_count - last_report >= 1000:
+                    # Report progress every 500 chars
+                    if char_count - last_report >= 500:
                         elapsed = time.time() - start_time
-                        print(f"\r{Colors.OKCYAN}  ↳ Receiving: {char_count:,} chars ({elapsed:.0f}s){Colors.ENDC}", end="", flush=True)
+                        if source_chars > 0:
+                            # Korean is ~0.7~1.0x length of English
+                            estimated_total = int(source_chars * 0.85)
+                            pct = min(char_count / estimated_total * 100, 99) if estimated_total > 0 else 0
+                            bar_len = 20
+                            filled = int(bar_len * pct / 100)
+                            bar = '\u2588' * filled + '\u2591' * (bar_len - filled)
+                            print(f"\r{Colors.OKCYAN}  \u21b3 [{bar}] {pct:.0f}% ({char_count:,} chars, {elapsed:.0f}s){Colors.ENDC}", end="", flush=True)
+                        else:
+                            print(f"\r{Colors.OKCYAN}  \u21b3 Receiving: {char_count:,} chars ({elapsed:.0f}s){Colors.ENDC}", end="", flush=True)
                         last_report = char_count
 
             elapsed = time.time() - start_time
-            print(f"\r{Colors.OKCYAN}  ↳ Received: {char_count:,} chars in {elapsed:.1f}s{Colors.ENDC}          ")
+            print(f"\r{Colors.OKCYAN}  \u21b3 Received: {char_count:,} chars in {elapsed:.1f}s{Colors.ENDC}          ")
             return ''.join(chunks)
 
         except Exception as e:
@@ -928,6 +1032,143 @@ def _call_translation_api(client, model, system_prompt, content, config):
             else:
                 print_error(f"API call failed after {max_retries} attempts: {e}")
                 return None
+
+
+async def _call_translation_api_async(client, model, system_prompt, content, config,
+                                       source_chars=0, max_tokens_override=0):
+    """Async version of _call_translation_api with identical logic.
+
+    Args:
+        client: AsyncOpenAI client instance
+        model: Model name
+        system_prompt: System prompt string
+        content: Content to translate
+        config: Configuration dict
+        source_chars: Length of source text for progress estimation (0 = no progress bar)
+        max_tokens_override: Dynamic max_tokens value (0 = use env/default)
+
+    Returns:
+        translated text or None on failure
+    """
+    import time
+    import asyncio
+
+    max_retries = config.get("translation", {}).get("max_retries", 3)
+    retry_delay = config.get("translation", {}).get("retry_delay_seconds", 2)
+    timeout = config.get("translation", {}).get("timeout_seconds", 300)
+    temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "0.3"))
+
+    # Dynamic max_tokens: use override, then env, then calculate from source
+    if max_tokens_override > 0:
+        max_tokens = max_tokens_override
+    else:
+        env_max = int(os.getenv("TRANSLATION_MAX_TOKENS", "0"))
+        if env_max > 0:
+            max_tokens = env_max
+        else:
+            source_token_est = estimate_tokens(content)
+            max_tokens = max(int(source_token_est * 1.8), 4096)
+
+    for attempt in range(max_retries):
+        try:
+            start_time = time.time()
+            stream = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": content}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+                stream=True
+            )
+
+            chunks = []
+            char_count = 0
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    text = chunk.choices[0].delta.content
+                    chunks.append(text)
+                    char_count += len(text)
+
+            elapsed = time.time() - start_time
+            return ''.join(chunks)
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = retry_delay * (attempt + 1)
+                print_warning(f"Async API call failed (attempt {attempt+1}/{max_retries}): {e}")
+                await asyncio.sleep(wait_time)
+            else:
+                print_error(f"Async API call failed after {max_retries} attempts: {e}")
+                return None
+
+
+async def _translate_chunks_parallel(client, model, system_prompt, chunks,
+                                      prev_context, config):
+    """Translate multiple chunks in parallel with concurrency control.
+
+    Args:
+        client: AsyncOpenAI client instance
+        model: Model name
+        system_prompt: Base system prompt
+        chunks: List of text chunks from same section
+        prev_context: Shared context from previous section
+        config: Configuration dict with parallel settings
+
+    Returns:
+        List of translated chunks in original order, or None if critical failure
+    """
+    import asyncio
+
+    max_workers = config.get("translation", {}).get("parallel_max_workers", 3)
+    semaphore = asyncio.Semaphore(max_workers)
+
+    async def translate_one_chunk(idx, chunk):
+        """Translate single chunk with semaphore control."""
+        async with semaphore:
+            prompt_with_context = system_prompt
+            if prev_context:
+                prompt_with_context += f"\n\n[Previous context for terminology consistency: ...{prev_context}]"
+
+            dynamic_max = max(int(estimate_tokens(chunk) * 1.8), 4096)
+
+            result = await _call_translation_api_async(
+                client, model, prompt_with_context, chunk, config,
+                source_chars=len(chunk), max_tokens_override=dynamic_max
+            )
+
+            return (idx, result)
+
+    # Create tasks for all chunks
+    tasks = [translate_one_chunk(i, chunk) for i, chunk in enumerate(chunks)]
+
+    # Execute with error handling
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Process results
+    ordered_results = [None] * len(chunks)
+    failed_count = 0
+
+    for result in results:
+        if isinstance(result, Exception):
+            print_warning(f"Parallel chunk translation error: {result}")
+            failed_count += 1
+            continue
+
+        idx, translated = result
+        if translated is None:
+            failed_count += 1
+        else:
+            ordered_results[idx] = translated
+
+    # If too many failures, raise error to trigger fallback
+    if failed_count > len(chunks) * 0.3:
+        raise RuntimeError(f"Too many parallel failures: {failed_count}/{len(chunks)}")
+
+    # Fill any remaining None values with empty strings (will fail verification)
+    return [r if r is not None else "" for r in ordered_results]
 
 
 def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
@@ -955,10 +1196,12 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
         print_info(f"Translation model: {model}")
         print_info(f"API endpoint: {api_base}")
 
-        # Initialize OpenAI client
+        # Initialize OpenAI clients (sync and async)
         try:
-            from openai import OpenAI
-            client = OpenAI(base_url=api_base, api_key=api_key)
+            from openai import OpenAI, AsyncOpenAI
+            import asyncio
+            client_sync = OpenAI(base_url=api_base, api_key=api_key)
+            client_async = AsyncOpenAI(base_url=api_base, api_key=api_key)
         except Exception as e:
             print_error(f"Failed to initialize OpenAI client: {e}")
             return None
@@ -986,71 +1229,150 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
         skipped = [(s, t) for s, t in sections if not t]
         print_info(f"Sections: {len(translatable)} to translate, {len(skipped)} to skip")
 
-        # Step 5: Translate
-        total_tokens = estimate_tokens(' '.join(s for s, _ in translatable))
-        print_info(f"Estimated tokens: ~{total_tokens:,}")
+        # Step 5: Section-by-section translation (always, for quality)
+        import time as _time
+        total_chars = sum(len(s) for s, t in sections if t)
+        translatable_count = sum(1 for _, t in sections if t)
+        max_section_chars = config.get("translation", {}).get("max_section_chars", 5000)
+        verify_enabled = config.get("translation", {}).get("verify_translation", True)
 
-        translated_sections = []
+        # Parallel translation settings
+        parallel_enabled = config.get("translation", {}).get("enable_parallel_translation", True)
+        parallel_min_chunks = config.get("translation", {}).get("parallel_min_chunks", 2)
+        max_workers = config.get("translation", {}).get("parallel_max_workers", 3)
 
-        if total_tokens < 60000:
-            # Strategy A: Full document translation (single API call)
-            print_info("Strategy: Full document translation (single API call)")
-            translatable_body = '\n\n'.join(s for s, _ in sections if _)
+        print_info(f"Translating {translatable_count} sections ({total_chars:,} chars)")
+        if parallel_enabled:
+            print_info(f"Parallel translation enabled (max {max_workers} concurrent API calls)")
 
-            result = _call_translation_api(client, model, system_prompt, translatable_body, config)
-            if not result:
-                print_error("Full document translation failed")
-                return None
+        translate_start = _time.time()
+        prev_context = ""
+        translated_parts = []
+        chars_translated = 0
+        section_idx = 0
 
-            # Reconstruct: insert translated content and skipped sections in order
-            # For full translation, the result contains all translatable sections
-            # We need to interleave with skipped sections
-            translated_parts = []
-            skip_idx = 0
-            translate_done = False
+        for i, (section_text, should_translate) in enumerate(sections, 1):
+            if not should_translate:
+                translated_parts.append(section_text)
+                continue
 
-            for section_text, should_translate in sections:
-                if should_translate and not translate_done:
-                    # Insert the full translation result at the position of first translatable section
-                    translated_parts.append(result)
-                    translate_done = True
-                elif should_translate:
-                    # Already included in full translation
-                    continue
-                else:
-                    translated_parts.append(section_text)
+            section_idx += 1
+            overall_pct = chars_translated / total_chars * 100 if total_chars > 0 else 0
 
-            final_body = '\n\n'.join(translated_parts)
-            print_success("Full document translation complete")
+            # Split long sections into paragraph-level chunks
+            chunks = _split_long_section(section_text, max_section_chars)
 
-        else:
-            # Strategy B: Section-by-section translation
-            print_info(f"Strategy: Section-by-section translation ({len(sections)} sections)")
-            prev_context = ""
-            translated_parts = []
+            if len(chunks) == 1:
+                # Single chunk section
+                print_info(f"Section {section_idx}/{translatable_count} ({overall_pct:.0f}% overall, {len(section_text):,} chars)")
 
-            for i, (section_text, should_translate) in enumerate(sections, 1):
-                if should_translate:
-                    print_progress(i, len(sections), f"Translating section {i}/{len(sections)}")
+                prompt_with_context = system_prompt
+                if prev_context:
+                    prompt_with_context += f"\n\n[Previous context for terminology consistency: ...{prev_context}]"
 
-                    # Add context from previous translation
-                    prompt_with_context = system_prompt
-                    if prev_context:
-                        prompt_with_context += f"\n\n[Previous section context for terminology consistency: {prev_context}]"
+                # Dynamic max_tokens based on source length
+                dynamic_max = max(int(estimate_tokens(section_text) * 1.8), 4096)
 
-                    result = _call_translation_api(client, model, prompt_with_context, section_text, config)
-                    if not result:
-                        print_error(f"Section {i} translation failed")
-                        return None
+                result = _call_translation_api(
+                    client_sync, model, prompt_with_context, section_text, config,
+                    source_chars=len(section_text), max_tokens_override=dynamic_max
+                )
+                if not result:
+                    print_error(f"Section {section_idx} translation failed")
+                    return None
 
-                    translated_parts.append(result)
-                    # Keep last 200 chars as context for next section
-                    prev_context = result[-200:] if len(result) > 200 else result
-                else:
-                    translated_parts.append(section_text)
+                # Verify translation completeness
+                if verify_enabled:
+                    is_ok, reason = _verify_translation(section_text, result)
+                    if not is_ok:
+                        print_warning(f"Verification failed ({reason}), retrying section {section_idx}...")
+                        retry_prompt = system_prompt + "\n\nIMPORTANT: Your previous translation was incomplete. Translate EVERY sentence without any omission."
+                        if prev_context:
+                            retry_prompt += f"\n\n[Previous context for terminology consistency: ...{prev_context}]"
+                        result2 = _call_translation_api(
+                            client_sync, model, retry_prompt, section_text, config,
+                            source_chars=len(section_text), max_tokens_override=dynamic_max
+                        )
+                        if result2:
+                            _, reason2 = _verify_translation(section_text, result2)
+                            if reason2 == "ok" or len(result2) > len(result):
+                                result = result2
+                                print_success("Retry improved translation")
+                            else:
+                                print_warning(f"Retry did not improve ({reason2}), using best result")
 
-            final_body = '\n\n'.join(translated_parts)
-            print_success("Section-by-section translation complete")
+                translated_parts.append(result)
+                prev_context = result[-200:] if len(result) > 200 else result
+                chars_translated += len(section_text)
+
+            else:
+                # Long section split into multiple chunks
+                print_info(f"Section {section_idx}/{translatable_count} ({overall_pct:.0f}% overall, {len(section_text):,} chars -> {len(chunks)} chunks)")
+
+                # TRY PARALLEL TRANSLATION FIRST
+                section_results = None
+                if parallel_enabled and len(chunks) >= parallel_min_chunks:
+                    print_info(f"  [PARALLEL MODE: {len(chunks)} chunks with max {max_workers} workers]")
+                    try:
+                        section_results = asyncio.run(
+                            _translate_chunks_parallel(
+                                client_async, model, system_prompt, chunks,
+                                prev_context, config
+                            )
+                        )
+                        print_success(f"  Parallel translation complete")
+
+                        # Update context from last chunk
+                        if section_results:
+                            last_result = section_results[-1]
+                            prev_context = last_result[-200:] if len(last_result) > 200 else last_result
+
+                    except Exception as e:
+                        print_warning(f"  Parallel translation failed: {e}")
+                        print_info(f"  Falling back to sequential mode...")
+                        section_results = None
+
+                # FALLBACK TO SEQUENTIAL IF PARALLEL FAILED OR DISABLED
+                if section_results is None:
+                    print_info(f"  [SEQUENTIAL MODE: {len(chunks)} chunks]")
+                    section_results = []
+
+                    for ci, chunk in enumerate(chunks, 1):
+                        chunk_chars_before = sum(len(c) for c in chunks[:ci-1])
+                        chunk_pct = (chars_translated + chunk_chars_before) / total_chars * 100 if total_chars > 0 else 0
+                        print_info(f"  Chunk {ci}/{len(chunks)} ({chunk_pct:.0f}% overall, {len(chunk):,} chars)")
+
+                        prompt_with_context = system_prompt
+                        if prev_context:
+                            prompt_with_context += f"\n\n[Previous context for terminology consistency: ...{prev_context}]"
+
+                        dynamic_max = max(int(estimate_tokens(chunk) * 1.8), 4096)
+
+                        result = _call_translation_api(
+                            client_sync, model, prompt_with_context, chunk, config,
+                            source_chars=len(chunk), max_tokens_override=dynamic_max
+                        )
+                        if not result:
+                            print_error(f"Section {section_idx} chunk {ci} failed")
+                            return None
+
+                        section_results.append(result)
+                        prev_context = result[-200:] if len(result) > 200 else result
+
+                combined = '\n\n'.join(section_results)
+
+                # Verify combined section
+                if verify_enabled:
+                    is_ok, reason = _verify_translation(section_text, combined)
+                    if not is_ok:
+                        print_warning(f"Section {section_idx} verification: {reason} (proceeding with best result)")
+
+                translated_parts.append(combined)
+                chars_translated += len(section_text)
+
+        elapsed_total = _time.time() - translate_start
+        final_body = '\n\n'.join(translated_parts)
+        print_success(f"All sections translated ({elapsed_total:.0f}s total)")
 
         # Step 6: Restore protected blocks
         final_body = restore_special_blocks(final_body, placeholders)
