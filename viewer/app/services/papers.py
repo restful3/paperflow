@@ -1,3 +1,4 @@
+import json as _json
 import re
 import shutil
 from pathlib import Path
@@ -13,6 +14,18 @@ def _dir_size_mb(path: Path) -> float:
         return total / (1024 * 1024)
     except Exception:
         return 0.0
+
+
+def _load_paper_metadata(paper_dir: Path) -> dict | None:
+    """Load paper_meta.json from a paper directory if it exists."""
+    meta_path = paper_dir / "paper_meta.json"
+    if meta_path.is_file():
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return _json.load(f)
+        except Exception:
+            return None
+    return None
 
 
 def _paper_info(paper_dir: Path, location: str) -> dict:
@@ -39,12 +52,33 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         elif f.name.endswith(".md") and not f.name.endswith("_ko.md"):
             files["md_en"] = True
 
-    return {
+    info = {
         "name": paper_dir.name,
         "location": location,
         "formats": files,
         "size_mb": round(_dir_size_mb(paper_dir), 1),
     }
+
+    # Load AI-extracted metadata if available
+    meta = _load_paper_metadata(paper_dir)
+    if meta:
+        info["title"] = meta.get("title")
+        info["title_ko"] = meta.get("title_ko")
+        info["authors"] = meta.get("authors", [])
+        info["abstract"] = meta.get("abstract")
+        info["abstract_ko"] = meta.get("abstract_ko")
+        info["categories"] = meta.get("categories", [])
+        info["original_filename"] = meta.get("original_filename")
+    else:
+        info["title"] = None
+        info["title_ko"] = None
+        info["authors"] = []
+        info["abstract"] = None
+        info["abstract_ko"] = None
+        info["categories"] = []
+        info["original_filename"] = None
+
+    return info
 
 
 def list_papers(tab: str = "unread") -> list[dict]:

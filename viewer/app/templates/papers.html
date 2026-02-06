@@ -29,6 +29,12 @@
         </div>
         <div class="flex items-center space-x-3">
           <span class="text-white/80 text-sm hidden sm:inline" x-text="'Hello, {{ username }}'"></span>
+          <!-- Language toggle (EN/KO) -->
+          <button @click="$store.lang.toggle()"
+                  class="text-white/80 hover:text-white transition text-xs font-semibold px-1.5 py-0.5 rounded border border-white/30 hover:border-white/60"
+                  :title="$store.lang.ko ? 'Switch to English' : 'Switch to Korean'"
+                  x-text="$store.lang.ko ? 'KO' : 'EN'">
+          </button>
           <!-- Dark mode toggle -->
           <button @click="$store.darkMode.toggle()"
                   class="text-white/80 hover:text-white transition text-sm"
@@ -61,7 +67,7 @@
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
-        <input type="text" x-model="search" placeholder="Search papers..."
+        <input type="text" x-model="search" placeholder="Search by title, author, abstract, or category..."
                class="w-full pl-10 pr-4 py-2.5 rounded-xl border shadow-sm text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition"
                :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'">
       </div>
@@ -96,30 +102,52 @@
                 x-text="stats.archived"></span>
         </button>
       </div>
-      <!-- View mode toggle -->
-      <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
-           :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
-        <button @click="viewMode = 'card'; localStorage.setItem('pf-view', 'card')"
-                class="p-1.5 rounded-md transition"
-                :class="viewMode === 'card'
-                  ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
-                  : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
-                title="Card view">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-        </button>
-        <button @click="viewMode = 'list'; localStorage.setItem('pf-view', 'list')"
-                class="p-1.5 rounded-md transition"
-                :class="viewMode === 'list'
-                  ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
-                  : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
-                title="List view">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
+      <div class="flex items-center space-x-3">
+        <!-- Sort controls -->
+        <div class="flex items-center space-x-1">
+          <select x-model="sortBy"
+                  @change="localStorage.setItem('pf-sort', sortBy)"
+                  class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
+                  :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
+            <option value="name">Sort: Name</option>
+            <option value="title">Sort: Title</option>
+            <option value="size">Sort: Size</option>
+          </select>
+          <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+                  class="p-1.5 rounded-md transition"
+                  :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
+                  :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
+            <svg class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+            </svg>
+          </button>
+        </div>
+        <!-- View mode toggle -->
+        <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
+             :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
+          <button @click="viewMode = 'card'; localStorage.setItem('pf-view', 'card')"
+                  class="p-1.5 rounded-md transition"
+                  :class="viewMode === 'card'
+                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                    : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                  title="Card view">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
+          <button @click="viewMode = 'list'; localStorage.setItem('pf-view', 'list')"
+                  class="p-1.5 rounded-md transition"
+                  :class="viewMode === 'list'
+                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                    : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                  title="List view">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -176,16 +204,34 @@
         <div class="card-enter rounded-xl shadow-sm border transition-all overflow-hidden"
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:shadow-lg hover:border-indigo-500' : 'bg-white border-gray-100 hover:shadow-md hover:border-indigo-200'">
           <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="block p-4">
-            <h3 class="font-semibold text-sm leading-snug mb-2 line-clamp-2 transition-colors"
+            <h3 class="font-semibold text-sm leading-snug mb-1 line-clamp-2 transition-colors"
                 :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
-                x-text="paper.name"></h3>
-            <div class="flex flex-wrap gap-1.5 mb-2">
-              <span x-show="paper.formats.html" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">HTML</span>
-              <span x-show="paper.formats.md_ko" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">MD-KO</span>
-              <span x-show="paper.formats.md_en" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">MD-EN</span>
-              <span x-show="paper.formats.pdf" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">PDF</span>
+                x-text="($store.lang.ko && paper.title_ko) ? paper.title_ko : (paper.title || paper.name)"></h3>
+            <!-- Authors -->
+            <p x-show="paper.authors && paper.authors.length > 0"
+               class="text-xs mb-1.5 line-clamp-1 transition-colors"
+               :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+               x-text="paper.authors ? paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : '') : ''"></p>
+            <!-- Abstract snippet -->
+            <p x-show="paper.abstract || paper.abstract_ko"
+               class="text-xs mb-2 line-clamp-2 transition-colors"
+               :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+               x-text="(() => { const abs = ($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract; return abs ? abs.substring(0, 150) + (abs.length > 150 ? '...' : '') : ''; })()"></p>
+            <!-- Category badges -->
+            <div x-show="paper.categories && paper.categories.length > 0" class="flex flex-wrap gap-1.5 mb-2">
+              <template x-for="cat in (paper.categories || []).slice(0, 3)" :key="cat">
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700"
+                      x-text="cat"></span>
+              </template>
             </div>
-            <p class="text-xs transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></p>
+            <!-- Format badges + size -->
+            <div class="flex items-center gap-1.5">
+              <span x-show="paper.formats.html" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">HTML</span>
+              <span x-show="paper.formats.md_ko" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">MD-KO</span>
+              <span x-show="paper.formats.md_en" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">MD-EN</span>
+              <span x-show="paper.formats.pdf" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">PDF</span>
+              <span class="text-xs ml-auto transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
+            </div>
           </a>
           <div class="border-t px-4 py-2 flex justify-end space-x-1 transition-colors"
                :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-50'">
@@ -224,10 +270,19 @@
         <div class="card-enter flex items-center rounded-lg border px-4 py-2.5 transition-all"
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'">
           <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="flex-1 min-w-0 flex items-center gap-4">
-            <h3 class="font-medium text-sm truncate transition-colors flex-1 min-w-0"
-                :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
-                x-text="paper.name"></h3>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-sm truncate transition-colors"
+                  :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
+                  x-text="($store.lang.ko && paper.title_ko) ? paper.title_ko : (paper.title || paper.name)"></h3>
+              <p x-show="paper.authors && paper.authors.length > 0"
+                 class="text-[10px] truncate transition-colors"
+                 :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                 x-text="paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : '')"></p>
+            </div>
             <div class="flex gap-1 shrink-0">
+              <template x-for="cat in (paper.categories || []).slice(0, 2)" :key="cat">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" x-text="cat"></span>
+              </template>
               <span x-show="paper.formats.html" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">HTML</span>
               <span x-show="paper.formats.md_ko" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">KO</span>
               <span x-show="paper.formats.md_en" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">EN</span>
@@ -336,6 +391,8 @@ function papersApp() {
     logOpen: false,
     logInterval: null,
     viewMode: localStorage.getItem('pf-view') || 'card',
+    sortBy: localStorage.getItem('pf-sort') || 'name',
+    sortOrder: localStorage.getItem('pf-sort-order') || 'asc',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
 
     async init() {
@@ -343,9 +400,37 @@ function papersApp() {
     },
 
     get filtered() {
-      if (!this.search) return this.papers;
-      const q = this.search.toLowerCase();
-      return this.papers.filter(p => p.name.toLowerCase().includes(q));
+      let results = this.papers;
+
+      // Search across all metadata fields
+      if (this.search) {
+        const q = this.search.toLowerCase();
+        results = results.filter(p =>
+          p.name.toLowerCase().includes(q)
+          || (p.title && p.title.toLowerCase().includes(q))
+          || (p.title_ko && p.title_ko.toLowerCase().includes(q))
+          || (p.authors && p.authors.some(a => a.toLowerCase().includes(q)))
+          || (p.abstract && p.abstract.toLowerCase().includes(q))
+          || (p.abstract_ko && p.abstract_ko.toLowerCase().includes(q))
+          || (p.categories && p.categories.some(c => c.toLowerCase().includes(q)))
+        );
+      }
+
+      // Sort
+      const dir = this.sortOrder === 'asc' ? 1 : -1;
+      if (this.sortBy === 'title') {
+        results = [...results].sort((a, b) => {
+          const ta = (a.title || a.name).toLowerCase();
+          const tb = (b.title || b.name).toLowerCase();
+          return dir * ta.localeCompare(tb);
+        });
+      } else if (this.sortBy === 'size') {
+        results = [...results].sort((a, b) => dir * (a.size_mb - b.size_mb));
+      } else {
+        results = [...results].sort((a, b) => dir * a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      }
+
+      return results;
     },
 
     async switchTab(t) {

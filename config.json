@@ -1,8 +1,19 @@
 {
   "processing_pipeline": {
     "convert_to_markdown": true,
+    "extract_metadata": true,
     "translate_to_korean": true,
     "render_to_html": true
+  },
+  "metadata_extraction": {
+    "max_input_chars": 8000,
+    "temperature": 0.1,
+    "max_tokens": 2048,
+    "timeout_seconds": 60,
+    "max_retries": 2,
+    "retry_delay_seconds": 2,
+    "smart_rename": true,
+    "max_folder_name_length": 80
   },
   "translation": {
     "max_retries": 3,

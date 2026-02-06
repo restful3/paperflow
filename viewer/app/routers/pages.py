@@ -59,10 +59,15 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     else:
         default_view = "html"
 
+    paper_title = info.get("title") if info else None
+    paper_title_ko = info.get("title_ko") if info else None
+
     return templates.TemplateResponse("viewer.html", {
         "request": request,
         "paper_name": name,
         "paper_name_encoded": quote(name, safe=""),
+        "paper_title": paper_title,
+        "paper_title_ko": paper_title_ko,
         "has_html": has_html,
         "has_pdf": has_pdf,
         "has_md_ko": has_md_ko,

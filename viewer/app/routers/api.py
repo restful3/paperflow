@@ -35,8 +35,23 @@ async def logout():
 # ── Papers ──────────────────────────────────────────────────────────────────
 
 @router.get("/papers")
-async def list_papers(tab: str = "unread", _user: str = Depends(get_current_user_api)):
-    return paper_svc.list_papers(tab)
+async def list_papers(
+    tab: str = "unread",
+    sort: str = "name",
+    order: str = "asc",
+    _user: str = Depends(get_current_user_api),
+):
+    papers = paper_svc.list_papers(tab)
+    if sort == "title":
+        papers.sort(
+            key=lambda p: (p.get("title") or p["name"]).lower(),
+            reverse=(order == "desc"),
+        )
+    elif sort == "size":
+        papers.sort(key=lambda p: p["size_mb"], reverse=(order == "desc"))
+    elif sort == "name":
+        papers.sort(key=lambda p: p["name"].lower(), reverse=(order == "desc"))
+    return papers
 
 
 @router.get("/papers/{name:path}/info")

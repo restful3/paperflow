@@ -68,8 +68,19 @@ def load_config():
     default_config = {
         "processing_pipeline": {
             "convert_to_markdown": True,
+            "extract_metadata": True,
             "translate_to_korean": False,
             "render_to_html": True
+        },
+        "metadata_extraction": {
+            "max_input_chars": 8000,
+            "temperature": 0.1,
+            "max_tokens": 2048,
+            "timeout_seconds": 60,
+            "max_retries": 2,
+            "retry_delay_seconds": 2,
+            "smart_rename": True,
+            "max_folder_name_length": 80
         },
         "translation": {
             "max_retries": 3,
@@ -83,12 +94,11 @@ def load_config():
         if os.path.exists("config.json"):
             with open("config.json", "r", encoding="utf-8") as f:
                 loaded = json.load(f)
-                # Load top-level config
-                for key in default_config:
+                # Load top-level config sections with merge
+                for key in list(default_config.keys()):
                     if key in loaded:
-                        if key == "processing_pipeline" and isinstance(loaded[key], dict):
-                            # Merge processing_pipeline settings
-                            default_config["processing_pipeline"].update(loaded[key])
+                        if isinstance(default_config[key], dict) and isinstance(loaded[key], dict):
+                            default_config[key].update(loaded[key])
                         else:
                             default_config[key] = loaded[key]
     except Exception as e:
@@ -102,6 +112,10 @@ def load_config():
 
     if pipeline.get("translate_to_korean", False):
         # Translation requires markdown conversion
+        pipeline["convert_to_markdown"] = True
+
+    if pipeline.get("extract_metadata", False):
+        # Metadata extraction requires markdown conversion
         pipeline["convert_to_markdown"] = True
 
     return default_config
@@ -415,6 +429,247 @@ def convert_pdf_to_md(pdf_path, output_dir):
             pass
 
         return None
+
+##############################################################################
+# Metadata Extraction
+# Extract paper title, authors, abstract, categories using AI
+##############################################################################
+
+METADATA_EXTRACTION_PROMPT = """You are an academic paper metadata extractor. Given the beginning of an academic paper in Markdown format, extract metadata and return ONLY a valid JSON object:
+
+{
+  "title": "Exact paper title",
+  "title_ko": "Korean translation of the title",
+  "authors": ["Author Name 1", "Author Name 2"],
+  "abstract": "Complete abstract text",
+  "abstract_ko": "Korean translation of the abstract",
+  "categories": ["Category1", "Category2"]
+}
+
+Rules:
+- Extract the EXACT title as written in the paper. Do not modify or summarize it.
+- Provide a natural Korean translation of the title in "title_ko".
+- List ALL authors by their full names in order. If affiliations are mixed in, extract only the names.
+- Extract the complete abstract text. If no clear abstract section exists, provide a 1-2 sentence summary of the paper's topic.
+- Provide a natural Korean translation of the abstract in "abstract_ko".
+- For categories, infer 2-5 relevant academic categories (e.g., "Machine Learning", "Natural Language Processing", "Computer Vision", "Reinforcement Learning", "Robotics", "Data Mining", "Software Engineering", "Optimization", "Deep Learning").
+- Return ONLY the JSON object. No markdown formatting, no code blocks, no explanation.
+- If you cannot determine a field, use null for strings or [] for arrays."""
+
+
+def extract_paper_metadata(md_path, output_dir, config):
+    """Extract paper metadata (title, authors, abstract, categories) using AI.
+
+    Reads the first portion of the markdown file and sends it to an
+    OpenAI-compatible API for structured metadata extraction.
+
+    Returns:
+        Metadata dict on success, None on failure.
+    """
+    from openai import OpenAI
+
+    # Load AI settings
+    api_base = os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("TRANSLATION_MODEL", "gpt-4o")
+
+    if not api_base or not api_key:
+        print_warning("Metadata extraction skipped: OPENAI_BASE_URL or OPENAI_API_KEY not set")
+        return None
+
+    meta_config = config.get("metadata_extraction", {})
+    max_input_chars = meta_config.get("max_input_chars", 8000)
+    temperature = meta_config.get("temperature", 0.1)
+    max_tokens = meta_config.get("max_tokens", 2048)
+    timeout = meta_config.get("timeout_seconds", 60)
+    max_retries = meta_config.get("max_retries", 2)
+    retry_delay = meta_config.get("retry_delay_seconds", 2)
+
+    # Read first portion of markdown
+    try:
+        with open(md_path, 'r', encoding='utf-8') as f:
+            md_content = f.read(max_input_chars)
+    except Exception as e:
+        print_error(f"Failed to read markdown for metadata extraction: {e}")
+        return None
+
+    if not md_content.strip():
+        print_warning("Markdown content is empty, skipping metadata extraction")
+        return None
+
+    print_info(f"Sending {len(md_content):,} chars to AI for metadata extraction...")
+
+    client = OpenAI(base_url=api_base, api_key=api_key)
+
+    for attempt in range(max_retries):
+        try:
+            import time
+            start_time = time.time()
+            print_info(f"Calling API... (attempt {attempt+1}/{max_retries})")
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": METADATA_EXTRACTION_PROMPT},
+                    {"role": "user", "content": md_content}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout
+            )
+
+            result_text = response.choices[0].message.content.strip()
+            elapsed = time.time() - start_time
+            print_info(f"API response received in {elapsed:.1f}s")
+
+            # Strip markdown code block wrappers if present
+            if result_text.startswith("```"):
+                result_text = re.sub(r'^```(?:json)?\s*\n?', '', result_text)
+                result_text = re.sub(r'\n?```\s*$', '', result_text)
+
+            metadata = json.loads(result_text)
+
+            # Validate title exists and is meaningful
+            title = metadata.get("title")
+            if not title or not isinstance(title, str) or len(title.strip()) < 3:
+                print_warning("Extracted title is too short or missing")
+                metadata["title"] = None
+
+            # Ensure authors is a list
+            if not isinstance(metadata.get("authors"), list):
+                metadata["authors"] = []
+
+            # Ensure categories is a list
+            if not isinstance(metadata.get("categories"), list):
+                metadata["categories"] = []
+
+            # Ensure Korean fields default to None if missing/invalid
+            if not isinstance(metadata.get("title_ko"), str) or not metadata["title_ko"].strip():
+                metadata["title_ko"] = None
+            if not isinstance(metadata.get("abstract_ko"), str) or not metadata["abstract_ko"].strip():
+                metadata["abstract_ko"] = None
+
+            # Add envelope fields
+            metadata["original_filename"] = os.path.basename(md_path).replace('.md', '.pdf')
+            metadata["extracted_at"] = datetime.now().isoformat()
+
+            # Save paper_meta.json
+            meta_path = os.path.join(output_dir, "paper_meta.json")
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+            print_success(f"Metadata saved to: {meta_path}")
+
+            return metadata
+
+        except json.JSONDecodeError as e:
+            print_warning(f"JSON parse error (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(retry_delay)
+        except Exception as e:
+            print_warning(f"Metadata extraction API error (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                import time
+                wait_time = retry_delay * (attempt + 1)
+                time.sleep(wait_time)
+
+    print_error("Metadata extraction failed after all retries")
+    return None
+
+
+def sanitize_folder_name(title, max_length=80):
+    """Convert a paper title to a filesystem-safe folder name.
+
+    Preserves spaces (consistent with existing PaperFlow conventions),
+    removes OS-forbidden characters, and truncates at word boundaries.
+
+    Returns:
+        Sanitized string, or None if result is empty.
+    """
+    import unicodedata
+
+    name = unicodedata.normalize('NFKD', title)
+
+    # Remove OS-forbidden characters: / \ : * ? " < > |
+    name = re.sub(r'[/\\:*?"<>|]', '', name)
+
+    # Replace newlines and tabs with spaces
+    name = re.sub(r'[\n\r\t]', ' ', name)
+
+    # Collapse multiple spaces
+    name = re.sub(r'\s+', ' ', name).strip()
+
+    # Remove leading/trailing dots (hidden files on unix)
+    name = name.strip('.')
+
+    # Truncate at word boundary if too long
+    if len(name) > max_length:
+        truncated = name[:max_length]
+        last_space = truncated.rfind(' ')
+        if last_space > max_length * 0.6:
+            truncated = truncated[:last_space]
+        name = truncated.rstrip()
+
+    return name if name else None
+
+
+def rename_output_directory(old_output_dir, new_folder_name, original_base_name):
+    """Rename the output directory and internal files to match the extracted title.
+
+    Args:
+        old_output_dir: Current output directory path (e.g., outputs/old_name).
+        new_folder_name: Sanitized new folder name from extracted title.
+        original_base_name: Original base name (PDF filename without .pdf).
+
+    Returns:
+        Tuple of (new_output_dir, new_folder_name) on success, None on failure.
+    """
+    parent = os.path.dirname(old_output_dir)
+    new_dir = os.path.join(parent, new_folder_name)
+
+    # Handle uniqueness: append suffix if directory already exists
+    if os.path.exists(new_dir) and os.path.abspath(new_dir) != os.path.abspath(old_output_dir):
+        found_unique = False
+        for suffix in range(2, 100):
+            candidate = os.path.join(parent, f"{new_folder_name}-{suffix}")
+            if not os.path.exists(candidate):
+                new_dir = candidate
+                new_folder_name = f"{new_folder_name}-{suffix}"
+                found_unique = True
+                break
+        if not found_unique:
+            print_warning("Could not find unique folder name, keeping original")
+            return None
+
+    try:
+        # Step 1: Rename internal files that match original_base_name
+        for f in os.listdir(old_output_dir):
+            if f.startswith(original_base_name):
+                file_suffix = f[len(original_base_name):]  # e.g., ".md", ".json", "_ko.md"
+                new_name = new_folder_name + file_suffix
+                old_path = os.path.join(old_output_dir, f)
+                new_path = os.path.join(old_output_dir, new_name)
+                os.rename(old_path, new_path)
+                print_info(f"  Renamed: {f} -> {new_name}")
+
+        # Step 2: Rename directory
+        os.rename(old_output_dir, new_dir)
+
+        # Step 3: Update paper_meta.json with final folder_name
+        meta_path = os.path.join(new_dir, "paper_meta.json")
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+            meta["folder_name"] = new_folder_name
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        return (new_dir, new_folder_name)
+
+    except Exception as e:
+        print_error(f"Failed to rename output directory: {e}")
+        return None
+
 
 ##############################################################################
 # Translation Pipeline
@@ -975,6 +1230,7 @@ def process_single_pdf(pdf_path, config, prompt):
         # Display pipeline configuration
         print_info("Pipeline configuration:")
         print_info(f"  • PDF → Markdown: {'Enabled' if pipeline['convert_to_markdown'] else 'Disabled'}")
+        print_info(f"  • Metadata Extraction: {'Enabled' if pipeline.get('extract_metadata', False) else 'Disabled'}")
         print_info(f"  • Translation (Korean): {'Enabled' if pipeline.get('translate_to_korean', False) else 'Disabled'}")
         print_info(f"  • Markdown → HTML: {'Enabled' if pipeline['render_to_html'] else 'Disabled'}")
         print()
@@ -990,6 +1246,7 @@ def process_single_pdf(pdf_path, config, prompt):
         # Track processing results
         results = {
             "markdown": None,
+            "metadata": None,
             "translation": None,
             "html_en": None,
             "html_ko": None
@@ -1020,6 +1277,39 @@ def process_single_pdf(pdf_path, config, prompt):
             else:
                 print_warning(f"Markdown conversion disabled and no existing file found")
                 results["markdown"] = "skipped"
+
+        # Step 1.5: Extract metadata and optionally rename folder
+        if pipeline.get("extract_metadata", False) and md_path and os.path.exists(md_path):
+            print_info("Step 1.5: Extracting paper metadata with AI...")
+            try:
+                metadata = extract_paper_metadata(md_path, output_dir, config)
+                if metadata:
+                    title_preview = (metadata.get('title') or 'N/A')[:60]
+                    print_success(f"Metadata extracted - Title: {title_preview}")
+                    results["metadata"] = "success"
+
+                    # Smart rename if enabled
+                    meta_config = config.get("metadata_extraction", {})
+                    if meta_config.get("smart_rename", True) and metadata.get("title"):
+                        max_len = meta_config.get("max_folder_name_length", 80)
+                        new_name = sanitize_folder_name(metadata["title"], max_len)
+                        if new_name and new_name != base_name:
+                            print_info(f"Renaming: {base_name} -> {new_name}")
+                            rename_result = rename_output_directory(output_dir, new_name, base_name)
+                            if rename_result:
+                                output_dir, base_name = rename_result
+                                md_path = os.path.join(output_dir, base_name + ".md")
+                                print_success(f"Folder renamed to: {base_name}")
+                            else:
+                                print_warning("Folder rename failed, keeping original name")
+                else:
+                    print_warning("Metadata extraction failed (continuing without metadata)")
+                    results["metadata"] = "failed"
+            except Exception as e:
+                print_error(f"Metadata extraction error: {e}")
+                results["metadata"] = "failed"
+        else:
+            results["metadata"] = "skipped"
 
         # Step 2: Translation (optional)
         ko_md_path = None
