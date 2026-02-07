@@ -69,7 +69,7 @@ graph LR
 | **메타데이터** | AI 추출만 | AI 추출 + Brave Search 보강 (venue, DOI, year, URL) |
 | **헤딩 정규화** | 없음 | OCR 헤딩 레벨 자동 교정 |
 | **챗봇** | RAG 전용 | RAG + 조건부 웹 검색 보강 |
-| **UI** | 기본 | 콘텐츠 폭 조절, 읽기 진행률, 연도별 정렬 |
+| **UI** | 기본 | 콘텐츠 폭 조절, 읽기 진행률 (서버 동기화), 연도별 정렬 |
 | **출력 파일** | `*.md`, `*.html`, `*_ko.md`, `*_ko.html` | `*.md`, `*_ko.md` (HTML 파일 없음) |
 
 ---
@@ -146,6 +146,7 @@ flowchart TD
   - 한국어 제목/초록 번역
 - **웹 검색 보강** (Brave Search API):
   - Venue (학회/저널명), DOI, 발행 연도, 논문 URL
+  - URL 도메인 우선 판별 (arxiv.org → arXiv, openreview.net → OpenReview 등)
   - 알려진 학회 목록, DOI 정규식, 연도 패턴으로 정확도 향상
   - 기존 AI 추출 값을 덮어쓰지 않음 (빈 필드만 보강)
 - **폴더명 자동 변경**: PDF 파일명 → 논문 제목 (sanitized, 최대 80자)
@@ -174,7 +175,7 @@ flowchart TD
 ### Batch Processor
 
 - **AI 메타데이터 추출**: 제목/저자/초록/카테고리/연도 자동 추출
-- **웹 검색 보강**: Brave Search로 venue, DOI, 발행 연도, 논문 URL 보강
+- **웹 검색 보강**: Brave Search로 venue, DOI, 발행 연도, 논문 URL 보강 (URL 도메인 우선 판별)
 - **헤딩 정규화**: OCR 헤딩 레벨 불일치 자동 교정
 - **스마트 폴더 명명**: PDF 파일명 → 논문 제목으로 자동 변경
 - **한국어 번역**: 7단계 번역 파이프라인 (병렬 처리, 2-4x 빠름)
@@ -194,7 +195,7 @@ flowchart TD
 - **언어 토글**: EN/KO 버튼으로 UI 전체 및 논문 제목/초록 전환
 - **콘텐츠 폭 조절**: S(720px) / M(900px) / L(1200px) 프리셋 (localStorage 저장)
 - **글꼴 크기 조절**: 5단계 프리셋 (90%-150%)
-- **읽기 진행률**: 스크롤 위치 자동 저장/복원, 논문 카드에 진행률 표시
+- **읽기 진행률**: 서버 동기화로 크로스 브라우저 유지 (max-wins 병합), 카드/목록에 배지 표시
 - **클라이언트 사이드 TOC**: 헤딩 기반 자동 생성, IntersectionObserver 스크롤 스파이
 - **읽기 위치 기억**: localStorage 기반 스크롤 위치 저장/복원
 - **모바일 최적화**: 스크롤 시 상단바 자동 숨김 (< 768px)
@@ -369,7 +370,8 @@ outputs/Sanitized Paper Title/     # PDF 파일명 → 논문 제목으로 변�
   ├── chat_history.json        # 챗봇 대화 기록
   └── *.jpeg                   # 추출된 이미지
 
-archives/                      # "Archive" 버튼으로 이동된 논문
+reading_progress.json            # 읽기 진행률 (서버 동기화, 전체 논문 통합)
+archives/                        # "Archive" 버튼으로 이동된 논문
 ```
 
 ---
@@ -556,8 +558,8 @@ sequenceDiagram
 | `GET` | `/api/papers/{name}/chat/history` | 대화 기록 조회 |
 | `DELETE` | `/api/papers/{name}/chat/history` | 대화 기록 삭제 |
 | `POST` | `/api/papers/{name}/enrich` | 웹 검색 메타데이터 보강 |
-| `POST` | `/api/papers/{name}/progress` | 처리 상태 저장 |
-| `GET` | `/api/progress` | 전체 처리 진행률 |
+| `POST` | `/api/papers/{name}/progress` | 읽기 진행률 저장 (max-wins) |
+| `GET` | `/api/progress` | 전체 읽기 진행률 조회 |
 | `GET` | `/api/processing/status` | 처리 큐 상태 |
 | `DELETE` | `/api/processing/queue/{file}` | 처리 큐에서 제거 |
 | `POST` | `/api/upload` | PDF 업로드 |
