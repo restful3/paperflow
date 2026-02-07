@@ -141,15 +141,38 @@ flowchart TD
 - **출력**: `*.md`, `*.json`, `*.jpeg`
 - **GPU 메모리**: 변환 후 모델 삭제 + `torch.cuda.empty_cache()` 호출로 ~4-8GB VRAM 해제
 
-#### Stage 2: Markdown → HTML
-**함수**: `render_md_to_html()` ([main_terminal.py:625](main_terminal.py#L625))
+#### Stage 2: 메타데이터 추출 (AI)
+**함수**: `extract_paper_metadata()` ([main_terminal.py](main_terminal.py))
 
 - **입력**: `*.md` (영문 마크다운)
 - **처리**:
-  - Quarto CLI로 HTML 렌더링
+  - OpenAI API 호출로 논문 정보 추출
+  - 제목, 저자, 초록, 카테고리 파싱
+  - 폴더명 자동 변경: PDF 파일명 → 논문 제목 (sanitized)
+- **출력**: `paper_meta.json`
+- **설정**: `config.json`의 `extract_metadata` 플래그로 활성화/비활성화
+
+#### Stage 3: 한국어 번역 (AI, 병렬)
+**함수**: `translate_md_to_korean_openai()` ([main_terminal.py:1034](main_terminal.py#L1034))
+
+- **입력**: `*.md` (영문 마크다운)
+- **처리**:
+  - 7단계 번역 파이프라인: YAML 분리 → OCR 정리 → 특수 블록 보호 → 섹션 분류 → 번역 → 복원 → 검증
+  - **병렬 처리**: 긴 섹션(3000자+)을 청크로 분할 → AsyncOpenAI로 동시 번역 (최대 3 워커)
+  - **품질 검증**: 길이 비율, 헤딩/단락 개수 검증 → 실패 시 재시도 (최대 3회)
+  - **컨텍스트 보존**: 섹션 간 마지막 200자 전달로 용어 일관성 유지
+- **출력**: `*_ko.md`
+- **설정**: `config.json`의 `translate_to_korean` 플래그, `parallel_max_workers`, `max_section_chars`
+
+#### Stage 4: HTML 렌더링
+**함수**: `render_md_to_html()` ([main_terminal.py:625](main_terminal.py#L625))
+
+- **입력**: `*.md`, `*_ko.md` (영문/한국어 마크다운)
+- **처리**:
+  - Quarto CLI로 HTML 렌더링 (영문 + 한국어 각각)
   - `header.yaml` 템플릿 적용 (TOC, 테마, 임베딩)
   - **자동 폴백**: YAML 파싱 오류 시 간소화된 헤더로 재시도
-- **출력**: `*.html` (자체 완결형, 이미지/CSS 임베딩)
+- **출력**: `*.html`, `*_ko.html` (자체 완결형, 이미지/CSS 임베딩)
 - **GPU 메모리**: VRAM 미사용
 
 ---
@@ -158,7 +181,11 @@ flowchart TD
 
 ### 📄 Batch Processor
 
-- **⚡ 단순화된 파이프라인**: 2단계로 줄여 5-10배 빠른 처리 속도
+- **🤖 AI 메타데이터 추출**: OpenAI API로 제목/저자/초록/카테고리 자동 추출
+- **📝 스마트 폴더 명명**: PDF 파일명 → 논문 제목으로 자동 변경
+- **🌐 한국어 번역**: OpenAI API 기반 7단계 번역 파이프라인
+- **⚡ 병렬 번역**: AsyncOpenAI로 긴 섹션 동시 처리 (최대 3 워커, 2-4x 빠름)
+- **✅ 품질 검증**: 자동 번역 검증 + 재시도 로직 (최대 3회)
 - **🧠 GPU 메모리 최적화**: 명시적 VRAM 정리로 연속 배치 처리 지원
 - **👁️ Watch 모드**: `newones/` 디렉토리 자동 감시 및 처리 (5초 폴링)
 - **🔄 자동 폴백**: Quarto YAML 오류 시 간소화된 설정으로 재시도
@@ -169,12 +196,15 @@ flowchart TD
 
 - **🎨 모던 UI**: TailwindCSS + Alpine.js 반응형 인터페이스 (빌드 불필요, CDN)
 - **🔐 JWT 인증**: HTTP-only 쿠키 기반 30일 세션, 자동 로그인/리다이렉트
-- **📚 논문 관리**: Unread/Archived 탭, 검색 필터, 카드 그리드 레이아웃
-- **📖 멀티 뷰어**: HTML/PDF/Split 보기 전환, 전체화면 iframe
+- **📚 논문 관리**: Unread/Archived 탭, 검색 필터 (제목/저자/초록/카테고리), 정렬
+- **📖 멀티 뷰어**: HTML/PDF/Split 보기, 영문/한국어 전환, 전체화면
+- **🤖 RAG 챗봇**: 논문별 AI 챗봇 (BM25 검색 + OpenAI API)
+- **💬 실시간 스트리밍**: SSE로 AI 응답 실시간 출력 (Markdown 렌더링)
+- **💾 대화 기록**: 자동 저장/로드 (최대 100 메시지), 삭제 기능
 - **📁 CRUD 기능**: 아카이브/복원/삭제 (확인 모달), 용량 표시
 - **📤 PDF 업로드**: 드래그 앤 드롭, `newones/`에 자동 저장
 - **📝 로그 뷰어**: 접이식 터미널 스타일, 최신 로그 표시
-- **💬 토스트 알림**: 성공/에러/경고 자동 소멸 메시지
+- **💡 토스트 알림**: 성공/에러/경고 자동 소멸 메시지
 - **🐳 Docker 최적화**: 경량 이미지 (python:3.12-slim), GPU 불필요
 
 ---
