@@ -51,6 +51,16 @@ async def list_papers(
         )
     elif sort == "size":
         papers.sort(key=lambda p: p["size_mb"], reverse=(order == "desc"))
+    elif sort == "date":
+        papers.sort(
+            key=lambda p: p.get("extracted_at") or p.get("added_at") or "",
+            reverse=(order == "desc"),
+        )
+    elif sort == "year":
+        papers.sort(
+            key=lambda p: p.get("publication_year") or 0,
+            reverse=(order == "desc"),
+        )
     elif sort == "name":
         papers.sort(key=lambda p: p["name"].lower(), reverse=(order == "desc"))
     return papers
@@ -151,12 +161,51 @@ async def chat_with_paper(
                 }
                 return
 
-            # 4. Search relevant chunks
-            relevant_chunks = rag_svc.search_chunks(
+            # 4. Search relevant chunks (with scores for web search decision)
+            relevant_chunks, scores = rag_svc.search_chunks(
                 request.message,
                 chunks,
                 top_k=5
             )
+            top_score = scores[0] if scores else 0.0
+
+            # 4.5. Conditional web search augmentation
+            web_results = []
+            web_search_used = False
+
+            if rag_svc.should_web_search(request.message, top_score, len(relevant_chunks)):
+                # Load paper title for search query context
+                paper_title = None
+                try:
+                    paper_dir = paper_svc._resolve_paper_dir(name)
+                    if paper_dir:
+                        meta_path = paper_dir / "paper_meta.json"
+                        if meta_path.is_file():
+                            with open(meta_path, "r", encoding="utf-8") as f:
+                                paper_meta = json.load(f)
+                            paper_title = paper_meta.get("title")
+                except Exception:
+                    pass
+
+                search_query = rag_svc.build_web_search_query(request.message, paper_title)
+
+                try:
+                    from ..services.web_search import brave_search
+                    web_results = await brave_search(search_query, count=5)
+                    web_search_used = bool(web_results)
+                except Exception:
+                    web_results = []
+
+            # Notify frontend about web search
+            if web_search_used:
+                yield {
+                    "event": "message",
+                    "data": json.dumps({
+                        "type": "web_search",
+                        "query": search_query,
+                        "result_count": len(web_results)
+                    })
+                }
 
             # 5. Build RAG context
             context = rag_svc.build_rag_context(
@@ -164,7 +213,8 @@ async def chat_with_paper(
                 chunks=relevant_chunks,
                 history=history.messages[:-1],  # Exclude current message
                 max_chunks=5,
-                max_history=2
+                max_history=2,
+                web_results=web_results if web_search_used else None
             )
 
             # 6. Stream LLM response
@@ -174,7 +224,8 @@ async def chat_with_paper(
                 query=request.message,
                 model=os.getenv("TRANSLATION_MODEL", "gemini-claude-sonnet-4-5"),
                 base_url=os.getenv("OPENAI_BASE_URL", ""),
-                api_key=os.getenv("OPENAI_API_KEY", "")
+                api_key=os.getenv("OPENAI_API_KEY", ""),
+                has_web_context=web_search_used
             ):
                 if event["type"] == "token":
                     assistant_content += event["content"]
@@ -193,17 +244,30 @@ async def chat_with_paper(
                 }
                 for chunk in relevant_chunks
             ]
+            source_event = {"type": "sources", "sources": sources}
+            if web_search_used:
+                source_event["web_sources"] = [
+                    {"title": r["title"], "url": r["url"]}
+                    for r in web_results[:3]
+                ]
             yield {
                 "event": "message",
-                "data": json.dumps({"type": "sources", "sources": sources})
+                "data": json.dumps(source_event)
             }
 
             # 8. Save assistant message
+            web_sources_to_save = None
+            if web_search_used:
+                web_sources_to_save = [
+                    {"title": r["title"], "url": r["url"]}
+                    for r in web_results[:3]
+                ]
             assistant_msg = ChatMessage(
                 role="assistant",
                 content=assistant_content,
                 timestamp=datetime.now(),
-                sources=sources
+                sources=sources,
+                web_sources=web_sources_to_save
             )
             history.messages.append(assistant_msg)
             chat_svc.save_chat_history(history)
@@ -271,6 +335,37 @@ async def clear_chat_history_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail="Paper not found or no chat history")
     return {"ok": True, "message": f"Chat history cleared for '{name}'"}
+
+
+@router.post("/papers/{name:path}/enrich")
+async def enrich_paper(name: str, _user: str = Depends(get_current_user_api)):
+    """Enrich paper metadata via web search (venue, DOI, year, URL)."""
+    from ..services import web_search
+    name = unquote(name)
+    result = await web_search.enrich_paper_metadata(name)
+    if not result["success"] and result.get("error"):
+        if result["error"] == "Paper not found":
+            raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+# ── Reading Progress ──────────────────────────────────────────────────────
+
+@router.get("/progress")
+async def get_progress(_user: str = Depends(get_current_user_api)):
+    return paper_svc.get_all_progress()
+
+
+@router.post("/papers/{name:path}/progress")
+async def save_paper_progress(
+    name: str, payload: dict, _user: str = Depends(get_current_user_api)
+):
+    name = unquote(name)
+    progress = payload.get("progress")
+    if not isinstance(progress, (int, float)):
+        raise HTTPException(status_code=400, detail="'progress' required")
+    paper_svc.save_progress(name, int(progress))
+    return {"ok": True}
 
 
 @router.delete("/papers/{name:path}")

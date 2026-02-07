@@ -30,6 +30,42 @@
           </svg>
           <span class="text-white font-bold text-lg">PaperFlow</span>
         </div>
+        <!-- Search bar (inline in navbar) -->
+        <div class="flex-1 max-w-md mx-4 hidden sm:block relative">
+          <div class="relative">
+            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="text" x-model="search" placeholder="Search papers..."
+                   @focus="searchFocused = true; selectedSuggestionIdx = -1"
+                   @blur="setTimeout(() => searchFocused = false, 200)"
+                   @keydown="handleSearchKeydown($event)"
+                   class="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm bg-white/10 border border-white/20 text-white placeholder-white/40 focus:bg-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 outline-none transition">
+          </div>
+          <!-- Search suggestions dropdown -->
+          <div x-show="searchFocused && suggestions.length > 0" x-cloak
+               class="absolute left-0 right-0 top-full mt-1 rounded-lg shadow-xl border overflow-hidden z-50"
+               :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+            <template x-for="(item, idx) in suggestions" :key="item.type + '-' + item.text">
+              <button @mousedown.prevent="applySuggestion(item)"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors"
+                      :class="[
+                        idx === selectedSuggestionIdx
+                          ? ($store.darkMode.on ? 'bg-gray-700' : 'bg-indigo-50')
+                          : ($store.darkMode.on ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')
+                      ]">
+                <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                      :class="item.type === 'category' ? ($store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600')
+                            : item.type === 'venue' ? ($store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700')
+                            : item.type === 'year' ? ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')
+                            : ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')"
+                      x-text="item.type === 'category' ? '#' : item.type === 'author' ? '@' : item.type === 'venue' ? 'V' : 'Y'"></span>
+                <span class="flex-1 truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'" x-text="item.text"></span>
+                <span class="text-[10px] shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="item.count"></span>
+              </button>
+            </template>
+          </div>
+        </div>
         <div class="flex items-center space-x-3">
           <span class="text-white/80 text-sm hidden sm:inline" x-text="'Hello, {{ username }}'"></span>
           <!-- Language toggle (EN/KO) -->
@@ -64,97 +100,204 @@
 
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-    <!-- Search bar -->
-    <div class="mb-5">
+    <!-- Search bar (mobile only, navbar has it on sm+) -->
+    <div class="sm:hidden mb-4 relative">
       <div class="relative">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
-        <input type="text" x-model="search" placeholder="Search by title, author, abstract, or category..."
-               class="w-full pl-10 pr-4 py-3 sm:py-2.5 rounded-xl border shadow-sm text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition"
+        <input type="text" x-model="search" placeholder="Search papers..."
+               @focus="searchFocused = true; selectedSuggestionIdx = -1"
+               @blur="setTimeout(() => searchFocused = false, 200)"
+               @keydown="handleSearchKeydown($event)"
+               class="w-full pl-10 pr-4 py-3 rounded-xl border shadow-sm text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition"
                :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'">
       </div>
-    </div>
-
-    <!-- Tabs + View toggle -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-      <div class="flex space-x-0.5 rounded-lg p-0.5 transition-colors"
-           :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
-        <button @click="switchTab('unread')"
-                :class="tab === 'unread'
-                  ? ($store.darkMode.on ? 'bg-gray-700 shadow text-indigo-400 font-semibold' : 'bg-white shadow text-indigo-700 font-semibold')
-                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-                class="flex-1 sm:flex-none px-4 py-2.5 sm:px-3 sm:py-1.5 rounded-md text-sm sm:text-xs transition">
-          Unread
-          <span class="ml-1.5 text-xs sm:text-[10px] rounded-full px-2 sm:px-1.5 py-0.5"
-                :class="tab === 'unread'
-                  ? ($store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
-                  : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
-                x-text="stats.unread"></span>
-        </button>
-        <button @click="switchTab('archived')"
-                :class="tab === 'archived'
-                  ? ($store.darkMode.on ? 'bg-gray-700 shadow text-indigo-400 font-semibold' : 'bg-white shadow text-indigo-700 font-semibold')
-                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-                class="flex-1 sm:flex-none px-4 py-2.5 sm:px-3 sm:py-1.5 rounded-md text-sm sm:text-xs transition">
-          Archived
-          <span class="ml-1.5 text-xs sm:text-[10px] rounded-full px-2 sm:px-1.5 py-0.5"
-                :class="tab === 'archived'
-                  ? ($store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
-                  : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
-                x-text="stats.archived"></span>
-        </button>
-      </div>
-      <div class="flex items-center justify-between sm:justify-end gap-3">
-        <!-- Sort controls -->
-        <div class="flex items-center space-x-1">
-          <select x-model="sortBy"
-                  @change="localStorage.setItem('pf-sort', sortBy)"
-                  class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
-                  :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
-            <option value="name">Sort: Name</option>
-            <option value="title">Sort: Title</option>
-            <option value="size">Sort: Size</option>
-          </select>
-          <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
-                  class="p-2.5 sm:p-1.5 rounded-md transition"
-                  :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                  :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
-            <svg class="w-5 h-5 sm:w-4 sm:h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
-                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-            </svg>
+      <!-- Search suggestions dropdown (mobile) -->
+      <div x-show="searchFocused && suggestions.length > 0" x-cloak
+           class="absolute left-0 right-0 top-full mt-1 rounded-lg shadow-xl border overflow-hidden z-50"
+           :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+        <template x-for="(item, idx) in suggestions" :key="'m-' + item.type + '-' + item.text">
+          <button @mousedown.prevent="applySuggestion(item)"
+                  class="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left transition-colors"
+                  :class="idx === selectedSuggestionIdx
+                    ? ($store.darkMode.on ? 'bg-gray-700' : 'bg-indigo-50')
+                    : ($store.darkMode.on ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')">
+            <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                  :class="item.type === 'category' ? ($store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600')
+                        : item.type === 'venue' ? ($store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700')
+                        : item.type === 'year' ? ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')
+                        : ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')"
+                  x-text="item.type === 'category' ? '#' : item.type === 'author' ? '@' : item.type === 'venue' ? 'V' : 'Y'"></span>
+            <span class="flex-1 truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'" x-text="item.text"></span>
+            <span class="text-[10px] shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="item.count"></span>
           </button>
-        </div>
-        <!-- View mode toggle -->
-        <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
-             :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
-          <button @click="viewMode = 'card'; localStorage.setItem('pf-view', 'card')"
-                  class="p-2.5 sm:p-1.5 rounded-md transition"
-                  :class="viewMode === 'card'
-                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
-                    : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
-                  title="Card view">
-            <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-              <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-            </svg>
-          </button>
-          <button @click="viewMode = 'list'; localStorage.setItem('pf-view', 'list')"
-                  class="p-2.5 sm:p-1.5 rounded-md transition"
-                  :class="viewMode === 'list'
-                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
-                    : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
-                  title="List view">
-            <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
-          </button>
-        </div>
+        </template>
       </div>
     </div>
 
-    <!-- Upload & Processing panel placeholder (rendered at bottom of page) -->
+    <!-- Tab bar + Sort controls -->
+    <div class="border-b transition-colors"
+         :class="$store.darkMode.on ? 'border-gray-600' : 'border-gray-200'">
+      <div class="flex items-end justify-between">
+        <!-- Tab buttons -->
+        <div class="flex" role="tablist">
+          <!-- Unread tab -->
+          <button @click="switchTab('unread')" role="tab" :aria-selected="tab === 'unread'"
+                  class="flex-1 sm:flex-none px-4 py-2.5 sm:px-5 sm:py-2 text-sm sm:text-xs rounded-t-lg border border-b-0 -mb-px transition-colors"
+                  :class="tab === 'unread'
+                    ? ($store.darkMode.on ? 'bg-gray-800 border-gray-600 text-indigo-400 font-semibold z-10' : 'bg-white border-gray-200 text-indigo-700 font-semibold z-10')
+                    : ($store.darkMode.on ? 'bg-transparent border-transparent text-gray-500 hover:text-gray-300' : 'bg-transparent border-transparent text-gray-500 hover:text-gray-700')">
+            Unread
+            <span class="ml-1.5 text-xs sm:text-[10px] rounded-full px-2 sm:px-1.5 py-0.5"
+                  :class="tab === 'unread'
+                    ? ($store.darkMode.on ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
+                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
+                  x-text="stats.unread"></span>
+          </button>
+          <!-- Archived tab -->
+          <button @click="switchTab('archived')" role="tab" :aria-selected="tab === 'archived'"
+                  class="flex-1 sm:flex-none px-4 py-2.5 sm:px-5 sm:py-2 text-sm sm:text-xs rounded-t-lg border border-b-0 -mb-px ml-0.5 transition-colors"
+                  :class="tab === 'archived'
+                    ? ($store.darkMode.on ? 'bg-gray-800 border-gray-600 text-indigo-400 font-semibold z-10' : 'bg-white border-gray-200 text-indigo-700 font-semibold z-10')
+                    : ($store.darkMode.on ? 'bg-transparent border-transparent text-gray-500 hover:text-gray-300' : 'bg-transparent border-transparent text-gray-500 hover:text-gray-700')">
+            Archived
+            <span class="ml-1.5 text-xs sm:text-[10px] rounded-full px-2 sm:px-1.5 py-0.5"
+                  :class="tab === 'archived'
+                    ? ($store.darkMode.on ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
+                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
+                  x-text="stats.archived"></span>
+          </button>
+          <!-- Upload tab -->
+          <button @click="switchTab('upload')" role="tab" :aria-selected="tab === 'upload'"
+                  class="flex-1 sm:flex-none px-4 py-2.5 sm:px-5 sm:py-2 text-sm sm:text-xs rounded-t-lg border border-b-0 -mb-px ml-0.5 transition-colors"
+                  :class="tab === 'upload'
+                    ? ($store.darkMode.on ? 'bg-gray-800 border-gray-600 text-indigo-400 font-semibold z-10' : 'bg-white border-gray-200 text-indigo-700 font-semibold z-10')
+                    : ($store.darkMode.on ? 'bg-transparent border-transparent text-gray-500 hover:text-gray-300' : 'bg-transparent border-transparent text-gray-500 hover:text-gray-700')">
+            <svg class="w-3.5 h-3.5 inline -mt-0.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13"/>
+            </svg>
+            Upload
+            <span x-show="queueCount > 0 || activeUploads > 0" x-cloak
+                  class="ml-1.5 text-xs sm:text-[10px] rounded-full px-2 sm:px-1.5 py-0.5 font-medium"
+                  :class="isProcessing
+                    ? ($store.darkMode.on ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-600')
+                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
+                  x-text="queueCount + activeUploads"></span>
+            <span x-show="isProcessing" class="ml-1 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block"></span>
+          </button>
+        </div>
+        <!-- Sort/View controls (hidden on Upload tab) -->
+        <div x-show="tab !== 'upload'" class="hidden sm:flex items-center gap-3 mb-2">
+          <!-- Sort controls -->
+          <div class="flex items-center space-x-1">
+            <select x-model="sortBy"
+                    @change="localStorage.setItem('pf-sort', sortBy)"
+                    class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
+                    :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
+              <option value="date">Sort: Date</option>
+              <option value="name">Sort: Name</option>
+              <option value="title">Sort: Title</option>
+              <option value="year">Sort: Year</option>
+              <option value="size">Sort: Size</option>
+              <option value="progress">Sort: Progress</option>
+            </select>
+            <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+                    class="p-1.5 rounded-md transition"
+                    :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
+                    :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
+              <svg class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+              </svg>
+            </button>
+          </div>
+          <!-- View mode toggle -->
+          <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
+               :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
+            <button @click="viewMode = 'card'; localStorage.setItem('pf-view', 'card')"
+                    class="p-1.5 rounded-md transition"
+                    :class="viewMode === 'card'
+                      ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                      : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                    title="Card view">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </button>
+            <button @click="viewMode = 'list'; localStorage.setItem('pf-view', 'list')"
+                    class="p-1.5 rounded-md transition"
+                    :class="viewMode === 'list'
+                      ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                      : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                    title="List view">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Mobile sort/view controls (below tabs, hidden on Upload) -->
+    <div x-show="tab !== 'upload'" class="flex sm:hidden items-center justify-between gap-3 px-4 py-2 border-l border-r transition-colors"
+         :class="$store.darkMode.on ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'">
+      <div class="flex items-center space-x-1">
+        <select x-model="sortBy"
+                @change="localStorage.setItem('pf-sort', sortBy)"
+                class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
+                :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
+          <option value="date">Sort: Date</option>
+          <option value="name">Sort: Name</option>
+          <option value="title">Sort: Title</option>
+          <option value="year">Sort: Year</option>
+          <option value="size">Sort: Size</option>
+        </select>
+        <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+                class="p-2.5 rounded-md transition"
+                :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
+                :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
+          <svg class="w-5 h-5 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+               fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
+           :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-100'">
+        <button @click="viewMode = 'card'; localStorage.setItem('pf-view', 'card')"
+                class="p-2.5 rounded-md transition"
+                :class="viewMode === 'card'
+                  ? ($store.darkMode.on ? 'bg-gray-600 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                  : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                title="Card view">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </button>
+        <button @click="viewMode = 'list'; localStorage.setItem('pf-view', 'list')"
+                class="p-2.5 rounded-md transition"
+                :class="viewMode === 'list'
+                  ? ($store.darkMode.on ? 'bg-gray-600 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                  : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')"
+                title="List view">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Content panel (bordered, connected to active tab) -->
+    <div class="border-l border-r border-b rounded-b-xl transition-colors min-h-[300px]"
+         :class="$store.darkMode.on ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'"
+         role="tabpanel">
+      <div class="p-4 sm:p-5">
+
+    <!-- Papers content (Unread / Archived tabs) -->
+    <div x-show="tab !== 'upload'">
 
     <!-- Loading -->
     <div x-show="loading" class="flex justify-center py-12">
@@ -164,9 +307,11 @@
       </svg>
     </div>
 
-    <!-- Paper cards grid -->
-    <div x-show="!loading && viewMode === 'card'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <template x-for="paper in filtered" :key="paper.name">
+    <!-- Paper cards grid (independent columns: expanding a card only pushes its own column) -->
+    <div x-show="!loading && viewMode === 'card'" class="flex gap-4">
+      <template x-for="(col, colIdx) in cardColumns" :key="colIdx">
+        <div class="flex-1 min-w-0 space-y-4">
+          <template x-for="paper in col" :key="paper.name">
         <div class="card-enter rounded-xl shadow-sm border transition-all duration-200 overflow-hidden hover:-translate-y-0.5"
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:shadow-lg hover:border-indigo-500' : 'bg-white border-gray-100 hover:shadow-md hover:border-indigo-200'">
           <!-- Gradient accent bar -->
@@ -175,33 +320,46 @@
             <h3 class="font-semibold text-sm leading-snug mb-1.5 line-clamp-2 transition-colors"
                 :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
                 x-text="($store.lang.ko && paper.title_ko) ? paper.title_ko : (paper.title || paper.name)"></h3>
-            <!-- Authors with person icon -->
-            <div x-show="paper.authors && paper.authors.length > 0"
-                 class="flex items-center gap-1 mb-2 transition-colors"
+            <!-- Authors + Year + Venue metadata line -->
+            <div class="flex items-center gap-1.5 mb-2 flex-wrap"
                  :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">
-              <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
-              </svg>
-              <span class="text-xs line-clamp-1"
-                    x-text="paper.authors ? paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : '') : ''"></span>
+              <div x-show="paper.authors && paper.authors.length > 0" class="flex items-center gap-1 min-w-0">
+                <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
+                </svg>
+                <span class="text-xs truncate"
+                      x-text="paper.authors ? paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : '') : ''"></span>
+              </div>
+              <span x-show="paper.publication_year"
+                    class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
+                    :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
+                    x-text="paper.publication_year"></span>
+              <span x-show="paper.venue"
+                    class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
+                    :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
+                    x-text="paper.venue"></span>
             </div>
-            <!-- Abstract snippet with blockquote style -->
+            <!-- Abstract snippet with blockquote style (3 lines) -->
             <div x-show="paper.abstract || paper.abstract_ko" class="mb-2.5 pl-2.5 border-l-2 transition-colors"
                  :class="$store.darkMode.on ? 'border-indigo-700' : 'border-indigo-200'">
-              <p class="text-xs line-clamp-2 leading-relaxed transition-colors"
+              <p class="text-xs line-clamp-3 leading-relaxed transition-colors"
                  :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
-                 x-text="(() => { const abs = ($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract; return abs ? abs.substring(0, 150) + (abs.length > 150 ? '...' : '') : ''; })()"></p>
+                 x-text="(() => { const abs = ($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract; return abs ? abs.substring(0, 250) + (abs.length > 250 ? '...' : '') : ''; })()"></p>
             </div>
-            <!-- Category tags (outline style) -->
+            <!-- Category tags with overflow indicator -->
             <div x-show="paper.categories && paper.categories.length > 0" class="flex flex-wrap gap-1.5">
               <template x-for="cat in (paper.categories || []).slice(0, 3)" :key="cat">
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs sm:text-[10px] font-medium transition-colors"
                       :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
                       x-text="'#' + cat"></span>
               </template>
+              <span x-show="paper.categories && paper.categories.length > 3"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                    x-text="'+' + (paper.categories.length - 3)"></span>
             </div>
           </a>
-          <!-- Unified footer: format indicators + size (left) | actions (right) -->
+          <!-- Footer: format + size + date (left) | details + actions (right) -->
           <div class="border-t px-4 py-2 flex items-center justify-between transition-colors"
                :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-100'">
             <div class="flex items-center gap-2 sm:gap-1.5">
@@ -217,7 +375,6 @@
                       class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700"
                       :class="$store.darkMode.on && 'bg-blue-900/30 text-blue-400'">PDF</span>
               </div>
-
               <!-- Desktop: Dots (sm:+) -->
               <div class="hidden sm:flex items-center gap-1.5">
                 <span x-show="paper.formats.md_ko" class="w-2 h-2 rounded-full bg-purple-500" title="MD-KO"></span>
@@ -225,8 +382,46 @@
                 <span x-show="paper.formats.pdf" class="w-2 h-2 rounded-full bg-blue-500" title="PDF"></span>
               </div>
               <span class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
+              <span x-show="paperDateLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paperDateLabel(paper)"></span>
+              <!-- External link to paper source -->
+              <a x-show="paper.paper_url" :href="paper.paper_url" target="_blank" rel="noopener"
+                 @click.stop
+                 class="ml-1 p-1 rounded transition"
+                 :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600'"
+                 title="Open source URL">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+                </svg>
+              </a>
             </div>
             <div class="flex items-center space-x-1">
+              <!-- Details expand/collapse toggle -->
+              <button @click.prevent="toggleCardDetail(paper)"
+                      class="p-3 sm:p-1.5 rounded-lg transition"
+                      :class="paper._expanded
+                        ? ($store.darkMode.on ? 'text-indigo-400 bg-gray-700' : 'text-indigo-600 bg-indigo-50')
+                        : ($store.darkMode.on ? 'text-gray-500 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50')"
+                      :title="paper._expanded ? 'Hide details' : 'Show details'">
+                <svg class="w-5 h-5 sm:w-4 sm:h-4 transition-transform duration-200"
+                     :class="paper._expanded && 'rotate-180'"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+              <!-- Enrich button (web search) -->
+              <button x-show="!paper.venue && !paper.doi" @click.prevent="enrichPaper(paper)"
+                      class="p-3 sm:p-1.5 rounded-lg transition"
+                      :class="$store.darkMode.on ? 'text-gray-500 hover:text-teal-400 hover:bg-gray-700' : 'text-gray-400 hover:text-teal-600 hover:bg-teal-50'"
+                      :disabled="paper._enriching"
+                      title="Enrich metadata via web search">
+                <svg x-show="!paper._enriching" class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <svg x-show="paper._enriching" class="w-5 h-5 sm:w-4 sm:h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+              </button>
               <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
                       class="p-3 sm:p-1.5 rounded-lg transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400 hover:bg-gray-700' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'"
@@ -253,6 +448,81 @@
               </button>
             </div>
           </div>
+          <!-- Reading progress bar -->
+          <div x-show="getProgress(paper.name) > 0"
+               class="px-4 pb-2 pt-0">
+            <div class="flex items-center gap-2">
+              <div class="flex-1 h-1 rounded-full overflow-hidden"
+                   :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
+                <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all"
+                     :style="'width: ' + getProgress(paper.name) + '%'"></div>
+              </div>
+              <span class="text-[10px] font-medium tabular-nums w-8 text-right"
+                    :class="getProgress(paper.name) >= 95
+                      ? ($store.darkMode.on ? 'text-emerald-400' : 'text-emerald-600')
+                      : ($store.darkMode.on ? 'text-gray-400' : 'text-gray-500')"
+                    x-text="getProgress(paper.name) + '%'"></span>
+            </div>
+          </div>
+          <!-- Expandable detail panel -->
+          <div x-show="paper._expanded" x-collapse x-cloak>
+            <div class="px-4 py-3 space-y-3 border-t transition-colors"
+                 :class="$store.darkMode.on ? 'border-gray-700 bg-gray-850' : 'border-gray-50 bg-gray-50/50'">
+              <!-- Full abstract -->
+              <div x-show="paper.abstract || paper.abstract_ko">
+                <h4 class="text-[10px] font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Abstract</h4>
+                <div class="pl-2.5 border-l-2 transition-colors"
+                     :class="$store.darkMode.on ? 'border-indigo-700' : 'border-indigo-200'">
+                  <p class="text-xs leading-relaxed transition-colors"
+                     :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'"
+                     x-text="($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract"></p>
+                </div>
+              </div>
+              <!-- All authors (when > 3) -->
+              <div x-show="paper.authors && paper.authors.length > 3">
+                <h4 class="text-[10px] font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Authors</h4>
+                <p class="text-xs leading-relaxed transition-colors"
+                   :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'"
+                   x-text="paper.authors.join(', ')"></p>
+              </div>
+              <!-- All categories (when > 3) -->
+              <div x-show="paper.categories && paper.categories.length > 3">
+                <h4 class="text-[10px] font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Categories</h4>
+                <div class="flex flex-wrap gap-1.5">
+                  <template x-for="cat in (paper.categories || [])" :key="'detail-' + cat">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors"
+                          :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
+                          x-text="'#' + cat"></span>
+                  </template>
+                </div>
+              </div>
+              <!-- External links -->
+              <div class="flex items-center gap-3 flex-wrap"
+                   x-show="paper.doi || paper.paper_url">
+                <a x-show="paper.paper_url" :href="paper.paper_url" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
+                   :class="$store.darkMode.on ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+                  </svg>
+                  <span x-text="paper.paper_url && paper.paper_url.includes('arxiv') ? 'arXiv' : 'Source'"></span>
+                </a>
+                <a x-show="paper.doi" :href="'https://doi.org/' + paper.doi" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
+                   :class="$store.darkMode.on ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-700'">
+                  <span>DOI</span>
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+          </template>
         </div>
       </template>
     </div>
@@ -260,76 +530,177 @@
     <!-- Paper list view -->
     <div x-show="!loading && viewMode === 'list'" class="space-y-1">
       <template x-for="paper in filtered" :key="paper.name">
-        <div class="card-enter flex items-center rounded-lg border px-4 py-2.5 transition-all duration-200"
-             :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-indigo-500 hover:bg-gray-750' : 'bg-white border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30'">
-          <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="flex-1 min-w-0 flex items-center gap-4">
-            <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-sm truncate transition-colors"
-                  :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
-                  x-text="($store.lang.ko && paper.title_ko) ? paper.title_ko : (paper.title || paper.name)"></h3>
-              <p x-show="paper.authors && paper.authors.length > 0"
-                 class="text-[10px] truncate transition-colors"
-                 :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
-                 x-text="paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : '')"></p>
-            </div>
-            <div class="flex gap-1.5 items-center shrink-0">
-              <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
-                <span class="px-1.5 py-0.5 rounded text-xs sm:text-[10px] font-medium transition-colors"
-                      :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
-                      x-text="'#' + cat"></span>
-              </template>
-              <!-- Format indicators -->
-              <div class="flex items-center gap-1 ml-1">
-                <!-- Mobile: Text badges -->
-                <div class="flex sm:hidden gap-1">
-                  <span x-show="paper.formats.md_ko"
-                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
-                        :class="$store.darkMode.on && 'bg-purple-900/30 text-purple-400'">KO</span>
-                  <span x-show="paper.formats.md_en"
-                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600"
-                        :class="$store.darkMode.on && 'bg-gray-700/50 text-gray-400'">EN</span>
-                  <span x-show="paper.formats.pdf"
-                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700"
-                        :class="$store.darkMode.on && 'bg-blue-900/30 text-blue-400'">PDF</span>
-                </div>
-
-                <!-- Desktop: Dots (sm:+) -->
-                <div class="hidden sm:flex gap-1">
-                  <span x-show="paper.formats.md_ko" class="w-1.5 h-1.5 rounded-full bg-purple-500" title="MD-KO"></span>
-                  <span x-show="paper.formats.md_en" class="w-1.5 h-1.5 rounded-full bg-gray-400" title="MD-EN"></span>
-                  <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
+        <div class="card-enter rounded-lg border overflow-hidden transition-all duration-200"
+             :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'">
+          <!-- Main row -->
+          <div class="flex items-center px-4 py-2.5">
+            <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="flex-1 min-w-0 flex items-center gap-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="font-medium text-sm truncate transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
+                    x-text="($store.lang.ko && paper.title_ko) ? paper.title_ko : (paper.title || paper.name)"></h3>
+                <p x-show="paper.authors && paper.authors.length > 0"
+                   class="text-[10px] truncate transition-colors"
+                   :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                   x-text="paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : '')"></p>
+              </div>
+              <div class="flex gap-1.5 items-center shrink-0">
+                <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
+                  <span class="px-1.5 py-0.5 rounded text-xs sm:text-[10px] font-medium transition-colors"
+                        :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
+                        x-text="'#' + cat"></span>
+                </template>
+                <!-- Format indicators -->
+                <div class="flex items-center gap-1 ml-1">
+                  <!-- Mobile: Text badges -->
+                  <div class="flex sm:hidden gap-1">
+                    <span x-show="paper.formats.md_ko"
+                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
+                          :class="$store.darkMode.on && 'bg-purple-900/30 text-purple-400'">KO</span>
+                    <span x-show="paper.formats.md_en"
+                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600"
+                          :class="$store.darkMode.on && 'bg-gray-700/50 text-gray-400'">EN</span>
+                    <span x-show="paper.formats.pdf"
+                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700"
+                          :class="$store.darkMode.on && 'bg-blue-900/30 text-blue-400'">PDF</span>
+                  </div>
+                  <!-- Desktop: Dots (sm:+) -->
+                  <div class="hidden sm:flex gap-1">
+                    <span x-show="paper.formats.md_ko" class="w-1.5 h-1.5 rounded-full bg-purple-500" title="MD-KO"></span>
+                    <span x-show="paper.formats.md_en" class="w-1.5 h-1.5 rounded-full bg-gray-400" title="MD-EN"></span>
+                    <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
+                  </div>
                 </div>
               </div>
+              <span x-show="paper.publication_year" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
+                    :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
+                    x-text="paper.publication_year"></span>
+              <span x-show="paper.venue" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
+                    :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
+                    x-text="paper.venue"></span>
+              <span x-show="paperDateLabel(paper)" class="hidden sm:inline text-[10px] w-24 text-right shrink-0 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                    x-text="paperDateLabel(paper)"></span>
+              <span class="text-[10px] w-12 text-right shrink-0 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                    x-text="paper.size_mb + ' MB'"></span>
+              <span x-show="getProgress(paper.name) > 0"
+                    class="text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 transition-colors"
+                    :class="getProgress(paper.name) >= 95
+                      ? ($store.darkMode.on ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
+                      : ($store.darkMode.on ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700')"
+                    x-text="getProgress(paper.name) + '%'"></span>
+            </a>
+            <div class="flex items-center space-x-1 ml-3 shrink-0">
+              <!-- Details expand/collapse toggle -->
+              <button @click.prevent="toggleCardDetail(paper)"
+                      class="p-2.5 sm:p-1 rounded transition"
+                      :class="paper._expanded
+                        ? ($store.darkMode.on ? 'text-indigo-400' : 'text-indigo-600')
+                        : ($store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600')"
+                      :title="paper._expanded ? 'Hide details' : 'Show details'">
+                <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5 transition-transform duration-200"
+                     :class="paper._expanded && 'rotate-180'"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+              <!-- Enrich button (web search) -->
+              <button x-show="!paper.venue && !paper.doi" @click.prevent="enrichPaper(paper)"
+                      class="p-2.5 sm:p-1 rounded transition"
+                      :class="$store.darkMode.on ? 'text-gray-500 hover:text-teal-400' : 'text-gray-400 hover:text-teal-600'"
+                      :disabled="paper._enriching"
+                      title="Enrich metadata via web search">
+                <svg x-show="!paper._enriching" class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <svg x-show="paper._enriching" class="w-5 h-5 sm:w-3.5 sm:h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+              </button>
+              <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
+                      class="p-2.5 sm:p-1 rounded transition"
+                      :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400' : 'text-gray-400 hover:text-emerald-600'"
+                      title="Archive">
+                <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+              </button>
+              <button x-show="tab === 'archived'" @click.prevent="confirmAction('restore', paper)"
+                      class="p-2.5 sm:p-1 rounded transition"
+                      :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600'"
+                      title="Restore">
+                <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                </svg>
+              </button>
+              <button @click.prevent="confirmAction('delete', paper)"
+                      class="p-2.5 sm:p-1 rounded transition"
+                      :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-600'"
+                      title="Delete">
+                <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
             </div>
-            <span class="text-[10px] w-12 text-right shrink-0 transition-colors"
-                  :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
-                  x-text="paper.size_mb + ' MB'"></span>
-          </a>
-          <div class="flex items-center space-x-1 ml-3 shrink-0">
-            <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
-                    class="p-2.5 sm:p-1 rounded transition"
-                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400' : 'text-gray-400 hover:text-emerald-600'"
-                    title="Archive">
-              <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-              </svg>
-            </button>
-            <button x-show="tab === 'archived'" @click.prevent="confirmAction('restore', paper)"
-                    class="p-2.5 sm:p-1 rounded transition"
-                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600'"
-                    title="Restore">
-              <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-              </svg>
-            </button>
-            <button @click.prevent="confirmAction('delete', paper)"
-                    class="p-2.5 sm:p-1 rounded transition"
-                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-600'"
-                    title="Delete">
-              <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-              </svg>
-            </button>
+          </div>
+          <!-- Expandable detail panel -->
+          <div x-show="paper._expanded" x-collapse x-cloak>
+            <div class="px-4 py-3 space-y-3 border-t transition-colors"
+                 :class="$store.darkMode.on ? 'border-gray-700 bg-gray-850' : 'border-gray-50 bg-gray-50/50'">
+              <!-- Full abstract -->
+              <div x-show="paper.abstract || paper.abstract_ko">
+                <h4 class="text-[10px] font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Abstract</h4>
+                <div class="pl-2.5 border-l-2 transition-colors"
+                     :class="$store.darkMode.on ? 'border-indigo-700' : 'border-indigo-200'">
+                  <p class="text-xs leading-relaxed transition-colors"
+                     :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'"
+                     x-text="($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract"></p>
+                </div>
+              </div>
+              <!-- All authors -->
+              <div x-show="paper.authors && paper.authors.length > 2">
+                <h4 class="text-[10px] font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Authors</h4>
+                <p class="text-xs leading-relaxed transition-colors"
+                   :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'"
+                   x-text="paper.authors.join(', ')"></p>
+              </div>
+              <!-- All categories -->
+              <div x-show="paper.categories && paper.categories.length > 1">
+                <h4 class="text-[10px] font-semibold uppercase tracking-wider mb-1.5 transition-colors"
+                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Categories</h4>
+                <div class="flex flex-wrap gap-1.5">
+                  <template x-for="cat in (paper.categories || [])" :key="'list-detail-' + cat">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors"
+                          :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
+                          x-text="'#' + cat"></span>
+                  </template>
+                </div>
+              </div>
+              <!-- External links -->
+              <div class="flex items-center gap-3 flex-wrap"
+                   x-show="paper.doi || paper.paper_url">
+                <a x-show="paper.paper_url" :href="paper.paper_url" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
+                   :class="$store.darkMode.on ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
+                  </svg>
+                  <span x-text="paper.paper_url && paper.paper_url.includes('arxiv') ? 'arXiv' : 'Source'"></span>
+                </a>
+                <a x-show="paper.doi" :href="'https://doi.org/' + paper.doi" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
+                   :class="$store.darkMode.on ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-700'">
+                  <span>DOI</span>
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -344,60 +715,39 @@
       <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="search ? 'No papers match your search.' : 'No papers yet. Upload a PDF to get started.'"></p>
     </div>
 
-    <!-- Upload & Processing Panel -->
-    <div class="mt-8 rounded-xl border shadow-sm transition-colors"
-         :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+    </div><!-- /Papers content -->
 
-      <!-- Panel header (always visible) -->
-      <button @click="togglePanel()"
-              class="w-full flex items-center justify-between px-4 py-3 transition-colors rounded-xl"
-              :class="$store.darkMode.on ? 'hover:bg-gray-750' : 'hover:bg-gray-50'">
-        <div class="flex items-center space-x-2">
-          <svg class="w-4 h-4 transition-transform" :class="panel.open && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-          </svg>
-          <span class="text-sm font-medium" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'">Upload & Processing</span>
-          <span x-show="isProcessing" class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <span x-show="queueCount > 0"
-                class="text-xs rounded-full px-2 py-0.5 font-medium"
-                :class="$store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600'"
-                x-text="queueCount + ' in queue'"></span>
-          <span x-show="uploadQueue.filter(u => u.status === 'uploading').length > 0"
-                class="text-xs rounded-full px-2 py-0.5 font-medium"
-                :class="$store.darkMode.on ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-600'">Uploading...</span>
-        </div>
-      </button>
+    <!-- Upload tab content -->
+    <div x-show="tab === 'upload'" x-cloak class="space-y-5">
 
-      <!-- Panel body -->
-      <div x-show="panel.open" x-collapse x-cloak>
-        <div class="px-4 pb-4 space-y-4">
-
-          <!-- Drop zone (compact) -->
-          <div class="border-2 border-dashed rounded-lg p-4 text-center transition"
+          <!-- Drop zone (large, prominent) -->
+          <div class="border-2 border-dashed rounded-xl p-8 sm:p-10 text-center transition"
                :class="[
                  panelDragOver ? ($store.darkMode.on ? 'border-indigo-400 bg-indigo-900/50' : 'border-indigo-500 bg-indigo-50') : ($store.darkMode.on ? 'border-gray-700' : 'border-gray-300')
                ]"
                @dragover.prevent="panelDragOver = true"
                @dragleave.prevent="panelDragOver = false"
                @drop.prevent="panelDragOver = false; handleDrop($event)">
-            <div class="flex items-center justify-center space-x-3">
-              <svg class="w-6 h-6 shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            <div class="flex flex-col items-center space-y-3">
+              <svg class="w-10 h-10" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
               </svg>
-              <span class="text-sm" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">Drop PDF files here, or</span>
-              <label class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium cursor-pointer hover:bg-indigo-700 transition">
-                Browse
-                <input type="file" accept=".pdf" multiple class="hidden" @change="handleFileSelect($event)">
-              </label>
+              <div>
+                <span class="text-sm" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">Drop PDF files here, or</span>
+                <label class="ml-2 inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium cursor-pointer hover:bg-indigo-700 transition">
+                  Browse
+                  <input type="file" accept=".pdf" multiple class="hidden" @change="handleFileSelect($event)">
+                </label>
+              </div>
             </div>
           </div>
 
           <!-- Upload queue (client-side) -->
           <template x-if="uploadQueue.length > 0">
             <div class="space-y-1.5">
+              <h4 class="text-xs font-semibold uppercase tracking-wider"
+                  :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Upload Queue</h4>
               <template x-for="(item, idx) in uploadQueue" :key="item.name + idx">
                 <div class="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors"
                      :class="$store.darkMode.on ? 'bg-gray-750' : 'bg-gray-50'">
@@ -493,12 +843,6 @@
             </template>
           </div>
 
-          <!-- Empty processing queue message -->
-          <div x-show="processingFiles.length === 0 && uploadQueue.length === 0"
-               class="text-center py-3">
-            <p class="text-xs" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">No files in processing queue.</p>
-          </div>
-
           <!-- Detailed Log (sub-toggle) -->
           <div class="border-t pt-3 transition-colors"
                :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
@@ -518,9 +862,20 @@
             </div>
           </div>
 
-        </div>
-      </div>
-    </div>
+          <!-- Empty state (no uploads, no processing) -->
+          <div x-show="processingFiles.length === 0 && uploadQueue.length === 0"
+               class="text-center py-8">
+            <svg class="mx-auto w-12 h-12 mb-3" :class="$store.darkMode.on ? 'text-gray-600' : 'text-gray-300'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13"/>
+            </svg>
+            <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">No files in queue. Drop a PDF above to start processing.</p>
+          </div>
+
+    </div><!-- /Upload tab content -->
+
+      </div><!-- /p-4 sm:p-5 -->
+    </div><!-- /Content panel -->
 
   </main>
 
@@ -560,12 +915,18 @@ function papersApp() {
     loading: true,
     stats: { unread: 0, archived: 0 },
     viewMode: localStorage.getItem('pf-view') || 'card',
-    sortBy: localStorage.getItem('pf-sort') || 'name',
-    sortOrder: localStorage.getItem('pf-sort-order') || 'asc',
+    sortBy: localStorage.getItem('pf-sort') || 'date',
+    sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
+    colCount: window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1,
+    searchFocused: false,
+    selectedSuggestionIdx: -1,
 
-    // Upload & Processing panel state
-    panel: { open: false, logOpen: false },
+    // Reading progress (server-synced)
+    serverProgress: {},
+
+    // Upload & Processing state
+    panel: { logOpen: false },
     panelDragOver: false,
     uploadQueue: [],
     processingFiles: [],
@@ -579,9 +940,112 @@ function papersApp() {
     get isProcessing() {
       return this.processingInfo.stage && !['idle', 'complete'].includes(this.processingInfo.stage);
     },
+    get activeUploads() {
+      return this.uploadQueue.filter(u => u.status === 'uploading' || u.status === 'pending').length;
+    },
+    // Distribute cards into independent columns (row-first order: 0→col1, 1→col2, 2→col3, 3→col1...)
+    get cardColumns() {
+      const papers = this.filtered;
+      const n = this.colCount;
+      const cols = Array.from({length: n}, () => []);
+      papers.forEach((p, i) => cols[i % n].push(p));
+      return cols;
+    },
+
+    // Search suggestions: aggregate categories, authors, venues, years from loaded papers
+    get suggestions() {
+      if (!this.searchFocused) return [];
+      const q = this.search.toLowerCase().trim();
+      const counts = { cat: {}, author: {}, venue: {}, year: {} };
+
+      for (const p of this.papers) {
+        if (p.categories) p.categories.forEach(c => { counts.cat[c] = (counts.cat[c] || 0) + 1; });
+        if (p.authors) p.authors.forEach(a => { counts.author[a] = (counts.author[a] || 0) + 1; });
+        if (p.venue) counts.venue[p.venue] = (counts.venue[p.venue] || 0) + 1;
+        if (p.publication_year) { const y = String(p.publication_year); counts.year[y] = (counts.year[y] || 0) + 1; }
+      }
+
+      const items = [];
+      const add = (map, type) => {
+        for (const [val, cnt] of Object.entries(map)) {
+          if (!q || val.toLowerCase().includes(q)) {
+            items.push({ text: val, type, count: cnt });
+          }
+        }
+      };
+      add(counts.cat, 'category');
+      add(counts.venue, 'venue');
+      add(counts.author, 'author');
+      add(counts.year, 'year');
+
+      // Sort: exact prefix match first, then by count desc
+      items.sort((a, b) => {
+        if (q) {
+          const aPrefix = a.text.toLowerCase().startsWith(q) ? 0 : 1;
+          const bPrefix = b.text.toLowerCase().startsWith(q) ? 0 : 1;
+          if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+        }
+        // categories first, then venue, author, year
+        const typeOrder = { category: 0, venue: 1, author: 2, year: 3 };
+        if (typeOrder[a.type] !== typeOrder[b.type]) return typeOrder[a.type] - typeOrder[b.type];
+        return b.count - a.count;
+      });
+
+      return items.slice(0, 8);
+    },
+
+    applySuggestion(item) {
+      this.search = item.text;
+      this.searchFocused = false;
+      this.selectedSuggestionIdx = -1;
+    },
+
+    handleSearchKeydown(e) {
+      const list = this.suggestions;
+      if (!list.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.selectedSuggestionIdx = (this.selectedSuggestionIdx + 1) % list.length;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.selectedSuggestionIdx = this.selectedSuggestionIdx <= 0 ? list.length - 1 : this.selectedSuggestionIdx - 1;
+      } else if (e.key === 'Enter' && this.selectedSuggestionIdx >= 0) {
+        e.preventDefault();
+        this.applySuggestion(list[this.selectedSuggestionIdx]);
+      } else if (e.key === 'Escape') {
+        this.searchFocused = false;
+        this.selectedSuggestionIdx = -1;
+      }
+    },
+
+    formatDate(isoStr) {
+      if (!isoStr) return '';
+      try {
+        const d = new Date(isoStr);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${mm}-${dd}`;
+      } catch { return ''; }
+    },
+
+    paperDateLabel(paper) {
+      return this.formatDate(paper.extracted_at || paper.added_at);
+    },
+
+    getProgress(paperName) {
+      const local = parseInt(localStorage.getItem(`pf-progress-${paperName}`) || '0');
+      const server = this.serverProgress[paperName] || 0;
+      return Math.max(local, server);
+    },
 
     async init() {
-      await Promise.all([this.fetchPapers(), this.fetchStats()]);
+      await Promise.all([this.fetchPapers(), this.fetchStats(), this.refreshStatus(), this.fetchProgress()]);
+      // Background polling for processing status (badge updates across all tabs)
+      this.statusInterval = setInterval(() => this.refreshStatus(), 5000);
+      // Track column count for responsive card layout
+      window.addEventListener('resize', () => {
+        this.colCount = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1;
+      });
     },
 
     get filtered() {
@@ -597,18 +1061,29 @@ function papersApp() {
           || (p.abstract && p.abstract.toLowerCase().includes(q))
           || (p.abstract_ko && p.abstract_ko.toLowerCase().includes(q))
           || (p.categories && p.categories.some(c => c.toLowerCase().includes(q)))
+          || (p.venue && p.venue.toLowerCase().includes(q))
         );
       }
 
       const dir = this.sortOrder === 'asc' ? 1 : -1;
-      if (this.sortBy === 'title') {
+      if (this.sortBy === 'date') {
+        results = [...results].sort((a, b) => {
+          const da = a.extracted_at || a.added_at || '';
+          const db = b.extracted_at || b.added_at || '';
+          return dir * da.localeCompare(db);
+        });
+      } else if (this.sortBy === 'title') {
         results = [...results].sort((a, b) => {
           const ta = (a.title || a.name).toLowerCase();
           const tb = (b.title || b.name).toLowerCase();
           return dir * ta.localeCompare(tb);
         });
+      } else if (this.sortBy === 'year') {
+        results = [...results].sort((a, b) => dir * ((a.publication_year || 0) - (b.publication_year || 0)));
       } else if (this.sortBy === 'size') {
         results = [...results].sort((a, b) => dir * (a.size_mb - b.size_mb));
+      } else if (this.sortBy === 'progress') {
+        results = [...results].sort((a, b) => dir * (this.getProgress(a.name) - this.getProgress(b.name)));
       } else {
         results = [...results].sort((a, b) => dir * a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       }
@@ -618,14 +1093,23 @@ function papersApp() {
 
     async switchTab(t) {
       this.tab = t;
-      await this.fetchPapers();
+      if (t === 'upload') {
+        this.refreshStatus();
+      } else {
+        await this.fetchPapers();
+      }
     },
 
     async fetchPapers() {
       this.loading = true;
       try {
         const resp = await apiFetch('/api/papers?tab=' + this.tab);
-        if (resp) this.papers = await resp.json();
+        if (resp) {
+          const papers = await resp.json();
+          const expandedSet = new Set(this.papers.filter(p => p._expanded).map(p => p.name));
+          papers.forEach(p => { p._expanded = expandedSet.has(p.name); });
+          this.papers = papers;
+        }
       } catch (e) {
         showToast('Failed to load papers', 'error');
       } finally {
@@ -638,6 +1122,33 @@ function papersApp() {
         const resp = await apiFetch('/api/stats');
         if (resp) this.stats = await resp.json();
       } catch (e) { /* silent */ }
+    },
+
+    async fetchProgress() {
+      try {
+        const resp = await apiFetch('/api/progress');
+        if (resp?.ok) {
+          this.serverProgress = await resp.json();
+          // Merge: server → localStorage (fill missing)
+          for (const [pname, val] of Object.entries(this.serverProgress)) {
+            const local = parseInt(localStorage.getItem(`pf-progress-${pname}`) || '0');
+            if (val > local) localStorage.setItem(`pf-progress-${pname}`, val.toString());
+          }
+          // Merge: localStorage → server (push missing, fire-and-forget)
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith('pf-progress-')) {
+              const pname = key.substring('pf-progress-'.length);
+              const local = parseInt(localStorage.getItem(key) || '0');
+              if (local > 0 && local > (this.serverProgress[pname] || 0)) {
+                apiFetch(`/api/papers/${encodeURIComponent(pname)}/progress`, {
+                  method: 'POST', body: JSON.stringify({ progress: local })
+                });
+              }
+            }
+          }
+        }
+      } catch (e) { /* silent fallback to localStorage-only */ }
     },
 
     confirmAction(action, paper) {
@@ -682,22 +1193,35 @@ function papersApp() {
       }
     },
 
-    // ── Upload & Processing Panel ──
+    toggleCardDetail(paper) {
+      paper._expanded = !paper._expanded;
+    },
 
-    togglePanel() {
-      this.panel.open = !this.panel.open;
-      if (this.panel.open) {
-        this.refreshStatus();
-        this.statusInterval = setInterval(() => this.refreshStatus(), 3000);
-      } else {
-        clearInterval(this.statusInterval);
-        this.statusInterval = null;
-        if (this.panel.logOpen) {
-          clearInterval(this.logInterval);
-          this.logInterval = null;
+    async enrichPaper(paper) {
+      paper._enriching = true;
+      try {
+        const name = encodeURIComponent(paper.name);
+        const resp = await apiFetch(`/api/papers/${name}/enrich`, { method: 'POST' });
+        if (resp && resp.ok) {
+          const data = await resp.json();
+          if (data.enriched_fields && data.enriched_fields.length > 0) {
+            showToast(`Enriched: ${data.enriched_fields.join(', ')}`);
+            await this.fetchPapers();
+          } else {
+            showToast('No additional metadata found', 'warning');
+          }
+        } else if (resp) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || data.error || 'Enrichment failed', 'error');
         }
+      } catch (e) {
+        showToast('Enrichment failed', 'error');
+      } finally {
+        paper._enriching = false;
       }
     },
+
+    // ── Upload & Processing ──
 
     handleDrop(event) {
       const files = Array.from(event.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
@@ -724,8 +1248,8 @@ function papersApp() {
           error: null,
         });
       }
-      // Auto-open panel
-      if (!this.panel.open) this.togglePanel();
+      // Auto-switch to Upload tab
+      if (this.tab !== 'upload') this.tab = 'upload';
       this.processUploadQueue();
     },
 

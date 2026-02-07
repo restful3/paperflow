@@ -625,6 +625,190 @@ def extract_paper_metadata(md_path, output_dir, config):
     return None
 
 
+##############################################################################
+# Web Search Enrichment
+# Enrich paper metadata with Brave Search API (venue, DOI, year, URL)
+##############################################################################
+
+# Known venue patterns for matching search results
+_VENUE_PATTERNS = [
+    # Conferences
+    (re.compile(r'\b(NeurIPS|NIPS)\b', re.IGNORECASE), 'NeurIPS'),
+    (re.compile(r'\bICML\b', re.IGNORECASE), 'ICML'),
+    (re.compile(r'\bICLR\b', re.IGNORECASE), 'ICLR'),
+    (re.compile(r'\bCVPR\b', re.IGNORECASE), 'CVPR'),
+    (re.compile(r'\bICCV\b', re.IGNORECASE), 'ICCV'),
+    (re.compile(r'\bECCV\b', re.IGNORECASE), 'ECCV'),
+    (re.compile(r'\bACL\s+20\d{2}\b', re.IGNORECASE), None),  # use match
+    (re.compile(r'\bEMNLP\b', re.IGNORECASE), 'EMNLP'),
+    (re.compile(r'\bNAACL\b', re.IGNORECASE), 'NAACL'),
+    (re.compile(r'\bAAAI\b', re.IGNORECASE), 'AAAI'),
+    (re.compile(r'\bIJCAI\b', re.IGNORECASE), 'IJCAI'),
+    (re.compile(r'\bSIGGRAPH\b', re.IGNORECASE), 'SIGGRAPH'),
+    (re.compile(r'\bCHI\s+20\d{2}\b', re.IGNORECASE), None),
+    (re.compile(r'\bKDD\b', re.IGNORECASE), 'KDD'),
+    (re.compile(r'\bWWW\b', re.IGNORECASE), 'WWW'),
+    (re.compile(r'\bCoRL\b', re.IGNORECASE), 'CoRL'),
+    (re.compile(r'\bRSS\s+20\d{2}\b', re.IGNORECASE), None),
+    # Journals
+    (re.compile(r'\bNature\b(?:\s+\w+)*', re.IGNORECASE), None),
+    (re.compile(r'\bScience\b', re.IGNORECASE), 'Science'),
+    (re.compile(r'\bIEEE\s+\w+', re.IGNORECASE), None),
+    (re.compile(r'\bACM\s+\w+', re.IGNORECASE), None),
+    (re.compile(r'\bJMLR\b', re.IGNORECASE), 'JMLR'),
+    (re.compile(r'\bTACL\b', re.IGNORECASE), 'TACL'),
+    # Preprints
+    (re.compile(r'\barXiv\b', re.IGNORECASE), 'arXiv'),
+    (re.compile(r'\bbioRxiv\b', re.IGNORECASE), 'bioRxiv'),
+    (re.compile(r'\bmedRxiv\b', re.IGNORECASE), 'medRxiv'),
+    (re.compile(r'\bOpenReview\b', re.IGNORECASE), 'OpenReview'),
+]
+
+_DOI_RE = re.compile(r'\b(10\.\d{4,}/[^\s,;"\'>]+)')
+_YEAR_RE = re.compile(r'\b((?:19|20)\d{2})\b')
+
+
+def _extract_venue_from_text(text):
+    """Extract venue name from search result text."""
+    for pattern, default_name in _VENUE_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            return default_name or m.group(0).strip()
+    return None
+
+
+def _extract_year_from_text(text):
+    """Extract publication year from search result text, preferring recent years."""
+    years = [int(y) for y in _YEAR_RE.findall(text) if 1990 <= int(y) <= 2030]
+    if not years:
+        return None
+    # Prefer the most common year in the text
+    from collections import Counter
+    counts = Counter(years)
+    return counts.most_common(1)[0][0]
+
+
+def enrich_metadata_with_web_search(metadata, output_dir, config):
+    """Enrich paper metadata using Brave Search API.
+
+    Searches for the paper by title + first author, then extracts:
+    - publication_year (if not already set)
+    - venue (journal/conference name)
+    - doi
+    - paper_url (link to paper)
+
+    Updates paper_meta.json in-place and returns updated metadata.
+    """
+    import urllib.request
+    import urllib.parse
+
+    api_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
+    if not api_key:
+        print_info("Web search enrichment skipped: BRAVE_SEARCH_API_KEY not set")
+        return metadata
+
+    title = metadata.get("title")
+    if not title:
+        print_info("Web search enrichment skipped: no title available")
+        return metadata
+
+    # Build search query: "title" first_author
+    authors = metadata.get("authors", [])
+    first_author = authors[0].split()[-1] if authors else ""  # last name
+    query = f'"{title}"'
+    if first_author:
+        query += f" {first_author}"
+
+    print_info(f"Searching web for paper metadata...")
+
+    try:
+        # Call Brave Search API
+        params = urllib.parse.urlencode({
+            "q": query,
+            "count": 5,
+            "text_decorations": "false",
+        })
+        url = f"https://api.search.brave.com/res/v1/web/search?{params}"
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip",
+            "X-Subscription-Token": api_key,
+        })
+
+        import gzip
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = resp.read()
+            if resp.headers.get("Content-Encoding") == "gzip":
+                data = gzip.decompress(data)
+            results = json.loads(data.decode("utf-8"))
+
+        web_results = results.get("web", {}).get("results", [])
+        if not web_results:
+            print_info("Web search returned no results")
+            return metadata
+
+        # Aggregate text from all results for pattern extraction
+        all_text = ""
+        first_url = None
+        for r in web_results:
+            all_text += f" {r.get('title', '')} {r.get('description', '')} {r.get('url', '')}"
+            if not first_url:
+                rurl = r.get("url", "")
+                # Prefer academic URLs
+                if any(d in rurl for d in ["arxiv.org", "doi.org", "openreview.net",
+                                            "semanticscholar.org", "ieee.org", "acm.org",
+                                            "springer.com", "nature.com", "sciencedirect.com"]):
+                    first_url = rurl
+            if not first_url:
+                first_url = web_results[0].get("url")
+
+        enriched = {}
+
+        # Extract venue
+        if not metadata.get("venue"):
+            venue = _extract_venue_from_text(all_text)
+            if venue:
+                enriched["venue"] = venue
+                print_success(f"  Venue: {venue}")
+
+        # Extract DOI
+        if not metadata.get("doi"):
+            doi_match = _DOI_RE.search(all_text)
+            if doi_match:
+                doi = doi_match.group(1).rstrip(".")
+                enriched["doi"] = doi
+                print_success(f"  DOI: {doi}")
+
+        # Extract publication year (only if AI didn't find it)
+        if not metadata.get("publication_year"):
+            year = _extract_year_from_text(all_text)
+            if year:
+                enriched["publication_year"] = year
+                print_success(f"  Year: {year}")
+
+        # Paper URL
+        if not metadata.get("paper_url") and first_url:
+            enriched["paper_url"] = first_url
+            print_success(f"  URL: {first_url}")
+
+        if enriched:
+            enriched["web_enriched_at"] = datetime.now().isoformat()
+            metadata.update(enriched)
+
+            # Save updated metadata
+            meta_path = os.path.join(output_dir, "paper_meta.json")
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+            print_success(f"Metadata enriched with {len(enriched) - 1} field(s) from web search")
+        else:
+            print_info("Web search found no additional metadata")
+
+    except Exception as e:
+        print_warning(f"Web search enrichment failed: {e}")
+
+    return metadata
+
+
 def sanitize_folder_name(title, max_length=80):
     """Convert a paper title to a filesystem-safe folder name.
 
@@ -1691,6 +1875,7 @@ def process_single_pdf(pdf_path, config, prompt):
         print_info("Pipeline configuration:")
         print_info(f"  • PDF → Markdown: {'Enabled' if pipeline['convert_to_markdown'] else 'Disabled'}")
         print_info(f"  • Metadata Extraction: {'Enabled' if pipeline.get('extract_metadata', False) else 'Disabled'}")
+        print_info(f"  • Web Search Enrichment: {'Enabled' if pipeline.get('enrich_with_web_search', True) else 'Disabled'}")
         print_info(f"  • Translation (Korean): {'Enabled' if pipeline.get('translate_to_korean', False) else 'Disabled'}")
         print()
 
@@ -1771,6 +1956,10 @@ def process_single_pdf(pdf_path, config, prompt):
                     title_preview = (metadata.get('title') or 'N/A')[:60]
                     print_success(f"Metadata extracted - Title: {title_preview}")
                     results["metadata"] = "success"
+
+                    # Enrich metadata with web search (venue, DOI, year, URL)
+                    if pipeline.get("enrich_with_web_search", True):
+                        metadata = enrich_metadata_with_web_search(metadata, output_dir, config)
 
                     # Smart rename if enabled
                     meta_config = config.get("metadata_extraction", {})

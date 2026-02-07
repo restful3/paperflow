@@ -18,6 +18,7 @@ class ChatMessage(BaseModel):
     content: str
     timestamp: datetime = Field(default_factory=datetime.now)
     sources: Optional[List[dict]] = None
+    web_sources: Optional[List[dict]] = None
 
     class Config:
         json_encoders = {

@@ -3,6 +3,7 @@
     "convert_to_markdown": true,
     "normalize_headings": true,
     "extract_metadata": true,
+    "enrich_with_web_search": true,
     "translate_to_korean": true
   },
   "metadata_extraction": {

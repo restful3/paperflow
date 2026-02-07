@@ -117,14 +117,14 @@ def search_chunks(
     query: str,
     chunks: List[ChatChunk],
     top_k: int = 5
-) -> List[ChatChunk]:
+) -> tuple[List[ChatChunk], List[float]]:
     """Search for relevant chunks using keyword-based scoring (BM25-style).
 
     Scoring:
     - Count term frequency in chunk content
     - Bonus score for heading matches (10 points)
     - Sort by score descending
-    - Return top K chunks
+    - Return top K chunks with their scores
 
     Args:
         query: User's question
@@ -132,7 +132,7 @@ def search_chunks(
         top_k: Number of top chunks to return (default: 5)
 
     Returns:
-        List of most relevant chunks (up to top_k)
+        Tuple of (relevant_chunks, scores) in descending score order
     """
     # Tokenize query (simple lowercase split)
     query_terms = query.lower().split()
@@ -160,8 +160,87 @@ def search_chunks(
     # Sort by score descending
     scored_chunks.sort(key=lambda x: x[0], reverse=True)
 
-    # Return top K chunks
-    return [chunk for score, chunk in scored_chunks[:top_k]]
+    # Return top K chunks with scores
+    top = scored_chunks[:top_k]
+    return ([chunk for _, chunk in top], [score for score, _ in top])
+
+
+# ── Web Search Heuristic ─────────────────────────────────────────────────
+
+# Patterns suggesting external information is needed (EN + KO)
+_EXTERNAL_PATTERNS = [
+    re.compile(r'\b(compar|versus|vs\.?|differ)', re.I),
+    re.compile(r'\b(state.of.the.art|sota|recent|latest|current)', re.I),
+    re.compile(r'\b(related\s+work|prior\s+work|other\s+(papers?|methods?|approaches?))', re.I),
+    re.compile(r'\b(benchmark|dataset|leaderboard)', re.I),
+    re.compile(r'\b(implement(ation)?|code|github|repository)', re.I),
+    re.compile(r'\b(who\s+(invented|proposed|created)|when\s+was)', re.I),
+    re.compile(r'\b(cite|citation|impact)', re.I),
+    re.compile(r'(비교|차이점|다른\s*(방법|논문|모델|접근))', re.I),
+    re.compile(r'(최신|최근|동향|트렌드)', re.I),
+    re.compile(r'(관련\s*연구|선행\s*연구|다른\s*연구)', re.I),
+    re.compile(r'(코드|구현|깃허브|소스코드)', re.I),
+    re.compile(r'(벤치마크|데이터셋|리더보드)', re.I),
+]
+
+# Patterns suggesting paper-internal questions (skip web search)
+_INTERNAL_PATTERNS = [
+    re.compile(r'\b(this\s+paper|the\s+paper|the\s+authors?|section\s+\d|table\s+\d|figure\s+\d|equation\s+\d)', re.I),
+    re.compile(r'\b(proposed\s+method|their\s+(approach|method|model|result))', re.I),
+    re.compile(r'\b(abstract|introduction|conclusion|appendix)', re.I),
+    re.compile(r'(이\s*논문|본\s*논문|저자|제안\s*(된|하는|한)\s*방법|본\s*연구)', re.I),
+    re.compile(r'(요약|초록|결론|서론)', re.I),
+]
+
+_SCORE_THRESHOLD = 3
+
+
+def should_web_search(query: str, top_score: float, num_results: int) -> bool:
+    """Decide whether to augment RAG with web search results.
+
+    Returns True if:
+    1. Query matches external-knowledge patterns, OR
+    2. BM25 retrieval found zero or very low-scoring results
+
+    Returns False if:
+    1. Query clearly asks about paper internals
+    """
+    # Paper-internal questions: skip web search
+    for pat in _INTERNAL_PATTERNS:
+        if pat.search(query):
+            return False
+
+    # External-knowledge patterns: trigger web search
+    for pat in _EXTERNAL_PATTERNS:
+        if pat.search(query):
+            return True
+
+    # Poor retrieval quality: trigger web search
+    if num_results == 0 or top_score < _SCORE_THRESHOLD:
+        return True
+
+    return False
+
+
+def build_web_search_query(user_query: str, paper_title: str | None = None) -> str:
+    """Build an effective web search query from user question + paper context.
+
+    Args:
+        user_query: The user's chat question
+        paper_title: Optional paper title for domain context
+
+    Returns:
+        Search query string
+    """
+    q = user_query.strip()
+    if len(q) > 80:
+        q = q[:80].rsplit(' ', 1)[0]
+
+    if paper_title:
+        short_title = paper_title[:50].rsplit(' ', 1)[0] if len(paper_title) > 50 else paper_title
+        q = f"{q} {short_title}"
+
+    return q
 
 
 def build_rag_context(
@@ -169,24 +248,10 @@ def build_rag_context(
     chunks: List[ChatChunk],
     history: List[ChatMessage],
     max_chunks: int = 5,
-    max_history: int = 2
+    max_history: int = 2,
+    web_results: list[dict] | None = None
 ) -> str:
     """Assemble RAG context for LLM prompt.
-
-    Format:
-    ```
-    # Paper Content (Relevant Excerpts)
-
-    ## Section: {heading}
-    {chunk_content}
-
-    # Previous Conversation
-    User: {previous question}
-    Assistant: {previous answer}
-
-    # Current Question
-    User: {current query}
-    ```
 
     Args:
         query: User's current question
@@ -194,6 +259,7 @@ def build_rag_context(
         history: Conversation history
         max_chunks: Maximum chunks to include (default: 5)
         max_history: Maximum previous conversation turns (default: 2)
+        web_results: Optional web search results to supplement context
 
     Returns:
         Formatted context string for LLM
@@ -211,7 +277,14 @@ def build_rag_context(
 
         context_parts.append(chunk.content)
 
-    # 2. Previous conversation (last N turns for context)
+    # 2. Web search results (supplementary)
+    if web_results:
+        context_parts.append("\n\n# Web Search Results (Supplementary)\n")
+        for r in web_results[:3]:
+            context_parts.append(f"\n## [{r.get('title', '')}]({r.get('url', '')})\n")
+            context_parts.append(r.get('description', ''))
+
+    # 3. Previous conversation (last N turns for context)
     if history and len(history) > 0:
         context_parts.append("\n\n# Previous Conversation\n")
 
@@ -222,7 +295,7 @@ def build_rag_context(
             role_label = "User" if msg.role == "user" else "Assistant"
             context_parts.append(f"{role_label}: {msg.content}\n")
 
-    # 3. Current question
+    # 4. Current question
     context_parts.append(f"\n# Current Question\nUser: {query}\n")
 
     return '\n'.join(context_parts)
@@ -233,15 +306,10 @@ async def generate_response_stream(
     query: str,
     model: str,
     base_url: str,
-    api_key: str
+    api_key: str,
+    has_web_context: bool = False
 ) -> AsyncGenerator[dict, None]:
     """Stream LLM response using OpenAI-compatible API.
-
-    System prompt instructs LLM to:
-    - Act as research assistant for academic papers
-    - Answer based on provided excerpts
-    - Be concise and cite sections
-    - Acknowledge if excerpts lack info
 
     Args:
         context: Assembled RAG context (paper excerpts + history + query)
@@ -249,6 +317,7 @@ async def generate_response_stream(
         model: LLM model name (e.g., "gpt-4o", "gemini-2.5-pro")
         base_url: API base URL
         api_key: API key
+        has_web_context: Whether web search results are included in context
 
     Yields:
         Event dicts:
@@ -268,7 +337,18 @@ Your task:
 - Answer questions based on the provided paper excerpts and conversation history
 - Be concise, accurate, and cite specific sections when possible
 - Use clear, accessible language while maintaining technical accuracy
-- If the provided excerpts don't contain enough information to answer fully, acknowledge this and suggest what additional context might help
+- If the provided excerpts don't contain enough information to answer fully, acknowledge this and suggest what additional context might help"""
+
+    if has_web_context:
+        system_prompt += """
+
+Web search context:
+- Supplementary web search results are provided under "# Web Search Results (Supplementary)"
+- Always prioritize paper content over web results
+- When citing web sources, include the URL as a markdown link
+- Clearly distinguish between information from the paper and information from the web"""
+
+    system_prompt += """
 
 Guidelines:
 - Focus on the paper's content, not general knowledge

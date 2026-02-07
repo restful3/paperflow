@@ -657,8 +657,8 @@
   <div x-data="chatPanel()"
        x-show="chatPanelOpen"
        x-cloak
-       @click.away="closeChat()"
        @keydown.escape.window="closeChat()"
+       @wheel.stop
        role="dialog"
        aria-modal="true"
        aria-labelledby="chat-panel-title"
@@ -715,7 +715,7 @@
       </div>
 
       <!-- Messages area -->
-      <div class="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+      <div class="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-4"
            x-ref="messagesContainer"
            role="log"
            aria-live="polite"
@@ -747,6 +747,33 @@
                      :class="$store.darkMode.on ? 'prose-invert' : ''"
                      x-html="renderMarkdown(msg.content)"></div>
               </div>
+              <!-- Web search indicator -->
+              <div x-show="msg.role === 'assistant' && (msg.webSearchUsed || (msg.web_sources && msg.web_sources.length > 0))" x-cloak
+                   class="flex items-center gap-1 mt-1.5 text-xs opacity-60">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span>Supplemented with web search</span>
+              </div>
+              <!-- Web sources (expandable) -->
+              <div x-show="(msg.webSources && msg.webSources.length > 0) || (msg.web_sources && msg.web_sources.length > 0)" x-cloak class="mt-1">
+                <button @click="toggleSources('web_' + idx)"
+                        class="text-xs opacity-60 hover:opacity-100 flex items-center gap-1 transition">
+                  <svg class="w-3 h-3 transition-transform" :class="showSources['web_' + idx] ? 'rotate-90' : ''"
+                       fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                  </svg>
+                  <span>Web sources</span>
+                </button>
+                <div x-show="showSources['web_' + idx]" x-cloak class="mt-1 space-y-0.5 pl-4">
+                  <template x-for="ws in (msg.webSources && msg.webSources.length > 0 ? msg.webSources : (msg.web_sources || []))" :key="ws.url">
+                    <a :href="ws.url" target="_blank" rel="noopener noreferrer"
+                       class="block text-xs text-indigo-500 hover:text-indigo-700 truncate"
+                       x-text="ws.title"></a>
+                  </template>
+                </div>
+              </div>
               <!-- Timestamp -->
               <p class="text-xs opacity-50 mt-1"
                  :class="msg.role === 'user' ? 'text-right' : 'text-left'"
@@ -766,7 +793,10 @@
                   <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
                   <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
                 </div>
-                <span class="text-xs opacity-60">Thinking...</span>
+                <span class="text-xs opacity-60"
+                      x-text="messages.length > 0 && messages[messages.length-1].webSearchUsed && !messages[messages.length-1].content
+                              ? 'Searching the web...'
+                              : 'Thinking...'"></span>
               </div>
             </div>
           </div>
@@ -1050,6 +1080,24 @@ function viewerApp() {
         }
       });
 
+      // Flush progress to server on page unload
+      window.addEventListener('beforeunload', () => {
+        if (this._serverProgressTimer) {
+          clearTimeout(this._serverProgressTimer);
+          const container = document.querySelector('.markdown-container');
+          if (container) {
+            const scrollable = container.scrollHeight - container.clientHeight;
+            if (scrollable > 0) {
+              const progress = Math.round((container.scrollTop / scrollable) * 100);
+              navigator.sendBeacon(
+                `/api/papers/${name}/progress`,
+                new Blob([JSON.stringify({ progress })], { type: 'application/json' })
+              );
+            }
+          }
+        }
+      });
+
       // Setup scroll listener based on current view
       this.$watch('view', (newView) => {
         this.setupScrollListener(newView);
@@ -1297,6 +1345,7 @@ function viewerApp() {
       return `pf-scroll-${name}-${viewType}-${lang}`;
     },
     _scrollSaveTimer: null,
+    _serverProgressTimer: null,
 
     saveScrollPosition(viewType) {
       const container = document.querySelector('.markdown-container');
@@ -1304,6 +1353,21 @@ function viewerApp() {
       const scrollTop = container.scrollTop;
       if (scrollTop > 0) {
         localStorage.setItem(this._scrollSaveKey(viewType), scrollTop.toString());
+      }
+      // Save reading progress % (language-independent)
+      const scrollable = container.scrollHeight - container.clientHeight;
+      if (scrollable > 0) {
+        const progress = Math.round((container.scrollTop / scrollable) * 100);
+        const paperName = decodeURIComponent(name);
+        localStorage.setItem(`pf-progress-${paperName}`, progress.toString());
+        // Sync to server (5s debounce)
+        clearTimeout(this._serverProgressTimer);
+        this._serverProgressTimer = setTimeout(() => {
+          apiFetch(`/api/papers/${name}/progress`, {
+            method: 'POST',
+            body: JSON.stringify({ progress })
+          });
+        }, 5000);
       }
     },
 
@@ -1891,7 +1955,9 @@ function chatPanel() {
           role: 'assistant',
           content: '',
           timestamp: new Date().toISOString(),
-          sources: []
+          sources: [],
+          webSources: [],
+          webSearchUsed: false
         };
         this.messages.push(assistantMessage);
 
@@ -1925,12 +1991,22 @@ function chatPanel() {
                   content: msg.content + event.content
                 };
                 this.$nextTick(() => this.scrollToBottom());
+              } else if (event.type === 'web_search') {
+                // Web search was triggered
+                const lastIdx = this.messages.length - 1;
+                const msg = this.messages[lastIdx];
+                this.messages[lastIdx] = {
+                  ...msg,
+                  webSearchUsed: true,
+                  webSearchQuery: event.query
+                };
               } else if (event.type === 'sources') {
                 const lastIdx = this.messages.length - 1;
                 const msg = this.messages[lastIdx];
                 this.messages[lastIdx] = {
                   ...msg,
-                  sources: event.sources
+                  sources: event.sources,
+                  webSources: event.web_sources || []
                 };
               } else if (event.type === 'done') {
                 break;

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_DAYS: int = 30
 
+    # Brave Search API
+    BRAVE_SEARCH_API_KEY: str = ""
+
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000

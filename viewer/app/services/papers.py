@@ -46,11 +46,19 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         elif f.name.endswith(".md") and not f.name.endswith("_ko.md"):
             files["md_en"] = True
 
+    # Folder modification time as fallback date
+    try:
+        mtime = paper_dir.stat().st_mtime
+        added_at = _dt.datetime.fromtimestamp(mtime).isoformat()
+    except Exception:
+        added_at = None
+
     info = {
         "name": paper_dir.name,
         "location": location,
         "formats": files,
         "size_mb": round(_dir_size_mb(paper_dir), 1),
+        "added_at": added_at,
     }
 
     # Load AI-extracted metadata if available
@@ -63,6 +71,11 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["abstract_ko"] = meta.get("abstract_ko")
         info["categories"] = meta.get("categories", [])
         info["original_filename"] = meta.get("original_filename")
+        info["extracted_at"] = meta.get("extracted_at")
+        info["publication_year"] = meta.get("publication_year")
+        info["venue"] = meta.get("venue")
+        info["doi"] = meta.get("doi")
+        info["paper_url"] = meta.get("paper_url")
     else:
         info["title"] = None
         info["title_ko"] = None
@@ -71,6 +84,11 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["abstract_ko"] = None
         info["categories"] = []
         info["original_filename"] = None
+        info["extracted_at"] = None
+        info["publication_year"] = None
+        info["venue"] = None
+        info["doi"] = None
+        info["paper_url"] = None
 
     # Check for chat history
     chat_history_file = paper_dir / "chat_history.json"
@@ -217,6 +235,7 @@ def delete_paper(name: str) -> tuple[bool, str]:
 
     size = _dir_size_mb(paper_dir)
     shutil.rmtree(str(paper_dir))
+    delete_progress(name)
     return True, f"'{name}' deleted ({size:.1f} MB freed)."
 
 
@@ -353,3 +372,48 @@ def delete_queued_file(filename: str) -> tuple[bool, str]:
         return True, f"'{filename}' removed from queue."
     except Exception as e:
         return False, f"Failed to delete '{filename}': {e}"
+
+
+# ── Reading Progress ───────────────────────────────────────────────────────
+
+_PROGRESS_FILE = "reading_progress.json"
+
+
+def _progress_path() -> Path:
+    return Path(settings.BASE_DIR) / _PROGRESS_FILE
+
+
+def get_all_progress() -> dict[str, int]:
+    path = _progress_path()
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+
+def save_progress(paper_name: str, progress: int) -> bool:
+    progress = max(0, min(100, progress))
+    data = get_all_progress()
+    if progress <= data.get(paper_name, 0):
+        return True
+    data[paper_name] = progress
+    try:
+        with open(_progress_path(), "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def delete_progress(paper_name: str) -> None:
+    data = get_all_progress()
+    if paper_name in data:
+        del data[paper_name]
+        try:
+            with open(_progress_path(), "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False)
+        except Exception:
+            pass
