@@ -700,7 +700,12 @@
                    :class="msg.role === 'user'
                      ? 'bg-indigo-600 text-white rounded-br-none'
                      : ($store.darkMode.on ? 'bg-gray-800 text-gray-100 border border-gray-700' : 'bg-white text-gray-900 border border-gray-200') + ' rounded-bl-none'">
-                <p class="whitespace-pre-wrap break-words" x-text="msg.content"></p>
+                <!-- User messages: plain text -->
+                <p x-show="msg.role === 'user'" class="whitespace-pre-wrap break-words" x-text="msg.content"></p>
+                <!-- Assistant messages: rendered markdown -->
+                <div x-show="msg.role === 'assistant'" class="prose prose-sm max-w-none break-words"
+                     :class="$store.darkMode.on ? 'prose-invert' : ''"
+                     x-html="renderMarkdown(msg.content)"></div>
               </div>
               <!-- Timestamp -->
               <p class="text-xs opacity-50 mt-1"
@@ -1785,6 +1790,11 @@ function chatPanel() {
       } catch (e) {
         return '';
       }
+    },
+
+    renderMarkdown(content) {
+      if (!content) return '';
+      return marked.parse(content);
     }
   };
 }
