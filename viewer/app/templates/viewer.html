@@ -451,11 +451,11 @@
           </svg>
         </button>
 
-        <!-- Current level indicator -->
-        <button @click="resetFontSize()"
+        <!-- Current level indicator / open display settings modal -->
+        <button @click="fontSizeModal.show = true"
                 class="px-2 py-1 rounded-lg text-xs font-semibold transition"
                 :class="$store.darkMode.on ? 'text-gray-300 border border-gray-600 hover:border-gray-400' : 'text-gray-600 border border-gray-300 hover:border-gray-500'"
-                :title="'Font size: ' + (fontScale * 100).toFixed(0) + '%'"
+                :title="'Font size: ' + (fontScale * 100).toFixed(0) + '% / Width: ' + contentWidth"
                 x-text="getFontSizeLabel()">
           M
         </button>
@@ -470,6 +470,19 @@
           </svg>
         </button>
       </div>
+
+      <!-- Content width control -->
+      <button @click="cycleContentWidth()"
+              class="px-2 py-1 rounded-lg text-xs font-semibold transition shrink-0"
+              :class="$store.darkMode.on ? 'text-gray-300 border border-gray-600 hover:border-gray-400' : 'text-gray-600 border border-gray-300 hover:border-gray-500'"
+              :title="'Content width: ' + contentWidth">
+        <span class="flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 12h16M4 12l3-3m-3 3l3 3m13-3l-3-3m3 3l-3 3"/>
+          </svg>
+          <span x-text="getContentWidthLabel()">M</span>
+        </span>
+      </button>
 
       <!-- Separator -->
       <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
@@ -1502,6 +1515,12 @@ function viewerApp() {
     getContentWidthLabel() {
       const level = this.contentWidthLevels.find(l => l.value === this.contentWidth);
       return level ? level.short : 'M';
+    },
+
+    cycleContentWidth() {
+      const idx = this.contentWidthLevels.findIndex(l => l.value === this.contentWidth);
+      const next = (idx + 1) % this.contentWidthLevels.length;
+      this.setContentWidth(this.contentWidthLevels[next].value);
     },
 
     // Helper: Check if mobile viewport
