@@ -489,7 +489,8 @@ METADATA_EXTRACTION_PROMPT = """You are an academic paper metadata extractor. Gi
   "authors": ["Author Name 1", "Author Name 2"],
   "abstract": "Complete abstract text",
   "abstract_ko": "Korean translation of the abstract",
-  "categories": ["Category1", "Category2"]
+  "categories": ["Category1", "Category2"],
+  "publication_year": 2025
 }
 
 Rules:
@@ -499,6 +500,7 @@ Rules:
 - Extract the complete abstract text. If no clear abstract section exists, provide a 1-2 sentence summary of the paper's topic.
 - Provide a natural Korean translation of the abstract in "abstract_ko".
 - For categories, infer 2-5 relevant academic categories (e.g., "Machine Learning", "Natural Language Processing", "Computer Vision", "Reinforcement Learning", "Robotics", "Data Mining", "Software Engineering", "Optimization", "Deep Learning").
+- Extract the publication year as an integer (e.g., 2025). Look for it in the header, footnotes, copyright notice, or submission date. If not found, use null.
 - Return ONLY the JSON object. No markdown formatting, no code blocks, no explanation.
 - If you cannot determine a field, use null for strings or [] for arrays."""
 
