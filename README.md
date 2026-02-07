@@ -209,6 +209,66 @@ flowchart TD
 
 ---
 
+## 🤖 RAG 챗봇 아키텍처
+
+PaperFlow는 각 논문마다 독립적인 RAG 기반 챗봇을 제공합니다.
+
+### RAG 파이프라인
+
+```mermaid
+flowchart LR
+    subgraph "1. 청킹 (Chunking)"
+        MD[Markdown 파일] --> Split[섹션별 분할<br/>500 토큰/청크<br/>50 토큰 오버랩]
+        Split --> Cache[캐시 저장<br/>chat_chunks.json]
+    end
+
+    subgraph "2. 검색 (Retrieval)"
+        Query[사용자 질문] --> BM25[BM25 키워드 검색<br/>TF + 제목 가중치]
+        Cache --> BM25
+        BM25 --> TopK[상위 5개 청크]
+    end
+
+    subgraph "3. 생성 (Generation)"
+        TopK --> Context[RAG 컨텍스트 조합<br/>청크 + 대화기록]
+        Context --> LLM[OpenAI API<br/>SSE 스트리밍]
+        LLM --> Response[Markdown 응답]
+    end
+
+    subgraph "4. 렌더링"
+        Response --> Marked[Marked.js<br/>클라이언트 사이드]
+        Marked --> Display[HTML 출력]
+    end
+
+    Response --> History[대화 기록 저장<br/>chat_history.json]
+
+    style Split fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
+    style BM25 fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style LLM fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style Marked fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+```
+
+### 주요 기능
+
+- **📚 자동 청킹**: Markdown을 섹션 단위로 분할 (500 토큰, 50 토큰 오버랩)
+- **🔍 키워드 검색**: BM25 알고리즘으로 질문 관련 청크 검색
+- **🎯 컨텍스트 보존**: 이전 대화 2턴 포함 (용어 일관성 유지)
+- **⚡ 실시간 스트리밍**: SSE로 AI 응답 실시간 출력
+- **💎 Markdown 렌더링**: Marked.js로 코드 블록, 수식, 목록 등 렌더링
+- **💾 대화 기록**: 자동 저장/로드 (최대 100 메시지)
+- **🎨 다크 모드**: TailwindCSS prose-invert로 자동 대응
+
+### 파일 구조
+
+각 논문 디렉토리에 챗봇 관련 파일 생성:
+```
+outputs/Paper Title/
+  ├── your_paper_ko.md         # 청킹 소스 (한국어 우선)
+  ├── chat_chunks.json         # 캐시된 청크 (자동 생성)
+  └── chat_history.json        # 대화 기록 (자동 저장)
+```
+
+---
+
 ## 📋 요구사항
 
 ### 필수
@@ -228,6 +288,7 @@ markdown-it-py>=3.0.0
 requests>=2.32.5
 python-dotenv>=1.0.0
 pypdf2>=3.0.0
+openai>=1.0.0          # AI 메타데이터 추출 & 번역
 ```
 
 **Web Viewer** (`viewer/requirements.txt`):
@@ -239,6 +300,7 @@ python-multipart>=0.0.6
 pyjwt>=2.8.0
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+openai>=1.0.0          # RAG 챗봇
 ```
 
 ---
@@ -259,6 +321,12 @@ cd PaperFlow
 
 `.env` 파일 생성:
 ```env
+# OpenAI API (메타데이터 추출, 번역, RAG 챗봇)
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=sk-your-api-key-here
+TRANSLATION_MODEL=gpt-4o          # 번역용 모델
+CHATBOT_MODEL=gpt-4o              # 챗봇용 모델
+
 # 로그인 인증
 LOGIN_ID=your_id
 LOGIN_PASSWORD=your_password
@@ -304,17 +372,24 @@ cp your_paper.pdf newones/          # PDF 추가 → 자동 처리
 ### 📦 출력 구조
 
 ```
-outputs/your_paper/
+outputs/Sanitized Paper Title/     # PDF 파일명 → 논문 제목으로 변경
   ├── your_paper.pdf           # 원본 PDF (newones/에서 이동)
   ├── your_paper.md            # 영문 Markdown
-  ├── your_paper.html          # 렌더링된 HTML ⭐
-  ├── your_paper.json          # 메타데이터
+  ├── your_paper.html          # 영문 HTML ⭐
+  ├── your_paper_ko.md         # 한국어 Markdown (번역)
+  ├── your_paper_ko.html       # 한국어 HTML ⭐
+  ├── your_paper.json          # marker-pdf 메타데이터
+  ├── paper_meta.json          # AI 추출 메타데이터 (제목/저자/초록/카테고리)
+  ├── chat_history.json        # RAG 챗봇 대화 기록
+  ├── chat_chunks.json         # RAG 청크 캐시
   └── *.jpeg                   # 추출된 이미지
 
 archives/                      # "Archive" 버튼으로 이동된 논문
 ```
 
-HTML 파일은 이미지와 CSS가 내장된 자체 완결형 파일입니다 (`embed-resources: true`).
+- HTML 파일은 이미지와 CSS가 내장된 자체 완결형 파일 (`embed-resources: true`)
+- 폴더명은 AI가 추출한 논문 제목으로 자동 변경 (최대 80자, 특수문자 제거)
+- `paper_meta.json`은 웹 뷰어에서 검색/정렬/표시에 사용
 
 ---
 
@@ -326,15 +401,61 @@ HTML 파일은 이미지와 CSS가 내장된 자체 완결형 파일입니다 (`
 {
   "processing_pipeline": {
     "convert_to_markdown": true,
+    "extract_metadata": true,
+    "translate_to_korean": true,
     "render_to_html": true
+  },
+  "metadata_extraction": {
+    "temperature": 0.0,
+    "max_tokens": 2000,
+    "timeout_seconds": 60,
+    "smart_rename": true,
+    "max_folder_name_length": 80
+  },
+  "translation": {
+    "max_retries": 3,
+    "retry_delay_seconds": 2,
+    "timeout_seconds": 300,
+    "max_section_chars": 3000,
+    "verify_translation": true,
+    "enable_parallel_translation": true,
+    "parallel_max_workers": 3,
+    "parallel_min_chunks": 2
   }
 }
 ```
 
+#### Processing Pipeline
+
 | 옵션 | 기본값 | 설명 |
 |------|--------|------|
 | `convert_to_markdown` | `true` | PDF → Markdown 변환 활성화 |
+| `extract_metadata` | `true` | AI 메타데이터 추출 활성화 |
+| `translate_to_korean` | `true` | 한국어 번역 활성화 |
 | `render_to_html` | `true` | Markdown → HTML 렌더링 활성화 |
+
+#### Metadata Extraction
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `temperature` | `0.0` | AI 추출 온도 (0=결정적) |
+| `max_tokens` | `2000` | AI 응답 최대 토큰 |
+| `timeout_seconds` | `60` | API 타임아웃 |
+| `smart_rename` | `true` | 폴더명 자동 변경 활성화 |
+| `max_folder_name_length` | `80` | 폴더명 최대 길이 |
+
+#### Translation
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `max_retries` | `3` | 번역 재시도 횟수 |
+| `retry_delay_seconds` | `2` | 재시도 지연 시간 |
+| `timeout_seconds` | `300` | 섹션별 타임아웃 |
+| `max_section_chars` | `3000` | 병렬 처리 기준 문자 수 |
+| `verify_translation` | `true` | 번역 품질 검증 활성화 |
+| `enable_parallel_translation` | `true` | 병렬 번역 활성화 |
+| `parallel_max_workers` | `3` | 동시 API 호출 수 (1-5) |
+| `parallel_min_chunks` | `2` | 병렬 처리 최소 청크 수 |
 
 ### header.yaml
 
@@ -355,11 +476,18 @@ format:
 
 ### .env
 
-로그인 인증 및 JWT 설정:
+OpenAI API, 로그인 인증 및 JWT 설정:
 ```env
-LOGIN_ID=admin              # 로그인 ID
-LOGIN_PASSWORD=password     # 로그인 비밀번호
-JWT_SECRET_KEY=secret       # JWT 시크릿 키 (변경 필수)
+# OpenAI API
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=sk-your-api-key-here
+TRANSLATION_MODEL=gpt-4o          # 번역용 모델
+CHATBOT_MODEL=gpt-4o              # RAG 챗봇용 모델
+
+# 로그인 인증
+LOGIN_ID=admin                    # 로그인 ID
+LOGIN_PASSWORD=password           # 로그인 비밀번호
+JWT_SECRET_KEY=secret             # JWT 시크릿 키 (변경 필수)
 ```
 
 ---
@@ -481,13 +609,16 @@ graph LR
 |--------|------|------|------|
 | `POST` | `/api/login` | 로그인 (JWT 쿠키 설정) | ❌ |
 | `POST` | `/api/logout` | 로그아웃 (쿠키 삭제) | ✅ |
-| `GET` | `/api/papers` | 논문 목록 (tab=unread/archived) | ✅ |
+| `GET` | `/api/papers` | 논문 목록 (tab=unread/archived, 검색/정렬) | ✅ |
 | `GET` | `/api/papers/{name}/info` | 논문 파일 정보 | ✅ |
 | `GET` | `/api/papers/{name}/html` | HTML 파일 서빙 | ✅ |
 | `GET` | `/api/papers/{name}/pdf` | PDF 파일 서빙 | ✅ |
 | `POST` | `/api/papers/{name}/archive` | 아카이브로 이동 | ✅ |
 | `POST` | `/api/papers/{name}/restore` | 읽을 논문으로 복원 | ✅ |
 | `DELETE` | `/api/papers/{name}` | 영구 삭제 | ✅ |
+| `POST` | `/api/papers/{name}/chat` | RAG 챗봇 질문 (SSE 스트리밍) | ✅ |
+| `GET` | `/api/papers/{name}/chat/history` | 챗봇 대화 기록 조회 | ✅ |
+| `DELETE` | `/api/papers/{name}/chat/history` | 챗봇 대화 기록 삭제 | ✅ |
 | `POST` | `/api/upload` | PDF 업로드 (newones/) | ✅ |
 | `GET` | `/api/stats` | 논문 개수 통계 | ✅ |
 | `GET` | `/api/logs/latest` | 최신 로그 내용 | ✅ |
@@ -515,17 +646,21 @@ PaperFlow/
 │   │   ├── auth.py          #   JWT 생성/검증, 쿠키 관리
 │   │   ├── dependencies.py  #   인증 의존성 주입
 │   │   ├── routers/
-│   │   │   ├── api.py       #   JSON API 엔드포인트
+│   │   │   ├── api.py       #   JSON API 엔드포인트 (챗봇 포함)
 │   │   │   └── pages.py     #   HTML 페이지 라우트
 │   │   ├── services/
-│   │   │   └── papers.py    #   논문 관리 비즈니스 로직
+│   │   │   ├── papers.py    #   논문 관리 비즈니스 로직
+│   │   │   ├── rag.py       #   RAG 파이프라인 (청킹/검색/생성)
+│   │   │   └── chat.py      #   챗봇 대화 기록 관리
+│   │   ├── models/
+│   │   │   └── chat.py      #   챗봇 데이터 모델 (Pydantic)
 │   │   └── templates/       #   Jinja2 HTML 템플릿
-│   │       ├── base.html    #     레이아웃 (TailwindCSS, Alpine.js)
+│   │       ├── base.html    #     레이아웃 (TailwindCSS, Alpine.js, Marked.js)
 │   │       ├── login.html   #     로그인 페이지
 │   │       ├── papers.html  #     논문 목록 (검색/업로드/로그)
-│   │       └── viewer.html  #     논문 뷰어 (HTML/PDF/Split)
+│   │       └── viewer.html  #     논문 뷰어 (HTML/PDF/챗봇)
 │   ├── Dockerfile           #   python:3.12-slim
-│   └── requirements.txt     #   FastAPI, JWT, Jinja2
+│   └── requirements.txt     #   FastAPI, JWT, Jinja2, OpenAI
 │
 ├── Dockerfile               # Processor Docker 이미지 (CUDA 12.1)
 ├── docker-compose.yml       # 서비스 구성 (converter + viewer)
@@ -576,6 +711,13 @@ graph LR
 ```bash
 # 1. .env 파일 설정
 cat > .env << EOF
+# OpenAI API
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=sk-your-api-key-here
+TRANSLATION_MODEL=gpt-4o
+CHATBOT_MODEL=gpt-4o
+
+# 로그인 인증
 LOGIN_ID=admin
 LOGIN_PASSWORD=password
 JWT_SECRET_KEY=$(openssl rand -hex 32)
@@ -655,6 +797,41 @@ services:
    ```
 2. JWT 시크릿 키가 설정되었는지 확인
 3. 브라우저 쿠키 삭제 후 재시도
+
+### RAG 챗봇 오류
+
+**증상**: "API 오류" 또는 응답 없음
+1. OpenAI API 키 확인:
+   ```bash
+   grep OPENAI_API_KEY .env
+   ```
+2. API 연결 테스트:
+   ```bash
+   curl $OPENAI_BASE_URL/models -H "Authorization: Bearer $OPENAI_API_KEY"
+   ```
+3. Docker 로그 확인:
+   ```bash
+   docker compose logs paperflow-viewer
+   ```
+
+**증상**: 챗봇 응답이 Markdown으로 표시되지 않음
+1. 브라우저 콘솔 확인 (F12 → Console)
+2. `Marked.js` 로드 여부 확인
+3. Docker 이미지 재빌드:
+   ```bash
+   docker compose build --no-cache paperflow-viewer
+   docker compose up -d paperflow-viewer
+   ```
+
+### 번역 실패
+
+**증상**: 영문 HTML만 생성되고 한국어 HTML 없음
+1. `config.json`에서 `translate_to_korean: true` 확인
+2. OpenAI API 키 확인
+3. 로그에서 번역 오류 확인:
+   ```bash
+   grep "Translation failed" logs/paperflow_*.log
+   ```
 
 ---
 
