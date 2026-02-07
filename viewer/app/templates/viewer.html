@@ -14,7 +14,8 @@
   /* Markdown container styles */
   .markdown-container {
     --font-scale: 1;
-    max-width: 900px;
+    --content-width: 900px;
+    max-width: var(--content-width);
     margin: 0 auto;
     overflow-y: auto;
     overflow-x: hidden;
@@ -829,11 +830,11 @@
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 scale-95"
          x-transition:enter-end="opacity-100 scale-100">
-      <h3 class="text-lg font-semibold mb-4"
-          :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'">
+      <h3 class="text-sm font-semibold mb-3"
+          :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">
         Font Size
       </h3>
-      <div class="space-y-2">
+      <div class="space-y-2 mb-5">
         <template x-for="level in fontSizeLevels" :key="level.value">
           <button @click="setFontScale(level.value); fontSizeModal.show = false"
                   class="w-full flex items-center justify-between px-4 py-3 rounded-lg text-left transition"
@@ -844,6 +845,25 @@
             <span class="text-sm opacity-75" x-text="'(' + (level.value * 100) + '%)'"></span>
           </button>
         </template>
+      </div>
+
+      <div class="border-t pt-4" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+        <h3 class="text-sm font-semibold mb-3"
+            :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">
+          Content Width
+        </h3>
+        <div class="grid grid-cols-4 gap-2">
+          <template x-for="level in contentWidthLevels" :key="level.value">
+            <button @click="setContentWidth(level.value); fontSizeModal.show = false"
+                    class="flex flex-col items-center gap-1 px-2 py-3 rounded-lg text-center transition"
+                    :class="contentWidth === level.value
+                      ? ($store.darkMode.on ? 'bg-indigo-600 text-white' : 'bg-indigo-600 text-white')
+                      : ($store.darkMode.on ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')">
+              <span class="text-lg font-bold" x-text="level.short"></span>
+              <span class="text-xs opacity-75" x-text="level.label"></span>
+            </button>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -888,6 +908,14 @@ function viewerApp() {
       { label: 'Large', value: 1.2 },
       { label: 'Extra Large', value: 1.35 },
       { label: 'Very Large', value: 1.5 },
+    ],
+
+    contentWidth: localStorage.getItem('pf-content-width') || '900px',
+    contentWidthLevels: [
+      { label: 'Narrow', value: '720px', short: 'S' },
+      { label: 'Default', value: '900px', short: 'M' },
+      { label: 'Wide', value: '1200px', short: 'L' },
+      { label: 'Full', value: '100%', short: 'F' },
     ],
 
     // Mobile top bar auto-hide state (< md:768px only)
@@ -993,14 +1021,19 @@ function viewerApp() {
         });
       });
 
-      // Apply initial font scale
+      // Apply initial font scale and content width
       this.applyFontScale();
+      this.applyContentWidth();
 
-      // Cross-tab sync for font scale
+      // Cross-tab sync for font scale and content width
       window.addEventListener('storage', (e) => {
         if (e.key === 'pf-font-scale') {
           this.fontScale = parseFloat(e.newValue || '1');
           this.applyFontScale();
+        }
+        if (e.key === 'pf-content-width') {
+          this.contentWidth = e.newValue || '900px';
+          this.applyContentWidth();
         }
       });
 
@@ -1084,13 +1117,14 @@ function viewerApp() {
       if (v === 'split') {
         await this.loadMdForCurrentLang();
         this.splitMdContent = this.activeMdContent;
-        this.$nextTick(() => this.applyFontScale());
+        this.$nextTick(() => { this.applyFontScale(); this.applyContentWidth(); });
       }
 
       // Apply font scale + restore scroll + re-extract TOC after view switch
       if (v === 'md') {
         this.$nextTick(() => {
           this.applyFontScale();
+          this.applyContentWidth();
           this.extractTocItems();
           this.setupTocObserver();
           this.restoreScrollPosition('md');
@@ -1450,6 +1484,24 @@ function viewerApp() {
       containers.forEach(el => {
         el.style.setProperty('--font-scale', this.fontScale);
       });
+    },
+
+    setContentWidth(width) {
+      this.contentWidth = width;
+      localStorage.setItem('pf-content-width', width);
+      this.applyContentWidth();
+    },
+
+    applyContentWidth() {
+      const containers = document.querySelectorAll('.markdown-container');
+      containers.forEach(el => {
+        el.style.setProperty('--content-width', this.contentWidth);
+      });
+    },
+
+    getContentWidthLabel() {
+      const level = this.contentWidthLevels.find(l => l.value === this.contentWidth);
+      return level ? level.short : 'M';
     },
 
     // Helper: Check if mobile viewport
