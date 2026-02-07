@@ -512,7 +512,7 @@ _PROGRESS_FILE = "reading_progress.json"
 
 
 def _progress_path() -> Path:
-    return Path(settings.BASE_DIR) / _PROGRESS_FILE
+    return settings.output_dir / _PROGRESS_FILE
 
 
 def get_all_progress() -> dict[str, int]:
