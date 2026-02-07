@@ -647,7 +647,7 @@ _VENUE_PATTERNS = [
     (re.compile(r'\bSIGGRAPH\b', re.IGNORECASE), 'SIGGRAPH'),
     (re.compile(r'\bCHI\s+20\d{2}\b', re.IGNORECASE), None),
     (re.compile(r'\bKDD\b', re.IGNORECASE), 'KDD'),
-    (re.compile(r'\bWWW\b', re.IGNORECASE), 'WWW'),
+    (re.compile(r'\bWWW\b(?!\.)', re.IGNORECASE), 'WWW'),
     (re.compile(r'\bCoRL\b', re.IGNORECASE), 'CoRL'),
     (re.compile(r'\bRSS\s+20\d{2}\b', re.IGNORECASE), None),
     # Journals
@@ -668,8 +668,17 @@ _DOI_RE = re.compile(r'\b(10\.\d{4,}/[^\s,;"\'>]+)')
 _YEAR_RE = re.compile(r'\b((?:19|20)\d{2})\b')
 
 
-def _extract_venue_from_text(text):
+def _extract_venue_from_text(text, url=None):
     """Extract venue name from search result text."""
+    if url:
+        if "arxiv.org" in url:
+            return "arXiv"
+        if "openreview.net" in url:
+            return "OpenReview"
+        if "biorxiv.org" in url:
+            return "bioRxiv"
+        if "medrxiv.org" in url:
+            return "medRxiv"
     for pattern, default_name in _VENUE_PATTERNS:
         m = pattern.search(text)
         if m:
@@ -766,7 +775,7 @@ def enrich_metadata_with_web_search(metadata, output_dir, config):
 
         # Extract venue
         if not metadata.get("venue"):
-            venue = _extract_venue_from_text(all_text)
+            venue = _extract_venue_from_text(all_text, url=first_url)
             if venue:
                 enriched["venue"] = venue
                 print_success(f"  Venue: {venue}")

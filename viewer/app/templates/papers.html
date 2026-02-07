@@ -30,17 +30,38 @@
           </svg>
           <span class="text-white font-bold text-lg">PaperFlow</span>
         </div>
-        <!-- Search bar (inline in navbar) -->
-        <div class="flex-1 max-w-md mx-4 hidden sm:block relative">
-          <div class="relative">
-            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <!-- Search bar with chips (inline in navbar) -->
+        <div class="flex-1 max-w-lg mx-4 hidden sm:block relative">
+          <div class="flex items-center flex-wrap gap-1 min-h-[34px] px-2 py-1 rounded-lg text-sm bg-white/10 border border-white/20 cursor-text transition"
+               :class="searchFocused ? 'bg-white/15 border-white/40 ring-1 ring-white/20' : ''"
+               @click="$refs.searchInput.focus()">
+            <!-- Search icon -->
+            <svg class="w-4 h-4 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
-            <input type="text" x-model="search" placeholder="Search papers..."
+            <!-- Chips -->
+            <template x-for="(tag, idx) in searchTags" :key="tag.type + '-' + tag.text">
+              <span class="inline-flex items-center gap-0.5 pl-1.5 pr-0.5 py-0.5 rounded text-[11px] font-medium shrink-0"
+                    :class="tag.type === 'category' ? 'bg-amber-500/20 text-amber-200'
+                          : tag.type === 'venue' ? 'bg-teal-500/20 text-teal-200'
+                          : tag.type === 'year' ? 'bg-gray-500/30 text-gray-200'
+                          : 'bg-blue-500/20 text-blue-200'">
+                <span class="text-[9px] opacity-70" x-text="tag.type === 'category' ? '#' : tag.type === 'author' ? '@' : tag.type === 'venue' ? 'V' : 'Y'"></span>
+                <span x-text="tag.text"></span>
+                <button @click.stop="removeTag(idx)" class="ml-0.5 rounded-full hover:bg-white/20 p-0.5 leading-none">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </span>
+            </template>
+            <!-- Text input -->
+            <input type="text" x-model="searchText" x-ref="searchInput"
+                   :placeholder="searchTags.length ? '' : 'Search papers...'"
                    @focus="searchFocused = true; selectedSuggestionIdx = -1"
                    @blur="setTimeout(() => searchFocused = false, 200)"
                    @keydown="handleSearchKeydown($event)"
-                   class="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm bg-white/10 border border-white/20 text-white placeholder-white/40 focus:bg-white/15 focus:border-white/40 focus:ring-1 focus:ring-white/20 outline-none transition">
+                   class="flex-1 min-w-[60px] bg-transparent text-white placeholder-white/40 outline-none text-sm">
           </div>
           <!-- Search suggestions dropdown -->
           <div x-show="searchFocused && suggestions.length > 0" x-cloak
@@ -100,18 +121,43 @@
 
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-    <!-- Search bar (mobile only, navbar has it on sm+) -->
+    <!-- Search bar with chips (mobile only, navbar has it on sm+) -->
     <div class="sm:hidden mb-4 relative">
-      <div class="relative">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="flex items-center flex-wrap gap-1.5 min-h-[44px] px-3 py-2 rounded-xl border shadow-sm cursor-text transition"
+           :class="[
+             searchFocused ? ($store.darkMode.on ? 'border-indigo-500 ring-2 ring-indigo-900/50' : 'border-indigo-400 ring-2 ring-indigo-100') : '',
+             $store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+           ]"
+           @click="$refs.searchInputMobile.focus()">
+        <!-- Search icon -->
+        <svg class="w-5 h-5 shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
-        <input type="text" x-model="search" placeholder="Search papers..."
+        <!-- Chips -->
+        <template x-for="(tag, idx) in searchTags" :key="'m-' + tag.type + '-' + tag.text">
+          <span class="inline-flex items-center gap-0.5 pl-2 pr-1 py-1 rounded-lg text-xs font-medium shrink-0"
+                :class="tag.type === 'category' ? ($store.darkMode.on ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-50 text-amber-700 border border-amber-200')
+                      : tag.type === 'venue' ? ($store.darkMode.on ? 'bg-teal-900/30 text-teal-300' : 'bg-teal-50 text-teal-700 border border-teal-200')
+                      : tag.type === 'year' ? ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600 border border-gray-200')
+                      : ($store.darkMode.on ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-700 border border-blue-200')">
+            <span class="text-[10px] opacity-60" x-text="tag.type === 'category' ? '#' : tag.type === 'author' ? '@' : tag.type === 'venue' ? 'V' : 'Y'"></span>
+            <span x-text="tag.text"></span>
+            <button @click.stop="removeTag(idx)" class="ml-1 rounded-full p-0.5 leading-none transition"
+                    :class="$store.darkMode.on ? 'hover:bg-white/10' : 'hover:bg-black/10'">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </span>
+        </template>
+        <!-- Text input -->
+        <input type="text" x-model="searchText" x-ref="searchInputMobile"
+               :placeholder="searchTags.length ? '' : 'Search papers...'"
                @focus="searchFocused = true; selectedSuggestionIdx = -1"
                @blur="setTimeout(() => searchFocused = false, 200)"
                @keydown="handleSearchKeydown($event)"
-               class="w-full pl-10 pr-4 py-3 rounded-xl border shadow-sm text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition"
-               :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'">
+               class="flex-1 min-w-[60px] bg-transparent outline-none text-sm"
+               :class="$store.darkMode.on ? 'text-gray-100 placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'">
       </div>
       <!-- Search suggestions dropdown (mobile) -->
       <div x-show="searchFocused && suggestions.length > 0" x-cloak
@@ -395,6 +441,13 @@
               </a>
             </div>
             <div class="flex items-center space-x-1">
+              <!-- Reading progress % -->
+              <span x-show="getProgress(paper.name) > 0"
+                    class="text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums transition-colors"
+                    :class="getProgress(paper.name) >= 95
+                      ? ($store.darkMode.on ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
+                      : ($store.darkMode.on ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700')"
+                    x-text="getProgress(paper.name) + '%'"></span>
               <!-- Details expand/collapse toggle -->
               <button @click.prevent="toggleCardDetail(paper)"
                       class="p-3 sm:p-1.5 rounded-lg transition"
@@ -446,22 +499,6 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                 </svg>
               </button>
-            </div>
-          </div>
-          <!-- Reading progress bar -->
-          <div x-show="getProgress(paper.name) > 0"
-               class="px-4 pb-2 pt-0">
-            <div class="flex items-center gap-2">
-              <div class="flex-1 h-1 rounded-full overflow-hidden"
-                   :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
-                <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all"
-                     :style="'width: ' + getProgress(paper.name) + '%'"></div>
-              </div>
-              <span class="text-[10px] font-medium tabular-nums w-8 text-right"
-                    :class="getProgress(paper.name) >= 95
-                      ? ($store.darkMode.on ? 'text-emerald-400' : 'text-emerald-600')
-                      : ($store.darkMode.on ? 'text-gray-400' : 'text-gray-500')"
-                    x-text="getProgress(paper.name) + '%'"></span>
             </div>
           </div>
           <!-- Expandable detail panel -->
@@ -712,7 +749,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
       </svg>
-      <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="search ? 'No papers match your search.' : 'No papers yet. Upload a PDF to get started.'"></p>
+      <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="(searchText || searchTags.length) ? 'No papers match your search.' : 'No papers yet. Upload a PDF to get started.'"></p>
     </div>
 
     </div><!-- /Papers content -->
@@ -911,7 +948,8 @@ function papersApp() {
   return {
     tab: 'unread',
     papers: [],
-    search: '',
+    searchText: '',
+    searchTags: [],
     loading: true,
     stats: { unread: 0, archived: 0 },
     viewMode: localStorage.getItem('pf-view') || 'card',
@@ -952,22 +990,37 @@ function papersApp() {
       return cols;
     },
 
-    // Search suggestions: aggregate categories, authors, venues, years from loaded papers
+    // Search suggestions: aggregate from tag-filtered papers, exclude already-selected tags
     get suggestions() {
       if (!this.searchFocused) return [];
-      const q = this.search.toLowerCase().trim();
-      const counts = { cat: {}, author: {}, venue: {}, year: {} };
+      const q = this.searchText.toLowerCase().trim();
 
-      for (const p of this.papers) {
+      // Count from tag-filtered papers (so counts reflect current filter state)
+      const tagFiltered = this.searchTags.length > 0
+        ? this.papers.filter(p => this.searchTags.every(tag => {
+            if (tag.type === 'category') return p.categories && p.categories.includes(tag.text);
+            if (tag.type === 'author') return p.authors && p.authors.includes(tag.text);
+            if (tag.type === 'venue') return p.venue === tag.text;
+            if (tag.type === 'year') return String(p.publication_year) === tag.text;
+            return true;
+          }))
+        : this.papers;
+
+      const counts = { cat: {}, author: {}, venue: {}, year: {} };
+      for (const p of tagFiltered) {
         if (p.categories) p.categories.forEach(c => { counts.cat[c] = (counts.cat[c] || 0) + 1; });
         if (p.authors) p.authors.forEach(a => { counts.author[a] = (counts.author[a] || 0) + 1; });
         if (p.venue) counts.venue[p.venue] = (counts.venue[p.venue] || 0) + 1;
         if (p.publication_year) { const y = String(p.publication_year); counts.year[y] = (counts.year[y] || 0) + 1; }
       }
 
+      // Build set of already-selected tags for exclusion
+      const selected = new Set(this.searchTags.map(t => t.type + ':' + t.text));
+
       const items = [];
       const add = (map, type) => {
         for (const [val, cnt] of Object.entries(map)) {
+          if (selected.has(type + ':' + val)) continue;
           if (!q || val.toLowerCase().includes(q)) {
             items.push({ text: val, type, count: cnt });
           }
@@ -978,14 +1031,13 @@ function papersApp() {
       add(counts.author, 'author');
       add(counts.year, 'year');
 
-      // Sort: exact prefix match first, then by count desc
+      // Sort: exact prefix match first, then by type order, then by count desc
       items.sort((a, b) => {
         if (q) {
           const aPrefix = a.text.toLowerCase().startsWith(q) ? 0 : 1;
           const bPrefix = b.text.toLowerCase().startsWith(q) ? 0 : 1;
           if (aPrefix !== bPrefix) return aPrefix - bPrefix;
         }
-        // categories first, then venue, author, year
         const typeOrder = { category: 0, venue: 1, author: 2, year: 3 };
         if (typeOrder[a.type] !== typeOrder[b.type]) return typeOrder[a.type] - typeOrder[b.type];
         return b.count - a.count;
@@ -995,13 +1047,26 @@ function papersApp() {
     },
 
     applySuggestion(item) {
-      this.search = item.text;
-      this.searchFocused = false;
+      this.searchTags.push({ text: item.text, type: item.type });
+      this.searchText = '';
       this.selectedSuggestionIdx = -1;
+      // Keep focus on the input after adding tag
+      this.$nextTick(() => {
+        const input = this.$refs.searchInput || this.$refs.searchInputMobile;
+        if (input) input.focus();
+      });
+    },
+
+    removeTag(idx) {
+      this.searchTags.splice(idx, 1);
     },
 
     handleSearchKeydown(e) {
       const list = this.suggestions;
+      if (e.key === 'Backspace' && this.searchText === '' && this.searchTags.length > 0) {
+        this.searchTags.pop();
+        return;
+      }
       if (!list.length) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -1051,8 +1116,20 @@ function papersApp() {
     get filtered() {
       let results = this.papers;
 
-      if (this.search) {
-        const q = this.search.toLowerCase();
+      // AND filter by selected tags
+      if (this.searchTags.length > 0) {
+        results = results.filter(p => this.searchTags.every(tag => {
+          if (tag.type === 'category') return p.categories && p.categories.includes(tag.text);
+          if (tag.type === 'author') return p.authors && p.authors.includes(tag.text);
+          if (tag.type === 'venue') return p.venue === tag.text;
+          if (tag.type === 'year') return String(p.publication_year) === tag.text;
+          return true;
+        }));
+      }
+
+      // Free text search
+      if (this.searchText) {
+        const q = this.searchText.toLowerCase();
         results = results.filter(p =>
           p.name.toLowerCase().includes(q)
           || (p.title && p.title.toLowerCase().includes(q))

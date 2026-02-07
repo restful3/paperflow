@@ -33,7 +33,7 @@ _VENUE_PATTERNS = [
     (re.compile(r'\bSIGGRAPH\b', re.IGNORECASE), 'SIGGRAPH'),
     (re.compile(r'\bCHI\s+20\d{2}\b', re.IGNORECASE), None),
     (re.compile(r'\bKDD\b', re.IGNORECASE), 'KDD'),
-    (re.compile(r'\bWWW\b', re.IGNORECASE), 'WWW'),
+    (re.compile(r'\bWWW\b(?!\.)', re.IGNORECASE), 'WWW'),
     (re.compile(r'\bCoRL\b', re.IGNORECASE), 'CoRL'),
     (re.compile(r'\bRSS\s+20\d{2}\b', re.IGNORECASE), None),
     # Journals
@@ -59,7 +59,16 @@ _ACADEMIC_DOMAINS = [
 ]
 
 
-def _extract_venue(text: str) -> str | None:
+def _extract_venue(text: str, url: str | None = None) -> str | None:
+    if url:
+        if "arxiv.org" in url:
+            return "arXiv"
+        if "openreview.net" in url:
+            return "OpenReview"
+        if "biorxiv.org" in url:
+            return "bioRxiv"
+        if "medrxiv.org" in url:
+            return "medRxiv"
     for pattern, default_name in _VENUE_PATTERNS:
         m = pattern.search(text)
         if m:
@@ -185,7 +194,7 @@ async def enrich_paper_metadata(paper_name: str) -> dict:
     enriched = {}
 
     if not meta.get("venue"):
-        venue = _extract_venue(all_text)
+        venue = _extract_venue(all_text, url=first_academic_url)
         if venue:
             enriched["venue"] = venue
 
