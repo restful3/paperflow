@@ -8,7 +8,7 @@
    ```
    OPENAI_BASE_URL=your_api_base_url
    OPENAI_API_KEY=your_api_key
-   TRANSLATION_MODEL=your_model_name  # e.g., gpt-4o, gemini-2.5-pro
+   TRANSLATION_MODEL=your_model_name  # e.g., gemini-claude-sonnet-4-5
    ```
 
 ## Test Phase 1: Backend API Testing

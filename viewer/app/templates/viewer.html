@@ -5,8 +5,11 @@
 {% block head %}
 <!-- Marked.js for markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<!-- KaTeX for math rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
-  .viewer-frame { height: calc(100vh - 3.5rem); }
   [x-cloak] { display: none !important; }
   /* Markdown container styles */
   .markdown-container {
@@ -15,6 +18,7 @@
     margin: 0 auto;
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain;
     height: 100%;
   }
   .markdown-container.dark {
@@ -79,6 +83,65 @@
   .markdown-container.dark th {
     background-color: #1e293b;
   }
+  /* KaTeX math styles */
+  .markdown-container .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+  }
+  .markdown-container.dark .katex { color: #d1d5db; }
+  .markdown-container img { max-width: 100%; height: auto; }
+
+  /* TOC sidebar styles */
+  .toc-sidebar {
+    width: 240px;
+    min-width: 240px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+  .toc-sidebar a {
+    display: block;
+    padding: 4px 12px;
+    border-left: 2px solid transparent;
+    color: #6b7280;
+    text-decoration: none;
+    transition: all 150ms;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .toc-sidebar a:hover { color: #4f46e5; }
+  .toc-sidebar a.active {
+    color: #4f46e5;
+    border-left-color: #4f46e5;
+    font-weight: 500;
+  }
+  .toc-sidebar.dark a { color: #9ca3af; }
+  .toc-sidebar.dark a:hover { color: #818cf8; }
+  .toc-sidebar.dark a.active {
+    color: #818cf8;
+    border-left-color: #818cf8;
+  }
+  .toc-sidebar a.toc-h3 { padding-left: 24px; font-size: 0.75rem; }
+  /* Mobile TOC overlay */
+  @media (max-width: 767px) {
+    .toc-sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 280px;
+      z-index: 50;
+      box-shadow: 4px 0 12px rgba(0,0,0,0.15);
+    }
+  }
+  .toc-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 49;
+  }
 
   /* Mobile top bar auto-hide animation */
   @media (max-width: 767px) {
@@ -100,21 +163,20 @@
 
     /* FIXED: Content expands when bar hidden (default state) */
     .viewer-content-mobile {
-      height: 100vh;  /* Full height when bar HIDDEN */
-      padding-top: 0;
-      transition: padding-top 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+      margin-top: 0;
+      transition: margin-top 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
     }
 
     /* Content shrinks when bar visible */
     .viewer-content-mobile.bar-visible {
-      padding-top: var(--top-bar-height, 140px);  /* Add padding when bar VISIBLE */
+      margin-top: var(--top-bar-height, 140px);
     }
   }
 </style>
 {% endblock %}
 
 {% block body %}
-<div x-data="viewerApp()" class="h-full flex flex-col overflow-x-hidden transition-colors duration-200">
+<div x-data="viewerApp()" class="h-full flex flex-col overflow-hidden transition-colors duration-200">
 
   <!-- Top bar -->
   <div class="h-auto md:h-auto shrink-0 px-3 md:px-4 py-2 md:py-3 shadow-sm border-b transition-colors duration-200
@@ -153,31 +215,13 @@
 
       <!-- View mode tabs (horizontal scroll) -->
       <div class="flex gap-1 overflow-x-auto pb-1 px-1 scrollbar-hide mb-2 max-w-full">
-        <template x-if="hasMdKo">
-          <button @click="switchView('md-ko')"
-                  :class="view === 'md-ko'
+        <template x-if="hasMdKo || hasMdEn">
+          <button @click="switchView('md')"
+                  :class="view === 'md'
                     ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-indigo-100 text-indigo-700')
                     : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')"
                   class="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition">
-            MD-KO
-          </button>
-        </template>
-        <template x-if="hasMdEn">
-          <button @click="switchView('md-en')"
-                  :class="view === 'md-en'
-                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-indigo-100 text-indigo-700')
-                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')"
-                  class="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition">
-            MD-EN
-          </button>
-        </template>
-        <template x-if="hasHtml">
-          <button @click="switchView('html')"
-                  :class="view === 'html'
-                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-indigo-100 text-indigo-700')
-                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')"
-                  class="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition">
-            HTML
+            MD
           </button>
         </template>
         <template x-if="hasPdf">
@@ -190,7 +234,7 @@
           </button>
         </template>
         <!-- Split button: hidden on mobile (< md), shown on tablet+ -->
-        <template x-if="hasHtml && hasPdf">
+        <template x-if="(hasMdKo || hasMdEn) && hasPdf">
           <button @click="switchView('split')"
                   :class="view === 'split'
                     ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-indigo-100 text-indigo-700')
@@ -213,7 +257,7 @@
            :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-100'">
 
         <!-- TOC Toggle -->
-        <button x-show="hasHtml && (view === 'html' || view === 'split')"
+        <button x-show="view === 'md' || view === 'split'"
                 @click="toggleToc(); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
                 :class="tocVisible
@@ -326,31 +370,13 @@
       <!-- View toggle -->
       <div class="flex rounded-lg p-0.5 shrink-0"
            :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-100'">
-        <template x-if="hasMdKo">
-          <button @click="switchView('md-ko')"
-                  :class="view === 'md-ko'
+        <template x-if="hasMdKo || hasMdEn">
+          <button @click="switchView('md')"
+                  :class="view === 'md'
                     ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
                     : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
                   class="px-3 py-1 rounded-md text-xs font-medium transition">
-            MD-KO
-          </button>
-        </template>
-        <template x-if="hasMdEn">
-          <button @click="switchView('md-en')"
-                  :class="view === 'md-en'
-                    ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
-                    : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-                  class="px-3 py-1 rounded-md text-xs font-medium transition">
-            MD-EN
-          </button>
-        </template>
-        <template x-if="hasHtml">
-          <button @click="switchView('html')"
-                  :class="view === 'html'
-                    ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
-                    : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')"
-                  class="px-3 py-1 rounded-md text-xs font-medium transition">
-            HTML
+            MD
           </button>
         </template>
         <template x-if="hasPdf">
@@ -362,7 +388,7 @@
             PDF
           </button>
         </template>
-        <template x-if="hasHtml && hasPdf">
+        <template x-if="(hasMdKo || hasMdEn) && hasPdf">
           <button @click="switchView('split')"
                   :class="view === 'split'
                     ? ($store.darkMode.on ? 'bg-gray-600 shadow text-indigo-400' : 'bg-white shadow text-indigo-700')
@@ -376,8 +402,8 @@
       <!-- Separator -->
       <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
 
-      <!-- TOC toggle (HTML views only) -->
-      <button x-show="hasHtml && (view === 'html' || view === 'split')"
+      <!-- TOC toggle (markdown views) -->
+      <button x-show="view === 'md' || view === 'split'"
               @click="toggleToc()"
               class="p-1.5 rounded-lg transition shrink-0"
               :class="tocVisible
@@ -491,40 +517,45 @@
     </div>
   </div>
 
-  <!-- Content area -->
-  <div class="flex-1 overflow-hidden flex
-              md:viewer-frame
+  <!-- Content area with TOC -->
+  <div class="flex-1 overflow-hidden flex min-h-0
               max-md:viewer-content-mobile"
        :class="topBarVisible && 'bar-visible'">
-    <!-- HTML view -->
-    <template x-if="view === 'html'">
-      <div class="relative w-full h-full"
-           @touchstart="handleTouchStart($event)"
-           @touchmove="handleTouchMove($event)"
-           @touchend="handleTouchEnd($event)"
-           @touchcancel="handleTouchCancel($event)"
-           @click="handleContainerClick($event)">
-        <iframe :src="htmlUrl" @load="onIframeLoad($event.target)" class="w-full h-full border-0 pointer-events-auto"></iframe>
-      </div>
-    </template>
 
-    <!-- Markdown Korean view -->
-    <template x-if="view === 'md-ko'">
-      <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10"
-           :class="$store.darkMode.on && 'dark'"
-           x-html="mdKoContent"
-           @touchstart="handleMarkdownTouchStart($event)"
-           @touchmove="handleTouchMove($event)"
-           @touchend="handleTouchEnd($event)"
-           @touchcancel="handleTouchCancel($event)"
-           @click="handleMarkdownClickDesktop($event)"></div>
-    </template>
+    <!-- TOC Sidebar (desktop: inline, mobile: overlay) -->
+    <!-- Mobile backdrop -->
+    <div x-show="tocVisible && tocItems.length > 0 && (view === 'md' || view === 'split')"
+         class="md:hidden toc-backdrop"
+         @click="toggleToc()"
+         x-transition.opacity></div>
+    <!-- TOC panel -->
+    <div x-show="tocVisible && tocItems.length > 0 && (view === 'md' || view === 'split')"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="max-md:-translate-x-full md:w-0 md:min-w-0 md:opacity-0"
+         x-transition:enter-end="max-md:translate-x-0 md:w-[240px] md:min-w-[240px] md:opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="max-md:translate-x-0 md:w-[240px] md:min-w-[240px] md:opacity-100"
+         x-transition:leave-end="max-md:-translate-x-full md:w-0 md:min-w-0 md:opacity-0"
+         class="toc-sidebar py-4 border-r overflow-x-hidden"
+         :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 dark' : 'bg-white border-gray-200'"
+         @wheel.stop="handleTocWheel($event)">
+      <div class="px-3 pb-2 text-xs font-semibold uppercase tracking-wider"
+           :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Contents</div>
+      <nav class="space-y-0.5">
+        <template x-for="item in tocItems" :key="item.id">
+          <a :href="'#' + item.id"
+             :class="[item.level === 3 ? 'toc-h3' : '', activeTocId === item.id ? 'active' : '']"
+             @click.prevent="scrollToHeading(item.id)"
+             x-text="item.text"></a>
+        </template>
+      </nav>
+    </div>
 
-    <!-- Markdown English view -->
-    <template x-if="view === 'md-en'">
-      <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10"
+    <!-- Markdown view (language controlled by EN/KO toggle) -->
+    <template x-if="view === 'md'">
+      <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
            :class="$store.darkMode.on && 'dark'"
-           x-html="mdEnContent"
+           x-html="activeMdContent"
            @touchstart="handleMarkdownTouchStart($event)"
            @touchmove="handleTouchMove($event)"
            @touchend="handleTouchEnd($event)"
@@ -544,14 +575,9 @@
       </div>
     </template>
 
-    <!-- Split view -->
+    <!-- Split view (MD + PDF) -->
     <template x-if="view === 'split'">
-      <div class="w-full h-full"
-           @touchstart="handleTouchStart($event)"
-           @touchmove="handleTouchMove($event)"
-           @touchend="handleTouchEnd($event)"
-           @touchcancel="handleTouchCancel($event)"
-           @click="handleContainerClick($event)">
+      <div class="w-full h-full">
         <!-- Mobile: Show warning (< md:768px) -->
         <div class="flex md:hidden flex-col items-center justify-center p-8 text-center h-full">
           <svg class="w-12 h-12 mb-4" :class="$store.darkMode.on ? 'text-gray-600' : 'text-gray-400'"
@@ -560,26 +586,26 @@
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
           <p class="text-sm mb-4" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">
-            Split view requires a larger screen (≥768px width)
+            Split view requires a larger screen (>=768px width)
           </p>
-          <button @click="switchView(hasHtml ? 'html' : 'pdf')"
+          <button @click="switchView((hasMdKo || hasMdEn) ? 'md' : 'pdf')"
                   class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition">
-            Switch to <span x-text="hasHtml ? 'HTML' : 'PDF'"></span> view
+            Switch to <span x-text="(hasMdKo || hasMdEn) ? 'MD' : 'PDF'"></span> view
           </button>
         </div>
 
         <!-- Tablet+: Split view (md:768px+) -->
         <div class="hidden md:flex flex-col lg:flex-row w-full h-full">
-          <iframe :src="htmlUrl" @load="onIframeLoad($event.target)"
-                  class="w-full lg:w-1/2 h-1/2 lg:h-full border-0"
-                  :class="$store.darkMode.on ? 'border-b lg:border-b-0 lg:border-r border-gray-700' : 'border-b lg:border-b-0 lg:border-r border-gray-300'"></iframe>
+          <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 w-full lg:w-1/2 h-1/2 lg:h-full overflow-y-auto min-h-0"
+               :class="[$store.darkMode.on && 'dark', $store.darkMode.on ? 'border-b lg:border-b-0 lg:border-r border-gray-700' : 'border-b lg:border-b-0 lg:border-r border-gray-300']"
+               x-html="splitMdContent"></div>
           <iframe :src="pdfUrl" class="w-full lg:w-1/2 h-1/2 lg:h-full border-0"></iframe>
         </div>
       </div>
     </template>
 
     <!-- No content -->
-    <template x-if="!hasHtml && !hasPdf && !hasMdKo && !hasMdEn">
+    <template x-if="!hasPdf && !hasMdKo && !hasMdEn">
       <div class="flex-1 flex items-center justify-center text-sm"
            :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">
         No viewable files found for this paper.
@@ -828,133 +854,31 @@
 function viewerApp() {
   const name = '{{ paper_name_encoded }}';
 
-  const DARK_CSS = `
-    /* Base */
-    html, body, .page-columns, #quarto-content {
-      background-color: #1a1b2e !important;
-      color: #d1d5db !important;
-    }
-    main.content, #quarto-document-content {
-      background-color: #1a1b2e !important;
-      color: #d1d5db !important;
-    }
-    /* Headings */
-    h1, h2, h3, h4, h5, h6 { color: #e5e7eb !important; }
-    /* Text */
-    p, li, dd, dt, figcaption, .caption, span, label { color: #d1d5db !important; }
-    strong, b, em { color: #e5e7eb !important; }
-    /* Links */
-    a { color: #93c5fd !important; }
-    a:hover { color: #bfdbfe !important; }
-    /* Code */
-    pre {
-      background-color: #1e293b !important;
-      border-color: #334155 !important;
-      border: 1px solid #334155 !important;
-      border-radius: 6px !important;
-    }
-    code { color: #e2e8f0 !important; background-color: #1e293b !important; }
-    pre code { background-color: transparent !important; }
-    .sourceCode { background-color: #1e293b !important; }
-    /* Syntax highlighting */
-    .sourceCode .kw { color: #c792ea !important; }
-    .sourceCode .dt { color: #ffcb6b !important; }
-    .sourceCode .st { color: #c3e88d !important; }
-    .sourceCode .co { color: #676e95 !important; }
-    .sourceCode .dv, .sourceCode .fl, .sourceCode .bn { color: #f78c6c !important; }
-    .sourceCode .fu { color: #82aaff !important; }
-    .sourceCode .op { color: #89ddff !important; }
-    .sourceCode .ch, .sourceCode .sc { color: #c3e88d !important; }
-    .sourceCode .al, .sourceCode .er { color: #ff5370 !important; }
-    .sourceCode .at { color: #ffcb6b !important; }
-    .sourceCode .va, .sourceCode .bu { color: #f78c6c !important; }
-    .sourceCode .cf { color: #c792ea !important; }
-    .sourceCode .cn { color: #f78c6c !important; }
-    .sourceCode .im { color: #c792ea !important; }
-    /* Tables */
-    table { border-color: #374151 !important; }
-    th {
-      background-color: #1e293b !important;
-      color: #e5e7eb !important;
-      border-color: #374151 !important;
-    }
-    td {
-      color: #d1d5db !important;
-      border-color: #374151 !important;
-    }
-    tr { background-color: #1a1b2e !important; }
-    tr:nth-child(even) { background-color: #1e1e38 !important; }
-    thead { border-color: #374151 !important; }
-    /* TOC sidebar */
-    #quarto-sidebar-toc-left {
-      background-color: #111827 !important;
-      border-right: 1px solid #1f2937 !important;
-    }
-    #TOC { background-color: #111827 !important; }
-    #TOC a, .nav-link { color: #9ca3af !important; }
-    #TOC a:hover, .nav-link:hover { color: #d1d5db !important; }
-    #TOC a.active, .nav-link.active {
-      color: #93c5fd !important;
-      border-left-color: #93c5fd !important;
-    }
-    #toc-title { color: #e5e7eb !important; }
-    /* Blockquote */
-    blockquote {
-      border-left-color: #4b5563 !important;
-      color: #9ca3af !important;
-      background-color: #1e1e38 !important;
-      padding: 0.5em 1em !important;
-      border-radius: 0 6px 6px 0 !important;
-    }
-    /* HR */
-    hr { border-color: #374151 !important; }
-    /* Callouts */
-    .callout {
-      background-color: #1e293b !important;
-      border-color: #374151 !important;
-      color: #d1d5db !important;
-    }
-    .callout-title { color: #e5e7eb !important; }
-    /* Quarto UI elements */
-    .quarto-title-block { color: #e5e7eb !important; }
-    .code-tools-button {
-      color: #9ca3af !important;
-      border-color: #374151 !important;
-    }
-    .code-tools-button:hover { color: #d1d5db !important; }
-    /* Figures */
-    figure { background-color: transparent !important; }
-    figcaption { color: #9ca3af !important; }
-    /* Math - inherit color */
-    .MathJax, .katex { color: #d1d5db !important; }
-    .MathJax svg { color: #d1d5db !important; }
-    /* Scrollbar */
-    ::-webkit-scrollbar-track { background: #1a1b2e !important; }
-    ::-webkit-scrollbar-thumb { background: #4b5563 !important; border-radius: 3px !important; }
-    ::-webkit-scrollbar-thumb:hover { background: #6b7280 !important; }
-    /* Margin sidebar */
-    #quarto-margin-sidebar { background-color: #1a1b2e !important; }
-    /* Misc */
-    .sidebar-toggle, .quarto-sidebar-toggle {
-      background-color: #1e293b !important;
-      color: #9ca3af !important;
-    }
-  `;
-
   return {
     view: '{{ default_view }}',
-    hasHtml: {{ 'true' if has_html else 'false' }},
     hasPdf: {{ 'true' if has_pdf else 'false' }},
     hasMdKo: {{ 'true' if has_md_ko else 'false' }},
     hasMdEn: {{ 'true' if has_md_en else 'false' }},
     location: '{{ location }}',
-    htmlUrl: '/api/papers/' + name + '/html',
     pdfUrl: '/api/papers/' + name + '/pdf',
     mdKoUrl: '/api/papers/' + name + '/md-ko',
     mdEnUrl: '/api/papers/' + name + '/md-en',
     mdKoContent: '',
     mdEnContent: '',
+    splitMdContent: '',
+
+    get activeMdContent() {
+      if (this.$store.lang.ko) {
+        return this.hasMdKo ? this.mdKoContent : this.mdEnContent;
+      } else {
+        return this.hasMdEn ? this.mdEnContent : this.mdKoContent;
+      }
+    },
+
     tocVisible: localStorage.getItem('pf-toc') !== 'hidden',
+    tocItems: [],
+    activeTocId: '',
+    tocObserver: null,
     modal: { show: false, action: '', title: '', message: '' },
     fontScale: parseFloat(localStorage.getItem('pf-font-scale') || '1'),
     fontSizeModal: { show: false },
@@ -990,16 +914,83 @@ function viewerApp() {
     TOUCH_TIME_LIMIT: 500,       // ms - Tap must complete within 500ms
 
     async init() {
+      // Configure marked.js renderer: add id to headings for TOC
+      const renderer = new marked.Renderer();
+      // Track used slugs to ensure unique heading IDs (reset before each parse)
+      const slugCounts = {};
+      renderer._resetSlugs = () => { Object.keys(slugCounts).forEach(k => delete slugCounts[k]); };
+      renderer.heading = function(text, level) {
+        // Handle marked v11 object format: text can be { text, depth, raw, tokens }
+        let headingText, headingLevel;
+        if (typeof text === 'object' && text !== null) {
+          headingText = text.text || '';
+          headingLevel = text.depth || level || 1;
+        } else {
+          headingText = text;
+          headingLevel = level;
+        }
+        let slug = headingText.toLowerCase()
+          .replace(/<[^>]+>/g, '')  // strip HTML tags
+          .replace(/[^\w\s가-힣-]/g, '')  // keep letters, numbers, spaces, Korean, hyphens
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        // Deduplicate: append -2, -3, etc. for repeated slugs
+        if (slugCounts[slug] !== undefined) {
+          slugCounts[slug]++;
+          slug = `${slug}-${slugCounts[slug]}`;
+        } else {
+          slugCounts[slug] = 1;
+        }
+        return `<h${headingLevel} id="${slug}">${headingText}</h${headingLevel}>`;
+      };
+      // PDF page-reference links (#page-XX-X) → plain text instead of <a> tag
+      // This is the fundamental fix: marked.js already handles all bracket escaping,
+      // so intercepting at render time works for every pattern.
+      renderer.link = function(token) {
+        const href = token.href || '';
+        const text = token.text || '';
+        if (href.startsWith('#page-')) {
+          return text;
+        }
+        const title = token.title ? ` title="${token.title}"` : '';
+        return `<a href="${href}"${title}>${text}</a>`;
+      };
+      marked.setOptions({ renderer });
+      this._resetSlugs = renderer._resetSlugs;
+
       // Pre-load markdown if default view is markdown
-      if (this.view === 'md-ko' && this.hasMdKo && !this.mdKoContent) {
-        await this.loadMarkdown('md-ko');
-      } else if (this.view === 'md-en' && this.hasMdEn && !this.mdEnContent) {
-        await this.loadMarkdown('md-en');
+      if (this.view === 'md') {
+        await this.loadMdForCurrentLang();
       }
 
-      // Watch for global darkMode changes to update iframes
-      window.addEventListener('darkModeChanged', (e) => {
-        this.applyToAllHtmlIframes();
+      // Watch language toggle: reload markdown content
+      this.$watch('$store.lang.ko', async (isKo) => {
+        if (this.view !== 'md' && this.view !== 'split') return;
+
+        // Save scroll ratio (%) before content swap — absolute pixels don't match across languages
+        const container = document.querySelector('.markdown-container');
+        const scrollable = container ? (container.scrollHeight - container.clientHeight) : 0;
+        const ratio = (container && scrollable > 0) ? (container.scrollTop / scrollable) : 0;
+
+        await this.loadMdForCurrentLang();
+
+        // Update split view content too
+        if (this.view === 'split') {
+          this.splitMdContent = this.activeMdContent;
+        }
+
+        this.$nextTick(() => {
+          this.extractTocItems();
+          this.setupTocObserver();
+          // Restore scroll position by ratio
+          const c = document.querySelector('.markdown-container');
+          if (c && ratio > 0) {
+            const newScrollable = c.scrollHeight - c.clientHeight;
+            c.scrollTop = ratio * newScrollable;
+          }
+          this.setupScrollSave('md');
+        });
       });
 
       // Apply initial font scale
@@ -1053,35 +1044,136 @@ function viewerApp() {
         setTimeout(updateTopBarHeight, 100);
         window.addEventListener('resize', updateTopBarHeight);
       });
+
+      // Forward wheel events from outside markdown container to it
+      // This prevents overscroll when cursor is on the empty space around the content
+      this.$el.addEventListener('wheel', (e) => {
+        if (this.view !== 'md') return;
+        const md = this.$el.querySelector('.markdown-container');
+        if (md && !md.contains(e.target)) {
+          md.scrollBy({ top: e.deltaY, left: 0 });
+          e.preventDefault();
+        }
+      }, { passive: false });
     },
 
     async switchView(v) {
+      // Save current scroll position before switching
+      this.saveScrollPosition(this.view);
+
       this.view = v;
 
       // Show bar briefly when switching views on mobile
       if (this.isMobile() && !this.topBarVisible) {
         this.topBarVisible = true;
         this.isManuallyToggled = true;
-        // Auto-hide after 2 seconds
         setTimeout(() => {
           this.isManuallyToggled = false;
-          if (v !== 'md-ko' && v !== 'md-en') {
-            // Keep hidden for markdown views (user can scroll)
+          if (v !== 'md') {
             this.topBarVisible = false;
           }
         }, 2000);
       }
 
       // Load markdown content when switching to markdown view
-      if (v === 'md-ko' && this.hasMdKo && !this.mdKoContent) {
-        await this.loadMarkdown('md-ko');
-      } else if (v === 'md-en' && this.hasMdEn && !this.mdEnContent) {
-        await this.loadMarkdown('md-en');
+      if (v === 'md') {
+        await this.loadMdForCurrentLang();
       }
 
-      // Apply font scale after view switch
-      if (v === 'md-ko' || v === 'md-en') {
+      // Split view: load markdown for the split pane
+      if (v === 'split') {
+        await this.loadMdForCurrentLang();
+        this.splitMdContent = this.activeMdContent;
         this.$nextTick(() => this.applyFontScale());
+      }
+
+      // Apply font scale + restore scroll + re-extract TOC after view switch
+      if (v === 'md') {
+        this.$nextTick(() => {
+          this.applyFontScale();
+          this.extractTocItems();
+          this.setupTocObserver();
+          this.restoreScrollPosition('md');
+          this.setupScrollSave('md');
+        });
+      }
+    },
+
+    // Protect math expressions from marked.js, then restore after parsing
+    protectMath(text) {
+      const placeholders = [];
+      let idx = 0;
+      // Order matters: match display math first, then inline
+
+      // 1. Display math: $$...$$ (multiline)
+      text = text.replace(/\$\$([\s\S]+?)\$\$/g, (m, math) => {
+        const ph = `%%MATH_DISPLAY_${idx}%%`;
+        placeholders.push({ ph, math, display: true });
+        idx++;
+        return ph;
+      });
+
+      // 2. Display math: \[...\] (single-line only to avoid matching citation brackets)
+      // Skip: numeric-only like \[22\], citation-like (digits/commas/spaces), markdown links
+      text = text.replace(/\\\[([^\n]+?)\\\]/g, (m, math) => {
+        const t = math.trim();
+        if (/^[\d,\s\-–—.]+$/.test(t)) return m;  // citations: \[1, 6\], \[1-3\]
+        if (math.includes('](#')) return m;
+        const ph = `%%MATH_DISPLAY_${idx}%%`;
+        placeholders.push({ ph, math, display: true });
+        idx++;
+        return ph;
+      });
+
+      // 3. Inline math: $...$ (single line, not $$)
+      text = text.replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (m, math) => {
+        const ph = `%%MATH_INLINE_${idx}%%`;
+        placeholders.push({ ph, math, display: false });
+        idx++;
+        return ph;
+      });
+
+      // 4. Inline math: \(...\)
+      text = text.replace(/\\\((.+?)\\\)/g, (m, math) => {
+        const ph = `%%MATH_INLINE_${idx}%%`;
+        placeholders.push({ ph, math, display: false });
+        idx++;
+        return ph;
+      });
+
+      return { text, placeholders };
+    },
+
+    restoreMath(html, placeholders) {
+      for (const { ph, math, display } of placeholders) {
+        try {
+          const rendered = katex.renderToString(math.trim(), {
+            displayMode: display,
+            throwOnError: false,
+            trust: true,
+          });
+          html = html.replace(ph, rendered);
+        } catch (e) {
+          // Fallback: show raw math in code block
+          const escaped = math.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          html = html.replace(ph, display ? `<pre><code>${escaped}</code></pre>` : `<code>${escaped}</code>`);
+        }
+      }
+      return html;
+    },
+
+    async loadMdForCurrentLang() {
+      const wantKo = this.$store.lang.ko;
+      if (wantKo && this.hasMdKo) {
+        if (!this.mdKoContent) await this.loadMarkdown('md-ko');
+      } else if (!wantKo && this.hasMdEn) {
+        if (!this.mdEnContent) await this.loadMarkdown('md-en');
+      } else if (wantKo && !this.hasMdKo && this.hasMdEn) {
+        if (!this.mdEnContent) await this.loadMarkdown('md-en');
+        showToast('Korean translation not available', 'warning');
+      } else if (!wantKo && !this.hasMdEn && this.hasMdKo) {
+        if (!this.mdKoContent) await this.loadMarkdown('md-ko');
+        showToast('English version not available', 'warning');
       }
     },
 
@@ -1097,9 +1189,7 @@ function viewerApp() {
           text = text.replace(yamlPattern, '');
 
           // Fix author sections: Remove code blocks that contain <sup> tags (author affiliations)
-          // This handles cases where author info is incorrectly wrapped in code blocks
           text = text.replace(/```\n([\s\S]*?<sup>[\s\S]*?)\n```/g, (match, content) => {
-            // If the code block contains <sup> tags, it's likely author info, so unwrap it
             return content;
           });
 
@@ -1108,12 +1198,33 @@ function viewerApp() {
             return `![${alt}](/api/papers/${name}/assets/${encodeURIComponent(src)})`;
           });
 
-          const html = marked.parse(text);
+          // Clean up citation/section links pointing to non-existent page anchors
+          // e.g. [\[1\]](#page-35-1) → \[1\], [6\]](#page-35-6) → 6\], [3.1](#page-3-0) → 3.1
+          // Uses (?:[^\]\\]|\\.)* to handle escaped brackets \] inside link text
+          text = text.replace(/\[((?:[^\]\\]|\\.)*)\]\(#page-[^)]+\)/g, '$1');
+
+          // Protect math expressions before marked.js parsing
+          const { text: safeText, placeholders } = this.protectMath(text);
+
+          // Parse markdown (reset slug counter for unique heading IDs)
+          this._resetSlugs();
+          let html = marked.parse(safeText);
+
+          // Restore math expressions with KaTeX rendering
+          html = this.restoreMath(html, placeholders);
+
           if (type === 'md-ko') {
             this.mdKoContent = html;
           } else {
             this.mdEnContent = html;
           }
+          // Extract TOC items, setup scroll spy, restore scroll position
+          this.$nextTick(() => {
+            this.extractTocItems();
+            this.setupTocObserver();
+            this.restoreScrollPosition('md');
+            this.setupScrollSave('md');
+          });
         } else {
           const errorMsg = `<p style="color: red;">Failed to load markdown file.</p>`;
           if (type === 'md-ko') {
@@ -1133,99 +1244,135 @@ function viewerApp() {
       }
     },
 
+    // Reading position save/restore
+    _scrollSaveKey(viewType) {
+      const lang = this.$store.lang.ko ? 'ko' : 'en';
+      return `pf-scroll-${name}-${viewType}-${lang}`;
+    },
+    _scrollSaveTimer: null,
+
+    saveScrollPosition(viewType) {
+      const container = document.querySelector('.markdown-container');
+      if (!container || viewType !== 'md') return;
+      const scrollTop = container.scrollTop;
+      if (scrollTop > 0) {
+        localStorage.setItem(this._scrollSaveKey(viewType), scrollTop.toString());
+      }
+    },
+
+    restoreScrollPosition(viewType) {
+      const container = document.querySelector('.markdown-container');
+      if (!container) return;
+      const saved = localStorage.getItem(this._scrollSaveKey(viewType));
+      if (saved) {
+        const pos = parseInt(saved);
+        if (pos > 0) {
+          container.scrollTop = pos;
+        }
+      }
+    },
+
+    setupScrollSave(viewType) {
+      const container = document.querySelector('.markdown-container');
+      if (!container) return;
+      // Remove old listener if any
+      if (container._scrollSaveHandler) {
+        container.removeEventListener('scroll', container._scrollSaveHandler);
+      }
+      container._scrollSaveHandler = () => {
+        clearTimeout(this._scrollSaveTimer);
+        this._scrollSaveTimer = setTimeout(() => {
+          this.saveScrollPosition(viewType);
+        }, 500);
+      };
+      container.addEventListener('scroll', container._scrollSaveHandler);
+    },
+
     toggleToc() {
       this.tocVisible = !this.tocVisible;
       localStorage.setItem('pf-toc', this.tocVisible ? 'visible' : 'hidden');
-      this.applyToAllHtmlIframes();
+      // On mobile, close TOC also resets backdrop
     },
 
-
-    onIframeLoad(iframe) {
-      // Delay slightly to ensure iframe DOM is fully ready
-      setTimeout(() => this.applySettings(iframe), 50);
+    extractTocItems() {
+      const container = document.querySelector('.markdown-container');
+      if (!container) { this.tocItems = []; return; }
+      const headings = container.querySelectorAll('h1[id], h2[id], h3[id]');
+      this.tocItems = Array.from(headings).map(h => ({
+        id: h.id,
+        text: h.textContent.trim(),
+        level: parseInt(h.tagName[1]),
+      }));
     },
 
-    applyToAllHtmlIframes() {
-      document.querySelectorAll('iframe').forEach(iframe => {
-        try {
-          if (iframe.src && iframe.src.includes('/html')) {
-            this.applySettings(iframe);
-          }
-        } catch(e) {}
-      });
-    },
+    scrollToHeading(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
 
-    applySettings(iframe) {
-      try {
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        if (!doc || !doc.body) return;
+      // Suppress auto-hide during programmatic scroll
+      this.isManuallyToggled = true;
+      this.topBarVisible = true;
+      if (this.manualToggleTimer) clearTimeout(this.manualToggleTimer);
+      this.manualToggleTimer = setTimeout(() => {
+        this.isManuallyToggled = false;
+      }, 1000);
 
-        // ── TOC toggle (always hide in split view to save space) ──
-        const showToc = this.tocVisible && this.view !== 'split';
-        const toc = doc.getElementById('quarto-sidebar-toc-left');
-        if (toc) {
-          toc.style.display = showToc ? '' : 'none';
-        }
-
-        // Override Quarto grid layout when TOC is hidden
-        let layoutStyle = doc.getElementById('pf-layout-override');
-        const isSplit = this.view === 'split';
-        if (!showToc) {
-          if (!layoutStyle) {
-            layoutStyle = doc.createElement('style');
-            layoutStyle.id = 'pf-layout-override';
-            doc.head.appendChild(layoutStyle);
-          }
-          if (isSplit) {
-            // Split view: use full width for compact layout
-            layoutStyle.textContent = `
-              #quarto-content.page-columns {
-                display: block !important;
-                grid-template-columns: none !important;
-              }
-              #quarto-margin-sidebar { display: none !important; }
-              main.content, #quarto-document-content {
-                max-width: 100% !important;
-                width: 100% !important;
-                margin: 0 !important;
-                padding: 0 1.5em !important;
-              }
-            `;
-          } else {
-            // HTML single view: centered content with readable width
-            layoutStyle.textContent = `
-              #quarto-content.page-columns {
-                display: block !important;
-                grid-template-columns: none !important;
-              }
-              #quarto-margin-sidebar { display: none !important; }
-              main.content, #quarto-document-content {
-                max-width: 900px !important;
-                margin: 0 auto !important;
-                padding: 0 2em !important;
-              }
-            `;
-          }
-        } else {
-          if (layoutStyle) layoutStyle.remove();
-        }
-
-        // ── Dark mode ──
-        let darkStyle = doc.getElementById('pf-dark-mode');
-        const isDark = Alpine.store('darkMode').on;
-        if (isDark) {
-          if (!darkStyle) {
-            darkStyle = doc.createElement('style');
-            darkStyle.id = 'pf-dark-mode';
-            doc.head.appendChild(darkStyle);
-          }
-          darkStyle.textContent = DARK_CSS;
-        } else {
-          if (darkStyle) darkStyle.remove();
-        }
-      } catch(e) {
-        console.warn('Could not access iframe content:', e);
+      // Scroll only the markdown container (not parent elements)
+      // scrollIntoView() bubbles up and scrolls overflow:hidden parents,
+      // which pushes the top bar out of view
+      const container = el.closest('.markdown-container');
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const offset = elRect.top - containerRect.top + container.scrollTop;
+        container.scrollTo({ top: offset, behavior: 'smooth' });
       }
+      this.activeTocId = id;
+      // Close TOC on mobile after click
+      if (this.isMobile()) {
+        this.tocVisible = false;
+        localStorage.setItem('pf-toc', 'hidden');
+      }
+    },
+
+    handleTocWheel(event) {
+      // Prevent wheel events from leaking to the markdown container
+      // when TOC reaches scroll boundary
+      const toc = event.currentTarget;
+      const { scrollTop, scrollHeight, clientHeight } = toc;
+      const atTop = scrollTop <= 0 && event.deltaY < 0;
+      const atBottom = scrollTop + clientHeight >= scrollHeight && event.deltaY > 0;
+      if (atTop || atBottom) {
+        event.preventDefault();
+      }
+    },
+
+    setupTocObserver() {
+      // Cleanup previous observer
+      if (this.tocObserver) {
+        this.tocObserver.disconnect();
+        this.tocObserver = null;
+      }
+      const container = document.querySelector('.markdown-container');
+      if (!container || this.tocItems.length === 0) return;
+      const headings = container.querySelectorAll('h1[id], h2[id], h3[id]');
+      if (headings.length === 0) return;
+
+      this.tocObserver = new IntersectionObserver((entries) => {
+        // Find the topmost visible heading
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          this.activeTocId = visible[0].target.id;
+        }
+      }, {
+        root: container,
+        rootMargin: '-10% 0px -80% 0px',
+        threshold: 0,
+      });
+
+      headings.forEach(h => this.tocObserver.observe(h));
     },
 
     doAction(action) {
@@ -1295,16 +1442,6 @@ function viewerApp() {
       this.fontScale = scale;
       localStorage.setItem('pf-font-scale', scale.toString());
       this.applyFontScale();
-
-      // Apply to all iframes (HTML, PDF)
-      document.querySelectorAll('iframe').forEach(iframe => {
-        iframe.style.zoom = scale;
-      });
-
-      // Dispatch event for cross-tab sync
-      window.dispatchEvent(new CustomEvent('fontScaleChanged', {
-        detail: { fontScale: scale }
-      }));
     },
 
     applyFontScale() {
@@ -1312,11 +1449,6 @@ function viewerApp() {
       const containers = document.querySelectorAll('.markdown-container');
       containers.forEach(el => {
         el.style.setProperty('--font-scale', this.fontScale);
-      });
-
-      // Apply to existing iframes
-      document.querySelectorAll('iframe').forEach(iframe => {
-        iframe.style.zoom = this.fontScale;
       });
     },
 
@@ -1338,7 +1470,7 @@ function viewerApp() {
       this.detachScrollListener();
       if (!this.isMobile()) return;
 
-      if (view === 'md-ko' || view === 'md-en') {
+      if (view === 'md') {
         this.$nextTick(() => {
           const container = document.querySelector('.markdown-container');
           if (container) {
@@ -1794,7 +1926,11 @@ function chatPanel() {
 
     renderMarkdown(content) {
       if (!content) return '';
-      return marked.parse(content);
+      const { text, placeholders } = this.protectMath(content);
+      this._resetSlugs();
+      let html = marked.parse(text);
+      html = this.restoreMath(html, placeholders);
+      return html;
     }
   };
 }

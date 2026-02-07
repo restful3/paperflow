@@ -172,7 +172,7 @@ async def chat_with_paper(
             async for event in rag_svc.generate_response_stream(
                 context=context,
                 query=request.message,
-                model=os.getenv("TRANSLATION_MODEL", "gpt-4o"),
+                model=os.getenv("TRANSLATION_MODEL", "gemini-claude-sonnet-4-5"),
                 base_url=os.getenv("OPENAI_BASE_URL", ""),
                 api_key=os.getenv("OPENAI_API_KEY", "")
             ):
@@ -284,15 +284,6 @@ async def delete_paper(name: str, _user: str = Depends(get_current_user_api)):
 
 # ── File serving ────────────────────────────────────────────────────────────
 
-@router.get("/papers/{name:path}/html")
-async def serve_html(name: str, _user: str = Depends(get_current_user_api)):
-    name = unquote(name)
-    path = paper_svc.get_html_path(name)
-    if not path:
-        raise HTTPException(status_code=404, detail="HTML file not found")
-    return FileResponse(path, media_type="text/html")
-
-
 @router.get("/papers/{name:path}/pdf")
 async def serve_pdf(name: str, _user: str = Depends(get_current_user_api)):
     name = unquote(name)
@@ -361,5 +352,19 @@ async def latest_log(_user: str = Depends(get_current_user_api)):
     if not log:
         return {"filename": None, "content": "No logs found.", "total_lines": 0}
     return log
+
+
+@router.get("/processing/status")
+async def processing_status(_user: str = Depends(get_current_user_api)):
+    return paper_svc.get_processing_status()
+
+
+@router.delete("/processing/queue/{filename}")
+async def delete_queued_file(filename: str, _user: str = Depends(get_current_user_api)):
+    filename = unquote(filename)
+    ok, msg = paper_svc.delete_queued_file(filename)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"ok": True, "message": msg}
 
 

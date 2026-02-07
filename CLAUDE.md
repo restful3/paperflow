@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PaperFlow is a Python-based tool that converts PDF documents (especially academic papers) to Markdown and renders them as HTML with a web-based viewer. It consists of two main components:
+PaperFlow is a Python-based tool that converts PDF documents (especially academic papers) to Markdown with a web-based viewer. It consists of two main components:
 
-1. **Batch Processor** ([main_terminal.py](main_terminal.py)) - Converts PDFs to HTML
+1. **Batch Processor** ([main_terminal.py](main_terminal.py)) - Converts PDFs to Markdown with AI translation
 2. **FastAPI Viewer** (viewer/app/) - Web interface for viewing and managing papers
 
 **Technology Stack**:
 - **marker-pdf library**: Local Python library for PDF to Markdown conversion with OCR capabilities
-- **Quarto**: Renders Markdown to HTML format
 - **FastAPI**: Web API and viewer interface with Alpine.js frontend
+- **KaTeX**: Client-side math equation rendering
+- **marked.js**: Client-side Markdown rendering
 
 **Key Feature**: Fully local processing with GPU acceleration for PDF conversion.
 
@@ -161,31 +162,32 @@ Alpine.js-based web interface:
   - Search by title, authors, abstract, categories
   - Sort by name, title, or size (ascending/descending)
 - **Viewing Modes**:
-  - HTML viewer: iframe display of rendered papers
+  - Markdown viewer: marked.js client-side rendering with KaTeX math equations
   - PDF viewer: iframe display of source PDFs
-  - Markdown viewer: Marked.js client-side rendering with client-side rendering
-  - Split view: Side-by-side HTML + PDF comparison
+  - Split view: Side-by-side Markdown + PDF
+  - Client-side TOC: Auto-generated from headings with IntersectionObserver scroll spy
+  - Reading position memory: localStorage-based scroll position save/restore
 - **Mobile Optimizations** (2026-02-06):
   - **Auto-Hide Top Bar**: Scroll-based automatic hide/show on mobile (< 768px)
     - Scroll down → Top bar hides smoothly (gains ~140px of screen space)
     - Scroll up → Top bar shows immediately for navigation
-    - Tap-to-toggle for iframe views (HTML/PDF)
+    - Tap-to-toggle for iframe views (PDF)
     - Always accessible: 3-second idle timer auto-shows bar
     - Desktop unchanged: Feature only active on mobile devices
   - Responsive layout optimizations for small screens
   - Touch-friendly button sizes (≥44px WCAG standard)
 - **UI Features**:
-  - Dark Mode: CSS injection for theme switching with localStorage persistence
+  - Dark Mode: Theme switching with localStorage persistence
   - Language Toggle: EN/KO switching for UI and paper titles
   - Font Size Control: 5 preset levels (90%-150%) with localStorage persistence
-  - TOC Toggle: Show/hide table of contents in HTML view
+  - TOC Sidebar: Client-side table of contents with scroll spy (desktop: inline panel, mobile: overlay)
 - **No AI Agent**: AI features removed in PaperFlow v2.0
 - Clean, responsive UI with Alpine.js reactive components
 - RESTful API backend with Jinja2 templates
 
 ### Batch Processing Pipeline
 
-The pipeline executes 4 stages for each PDF (see `process_single_pdf()` in [main_terminal.py](main_terminal.py)):
+The pipeline executes 3 stages for each PDF (see `process_single_pdf()` in [main_terminal.py](main_terminal.py)):
 
 #### 1. PDF → Markdown (`convert_pdf_to_md()`)
 - **GPU-only mode**: Requires CUDA GPU, checks memory before loading models
@@ -211,7 +213,7 @@ The pipeline executes 4 stages for each PDF (see `process_single_pdf()` in [main
   4. Classify sections (translate body, skip References/Appendix)
   5. Section-by-section translation with context preservation
   6. Restore protected blocks
-  7. Write Korean markdown with `header.yaml`
+  7. Write Korean markdown
 - **Quality assurance**:
   - Automatic verification (length ratio, heading/paragraph counts)
   - Retry logic with enhanced prompt if verification fails
@@ -219,17 +221,7 @@ The pipeline executes 4 stages for each PDF (see `process_single_pdf()` in [main
 - **Optional**: Can be disabled via `config.json` (`translate_to_korean: false`)
 - Output: `{filename}_ko.md`
 
-#### 4. HTML Rendering (`render_md_to_html()`)
-- **Important**: Runs `quarto render {filename}.md` from the output directory (not full path)
-- Renders both English and Korean markdown to HTML
-- Quarto config in `header.yaml`: theme, TOC, embedded resources
-- **Automatic Fallback**: If YAML parsing fails, retries with simplified header
-  - Detects "YAML parse exception" or "Error running Lua" in stderr
-  - Creates temporary file with simple YAML header (no complex CSS)
-  - Ensures HTML is always generated even if custom styling fails
-- Output: `{filename}.html` (English), `{filename}_ko.html` (Korean)
-
-#### 5. Cleanup
+#### 4. Cleanup
 - Moves source PDF from `newones/` to output directory
 - Leaves `newones/` empty for next batch (or watch mode detection)
 
@@ -238,24 +230,19 @@ The pipeline executes 4 stages for each PDF (see `process_single_pdf()` in [main
 Critical configuration files in project root:
 
 - **[config.json](config.json)**: Pipeline configuration
-  - `processing_pipeline`: Enable/disable each stage (convert_to_markdown, extract_metadata, translate_to_korean, render_to_html)
+  - `processing_pipeline`: Enable/disable each stage (convert_to_markdown, extract_metadata, translate_to_korean)
   - `metadata_extraction`: AI extraction settings (temperature, tokens, timeouts, smart_rename)
-  - `translation`: Translation settings (retries, timeout, preserve_english_html, max_section_chars, verify_translation)
-- **[header.yaml](header.yaml)**: Quarto HTML format
-  - `toc: true` with `toc-location: left` and `toc-depth: 3`
-  - `theme: cosmo`, `embed-resources: true` (self-contained HTML)
-  - Custom CSS for layout and styling
+  - `translation`: Translation settings (retries, timeout, max_section_chars, verify_translation)
 - **[requirements.txt](requirements.txt)**: Python dependencies
 - **[.env](.env)**: Environment variables
   - FastAPI viewer authentication: `LOGIN_ID`, `LOGIN_PASSWORD`, `JWT_SECRET_KEY`
   - OpenAI-compatible API: `OPENAI_BASE_URL`, `OPENAI_API_KEY`
-  - Translation settings: `TRANSLATION_MODEL` (e.g., gpt-4o, gemini-2.5-pro), `TRANSLATION_MAX_TOKENS`, `TRANSLATION_TEMPERATURE`
+  - Translation settings: `TRANSLATION_MODEL` (e.g., gemini-claude-sonnet-4-5), `TRANSLATION_MAX_TOKENS`, `TRANSLATION_TEMPERATURE`
 - **prompt.md** (optional): Custom translation prompt (overrides default academic translation prompt)
 
 ### Runtime Dependencies
 
 Must be available at runtime:
-- **Quarto CLI**: System-wide installation for HTML rendering
 - **CUDA GPU**: Required for marker-pdf (no CPU fallback)
 - **OpenAI-compatible API**: Required for metadata extraction and translation
   - Can be OpenAI API, local proxy (e.g., LiteLLM), or any compatible endpoint
@@ -270,16 +257,14 @@ outputs/Sanitized Paper Title/  # Renamed from PDF filename (if extract_metadata
   ├── example.json               # Metadata from marker-pdf
   ├── paper_meta.json            # Paper metadata (title, authors, abstract) ⭐
   ├── example.md                 # English markdown
-  ├── example.html               # English HTML ⭐
   ├── example_ko.md              # Korean markdown (if translate_to_korean=true)
-  ├── example_ko.html            # Korean HTML (if translate_to_korean=true) ⭐
   └── *.jpeg                     # Extracted images
 ```
 
 **Notes:**
 - Folder name is the sanitized paper title (max 80 chars) if `extract_metadata: true`
-- HTML files are self-contained with embedded images and CSS (configured via `embed-resources: true` in header.yaml)
 - Korean files are only generated if `translate_to_korean: true` in `config.json`
+- Markdown is rendered client-side with marked.js + KaTeX for math equations
 
 ## Development Notes
 
@@ -456,17 +441,7 @@ closeMobileMenu()              // Close hamburger menu when bar hides
 
 ### Implementation Gotchas
 
-**1. Quarto Path Handling** ([main_terminal.py:1232-1300](main_terminal.py#L1232-L1300))
-```python
-# CORRECT: Run from output dir with filename only
-subprocess.run(["quarto", "render", f"{filename}.md"], cwd=output_dir)
-subprocess.run(["quarto", "render", f"{filename}_ko.md"], cwd=output_dir)
-
-# WRONG: Full path causes "No valid input files" error
-subprocess.run(["quarto", "render", f"{output_dir}/{filename}.md"])
-```
-
-**2. Image Extraction** ([main_terminal.py:254-289](main_terminal.py#L254-L289))
+**1. Image Extraction** ([main_terminal.py:254-289](main_terminal.py#L254-L289))
 - `rendered.images` dict values can be single `PIL.Image` OR list of Images
 - Must check `isinstance(page_images, list)` and wrap if needed
 - Keys may already be formatted strings like `_page_1_Figure_0.jpeg`
@@ -577,15 +552,6 @@ Before processing, the system checks dependencies (see `check_services()` in [ma
 - VRAM automatically released after PDF→MD conversion
 - Check competing GPU processes: `nvidia-smi`
 
-**Quarto Not Found**:
-```bash
-# Ubuntu/Debian
-sudo apt install quarto
-
-# Or download from https://quarto.org/
-which quarto  # Verify installation
-```
-
 ### Log Analysis
 
 ```bash
@@ -613,7 +579,7 @@ grep "GPU memory" logs/paperflow_*.log
 ## Key Architectural Decisions
 
 1. **Two-Component Design**: Separate batch processor and web viewer for flexibility
-2. **4-Stage Pipeline**: PDF → MD → Metadata → Translation → HTML (metadata and translation optional)
+2. **3-Stage Pipeline**: PDF → MD → Metadata → Translation (metadata and translation optional)
 3. **Library over API**: marker-pdf used as Python library for better control and offline operation
 4. **GPU-Only Mode**: Requires CUDA GPU (no CPU fallback) for PDF conversion performance
 5. **Explicit VRAM Management**: GPU cleanup after PDF→MD conversion enables batch processing
@@ -622,7 +588,7 @@ grep "GPU memory" logs/paperflow_*.log
 8. **Quality Verification**: Automatic translation completeness checking with retry logic
 9. **Auto-cleanup**: Moves processed PDFs from `newones/` to output dirs to prevent re-processing
 10. **Watch Mode**: Continuous monitoring for automated workflows
-11. **Self-contained HTML**: Embedded images and CSS for portability (both English and Korean)
+11. **Client-side rendering**: marked.js + KaTeX for markdown and math, no server-side HTML generation
 12. **FastAPI + Alpine.js**: Modern web stack with JWT authentication (replaced Streamlit)
 
 ## Project Structure
@@ -634,7 +600,6 @@ PaperFlow/
 ├── run_batch_watch.sh     # Continuous watch mode
 ├── setup_venv.sh          # Setup script (creates .venv)
 ├── config.json            # Pipeline configuration
-├── header.yaml            # Quarto HTML format
 ├── requirements.txt       # Python dependencies
 ├── .env                   # FastAPI viewer authentication
 ├── viewer/                # FastAPI web viewer

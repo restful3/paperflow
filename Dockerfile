@@ -24,11 +24,6 @@ RUN apt-get update && apt-get install -u -y \
     python3-pip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Quarto (for HTML rendering)
-RUN wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.4.550/quarto-1.4.550-linux-amd64.deb \
-    && dpkg -i quarto-1.4.550-linux-amd64.deb \
-    && rm quarto-1.4.550-linux-amd64.deb
-
 # Copy requirements first to leverage cache
 COPY requirements.txt .
 

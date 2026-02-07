@@ -63,14 +63,45 @@ def print_progress(current, total, text=""):
     if current == total:
         print()
 
+def _count_active_stages(pipeline):
+    """Count the number of active pipeline stages for progress tracking."""
+    count = 0
+    if pipeline.get("convert_to_markdown", True):
+        count += 1
+    if pipeline.get("extract_metadata", False):
+        count += 1
+    if pipeline.get("translate_to_korean", False):
+        count += 1
+    return max(count, 1)
+
+def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None):
+    """Write processing status to shared JSON file for viewer polling."""
+    status = {
+        "current_file": filename,
+        "stage": stage,
+        "stage_num": stage_num,
+        "total_stages": total_stages,
+        "stage_label": stage_label,
+        "updated_at": datetime.now().isoformat(),
+        "error": error
+    }
+    status_path = os.path.join("logs", "processing_status.json")
+    try:
+        tmp_path = status_path + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(status, f, ensure_ascii=False)
+        os.replace(tmp_path, status_path)
+    except Exception:
+        pass
+
 def load_config():
     """Load config.json or return defaults"""
     default_config = {
         "processing_pipeline": {
             "convert_to_markdown": True,
+            "normalize_headings": True,
             "extract_metadata": True,
             "translate_to_korean": False,
-            "render_to_html": True
         },
         "metadata_extraction": {
             "max_input_chars": 8000,
@@ -86,7 +117,6 @@ def load_config():
             "max_retries": 3,
             "retry_delay_seconds": 2,
             "timeout_seconds": 300,
-            "preserve_english_html": True,
             "max_section_chars": 3000,
             "verify_translation": True,
             "enable_parallel_translation": True,
@@ -111,9 +141,6 @@ def load_config():
 
     # Auto-activate dependencies
     pipeline = default_config["processing_pipeline"]
-    if pipeline["render_to_html"]:
-        # HTML rendering requires markdown conversion
-        pipeline["convert_to_markdown"] = True
 
     if pipeline.get("translate_to_korean", False):
         # Translation requires markdown conversion
@@ -134,6 +161,8 @@ def load_prompt():
 - The translation must cover 100% of the source text. Every paragraph, every sentence must appear in the output.
 - If the input has N paragraphs, the output MUST also have N paragraphs.
 - Do NOT add any content that is not in the original text.
+- Do NOT add any headings (#, ##, ###, etc.) that do not exist in the source text.
+- If the text begins mid-sentence (a continuation), translate it starting from exactly where it begins — do NOT prepend any title or heading.
 - Never replace content with "..." or "(이하 생략)" or similar.
 - Translate figure/table captions and footnotes fully.
 
@@ -488,7 +517,7 @@ def extract_paper_metadata(md_path, output_dir, config):
     # Load AI settings
     api_base = os.getenv("OPENAI_BASE_URL")
     api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("TRANSLATION_MODEL", "gpt-4o")
+    model = os.getenv("TRANSLATION_MODEL", "gemini-claude-sonnet-4-5")
 
     if not api_base or not api_key:
         print_warning("Metadata extraction skipped: OPENAI_BASE_URL or OPENAI_API_KEY not set")
@@ -747,6 +776,150 @@ def clean_ocr_artifacts(text):
     return text
 
 
+# ── Heading normalization constants ──────────────────────────────────────────
+import re as _re
+
+_HEADING_RE = _re.compile(r'^(#{1,6})\s+(.+)$', _re.MULTILINE)
+_SPAN_RE = _re.compile(r'<span[^>]*>|</span>')
+_EMPHASIS_RE = _re.compile(r'^\*+(.+?)\*+$')
+
+# Numbered section patterns (most specific first)
+_DECIMAL_SUBSUB = _re.compile(r'^(\d{1,2}\.\d{1,2}\.\d{1,2})\b')
+_DECIMAL_SUB = _re.compile(r'^(\d{1,2}\.\d{1,2})\b')
+_DECIMAL_MAIN = _re.compile(r'^(\d{1,2})\s+\S')
+_ROMAN_MAIN = _re.compile(
+    r'^(I{1,3}|IV|VI{0,3}|IX|XI{0,3}|X{1,3})[\.\s]+\s*\S',
+    _re.IGNORECASE
+)
+_LETTER_SUB = _re.compile(r'^([A-Z])[\.\)]\s+\S')
+_ACM_RE = _re.compile(r'^ACM\s+Reference', _re.IGNORECASE)
+
+_STRUCTURAL_KEYWORDS = {
+    'references', 'bibliography', 'appendix', 'appendices',
+    'acknowledgements', 'acknowledgments', 'acknowledgement', 'acknowledgment',
+    'supplementary material', 'abstract',
+}
+
+
+def _clean_heading_for_matching(text):
+    """Strip HTML tags and emphasis markers for pattern matching."""
+    cleaned = _SPAN_RE.sub('', text).strip()
+    m = _EMPHASIS_RE.match(cleaned)
+    if m:
+        cleaned = m.group(1).strip()
+    return cleaned
+
+
+def _detect_numbering_scheme(heading_texts):
+    """Pre-scan headings to determine document numbering scheme.
+
+    Returns 'decimal', 'roman', or 'mixed'.
+    """
+    decimal_count = 0
+    roman_count = 0
+    for h in heading_texts:
+        cleaned = _clean_heading_for_matching(h)
+        if _DECIMAL_MAIN.match(cleaned) or _DECIMAL_SUB.match(cleaned):
+            decimal_count += 1
+        if _ROMAN_MAIN.match(cleaned):
+            roman_count += 1
+
+    if decimal_count > 0 and roman_count == 0:
+        return 'decimal'
+    elif roman_count >= 2 and decimal_count == 0:
+        return 'roman'
+    return 'mixed'
+
+
+def _is_structural_heading(text):
+    """Check if heading matches known structural sections (References, etc.)."""
+    # Strip numbering prefix
+    stripped = _re.sub(r'^[\dIVXivx\.\s]+', '', text).strip()
+    lower = stripped.lower()
+    for kw in _STRUCTURAL_KEYWORDS:
+        if kw in lower:
+            return True
+    return False
+
+
+def normalize_heading_levels(text):
+    """Normalize inconsistent markdown heading levels based on section numbering.
+
+    marker-pdf OCR produces random heading levels. This function uses the
+    section numbering in heading text to assign correct levels:
+      Title (first unnumbered heading) → H1
+      Main sections (1, 2, I, II)      → H2
+      Sub-sections (1.1, A., B.)       → H3
+      Sub-sub-sections (1.1.1)         → H4
+      Structural (References, etc.)    → H2
+      Unnumbered                       → previous numbered level + 1
+    """
+    yaml_header, body = split_yaml_and_body(text)
+
+    # Collect all heading texts for scheme detection
+    all_headings = _HEADING_RE.findall(body)
+    if not all_headings:
+        return text
+
+    heading_texts = [h[1] for h in all_headings]
+    scheme = _detect_numbering_scheme(heading_texts)
+
+    title_found = False
+    last_numbered_level = 2
+
+    def _replace_heading(match):
+        nonlocal title_found, last_numbered_level
+
+        heading_content = match.group(2)
+        cleaned = _clean_heading_for_matching(heading_content)
+
+        # Title: first heading without a section number
+        if not title_found:
+            has_number = bool(
+                _DECIMAL_MAIN.match(cleaned)
+                or (scheme != 'decimal' and _ROMAN_MAIN.match(cleaned))
+            )
+            if not has_number:
+                title_found = True
+                return f'# {heading_content}'
+            else:
+                title_found = True
+                # Fall through to numbered logic
+
+        # Numbered patterns (most specific first)
+        if _DECIMAL_SUBSUB.match(cleaned):
+            level = 4
+            last_numbered_level = 4
+        elif _DECIMAL_SUB.match(cleaned):
+            level = 3
+            last_numbered_level = 3
+        elif _DECIMAL_MAIN.match(cleaned):
+            level = 2
+            last_numbered_level = 2
+        elif scheme != 'decimal' and _ROMAN_MAIN.match(cleaned):
+            level = 2
+            last_numbered_level = 2
+        elif scheme != 'decimal' and _LETTER_SUB.match(cleaned):
+            level = 3
+            last_numbered_level = 3
+        elif _ACM_RE.match(cleaned):
+            level = 4
+        elif _is_structural_heading(cleaned):
+            level = 2
+            last_numbered_level = 2
+        else:
+            # Unnumbered, non-structural → one level below last numbered
+            level = min(last_numbered_level + 1, 4)
+
+        return f'{"#" * level} {heading_content}'
+
+    normalized = _HEADING_RE.sub(_replace_heading, body)
+
+    if yaml_header:
+        return yaml_header + '\n' + normalized
+    return normalized
+
+
 def protect_special_blocks(text):
     """Replace code blocks and math with placeholders before translation.
 
@@ -883,8 +1056,34 @@ def classify_sections(body):
     return classified
 
 
+def _is_safe_split_point(prev_paragraph):
+    """Check if the paragraph ends at a natural sentence boundary.
+
+    Prevents splitting in the middle of multi-line structures (tables, lists,
+    figures) where the next chunk would start with a sentence fragment,
+    causing the AI translator to insert spurious headings.
+    """
+    text = prev_paragraph.rstrip()
+    if not text:
+        return True
+    # Ends with sentence terminator
+    if text[-1] in '.?!:)]\u3002':
+        return True
+    # Ends with a markdown heading (already complete)
+    last_line = text.split('\n')[-1]
+    if re.match(r'^#{1,6}\s+', last_line):
+        return True
+    # Ends with a table row
+    if last_line.rstrip().endswith('|'):
+        return True
+    return False
+
+
 def _split_long_section(section_text, max_chars=5000):
-    """Split a long section into chunks at paragraph boundaries.
+    """Split a long section into chunks at safe paragraph boundaries.
+
+    Uses _is_safe_split_point() to avoid splitting mid-sentence or
+    mid-structure, which would cause AI to insert spurious headings.
 
     Returns:
         list of text chunks, each <= max_chars (best effort)
@@ -900,9 +1099,15 @@ def _split_long_section(section_text, max_chars=5000):
     for para in paragraphs:
         para_len = len(para) + 2  # +2 for \n\n separator
         if current_len + para_len > max_chars and current_chunk:
-            chunks.append('\n\n'.join(current_chunk))
-            current_chunk = [para]
-            current_len = para_len
+            # Only split if previous paragraph ends at a safe boundary
+            if _is_safe_split_point(current_chunk[-1]):
+                chunks.append('\n\n'.join(current_chunk))
+                current_chunk = [para]
+                current_len = para_len
+            else:
+                # Not safe to split — keep accumulating even if over max_chars
+                current_chunk.append(para)
+                current_len += para_len
         else:
             current_chunk.append(para)
             current_len += para_len
@@ -937,6 +1142,10 @@ def _verify_translation(source_text, translated_text):
     if source_headings > 0 and trans_headings < source_headings * 0.5:
         return False, f"headings missing ({trans_headings}/{source_headings})"
 
+    # Check for extra headings (AI hallucination)
+    if source_headings > 0 and trans_headings > source_headings * 1.5:
+        return False, f"extra headings ({trans_headings} vs {source_headings} in source)"
+
     # Compare paragraph counts
     source_paras = len([p for p in source_text.split('\n\n') if p.strip()])
     trans_paras = len([p for p in translated_text.split('\n\n') if p.strip()])
@@ -944,6 +1153,52 @@ def _verify_translation(source_text, translated_text):
         return False, f"paragraphs missing ({trans_paras}/{source_paras})"
 
     return True, "ok"
+
+
+def _strip_spurious_headings(source_text, translated_text):
+    """Remove headings in translation that don't exist in the source.
+
+    AI translators sometimes insert headings like '# 번역문' or '# Translation'
+    when they receive text fragments without context. This post-processing step
+    detects and removes such spurious headings.
+
+    Args:
+        source_text: Original English markdown (pre-protection, with headings)
+        translated_text: Korean translated markdown
+
+    Returns:
+        Cleaned translated text with spurious headings removed
+    """
+    source_headings = re.findall(r'^#{1,6}\s+', source_text, re.MULTILINE)
+    trans_headings = re.findall(r'^#{1,6}\s+', translated_text, re.MULTILINE)
+
+    if len(trans_headings) <= len(source_headings):
+        return translated_text  # No extra headings
+
+    # Known AI artifact heading patterns
+    _ARTIFACT_PATTERNS = [
+        re.compile(r'^#{1,6}\s+번역문\s*$'),
+        re.compile(r'^#{1,6}\s+[Tt]ranslat(ion|ed)(\s+[Tt]ext)?\s*$'),
+        re.compile(r'^#{1,6}\s+한국어\s*(번역|버전)\s*$'),
+        re.compile(r'^#{1,6}\s+Korean\s+[Tt]ranslat(ion|ed)\s*$'),
+    ]
+
+    lines = translated_text.split('\n')
+    cleaned = []
+    removed_count = 0
+
+    for line in lines:
+        if re.match(r'^#{1,6}\s+', line):
+            if any(p.match(line) for p in _ARTIFACT_PATTERNS):
+                removed_count += 1
+                continue  # Skip this spurious heading
+        cleaned.append(line)
+
+    if removed_count > 0:
+        print_info(f"Removed {removed_count} spurious heading(s) from translation")
+        return '\n'.join(cleaned)
+
+    return translated_text
 
 
 def estimate_tokens(text):
@@ -1171,7 +1426,7 @@ async def _translate_chunks_parallel(client, model, system_prompt, chunks,
     return [r if r is not None else "" for r in ordered_results]
 
 
-def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
+def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, progress_callback=None):
     """Translate English markdown to Korean using OpenAI-compatible API.
 
     Pipeline: YAML分離 → OCR정리 → 수식보호 → 섹션분류 → 번역 → 복원/결합
@@ -1187,7 +1442,7 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
 
         api_base = os.getenv("OPENAI_BASE_URL")
         api_key = os.getenv("OPENAI_API_KEY")
-        model = os.getenv("TRANSLATION_MODEL", "gpt-4o")
+        model = os.getenv("TRANSLATION_MODEL", "gemini-claude-sonnet-4-5")
 
         if not api_base or not api_key:
             print_error("OPENAI_BASE_URL or OPENAI_API_KEY not set in .env")
@@ -1217,6 +1472,9 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
         # Step 2: Clean OCR artifacts
         body = clean_ocr_artifacts(body)
         print_success("OCR artifacts cleaned")
+
+        # Save body before protection for spurious heading detection later
+        body_before_protection = body
 
         # Step 3: Protect code blocks and math
         body, placeholders = protect_special_blocks(body)
@@ -1258,6 +1516,10 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
 
             section_idx += 1
             overall_pct = chars_translated / total_chars * 100 if total_chars > 0 else 0
+
+            # Update progress callback for status tracking
+            if progress_callback:
+                progress_callback(section_idx, translatable_count, overall_pct)
 
             # Split long sections into paragraph-level chunks
             chunks = _split_long_section(section_text, max_section_chars)
@@ -1377,6 +1639,9 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
         # Step 6: Restore protected blocks
         final_body = restore_special_blocks(final_body, placeholders)
 
+        # Step 6.5: Strip spurious headings inserted by AI
+        final_body = _strip_spurious_headings(body_before_protection, final_body)
+
         # Step 7: Write output with header.yaml
         base_name = os.path.basename(md_path).replace('.md', '')
         ko_md_path = os.path.join(output_dir, f"{base_name}_ko.md")
@@ -1406,134 +1671,6 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt):
         print_error(traceback.format_exc())
         return None
 
-def render_md_to_html(md_path):
-    """Render MD to HTML using Quarto with fallback for YAML parsing issues"""
-    try:
-        print_info(f"Running Quarto to render HTML...")
-
-        # Use absolute path for md_path
-        md_path_abs = os.path.abspath(md_path)
-        output_dir = os.path.dirname(md_path_abs)
-
-        # Quarto needs just the filename when running in the directory
-        md_filename = os.path.basename(md_path_abs)
-        cmd = ["quarto", "render", md_filename]
-
-        print_info(f"Command: {' '.join(cmd)}")
-        print_info(f"Working directory: {output_dir}")
-        print_info(f"Target file: {md_filename}")
-
-        result = subprocess.run(cmd, cwd=output_dir, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            html_output = md_path.replace('.md', '.html')
-            if os.path.exists(html_output):
-                print_success(f"HTML file created: {os.path.getsize(html_output) / 1024:.2f} KB")
-            return html_output
-        else:
-            # Check if it's a YAML parsing error
-            if "YAML parse exception" in result.stderr or "Error running Lua" in result.stderr:
-                print_warning(f"YAML parsing error detected. Trying with simplified header...")
-                return _render_with_simple_header(md_path_abs, output_dir, md_filename)
-            else:
-                print_error(f"Quarto rendering failed (exit code: {result.returncode})")
-                print_error(f"STDERR: {result.stderr}")
-                if result.stdout:
-                    print_info(f"STDOUT: {result.stdout}")
-                return None
-
-    except FileNotFoundError:
-        print_error(f"Quarto command not found. Is Quarto installed?")
-        print_info(f"Install: https://quarto.org/")
-        return None
-    except Exception as e:
-        print_error(f"PDF rendering error: {e}")
-        import traceback
-        print_error(traceback.format_exc())
-        return None
-
-
-def _render_with_simple_header(md_path_abs, output_dir, md_filename):
-    """Fallback: Replace complex YAML header with simple one and retry rendering"""
-    try:
-        # Read the markdown file
-        with open(md_path_abs, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Extract body (everything after second ---)
-        if content.startswith('---'):
-            parts = content.split('---', 2)
-            if len(parts) >= 3:
-                body = parts[2]
-            else:
-                print_error("Cannot extract markdown body")
-                return None
-        else:
-            print_error("No YAML header found")
-            return None
-
-        # Create simple YAML header
-        simple_header = '''---
-format:
-  html:
-    embed-resources: true
-    toc: false
-    theme: cosmo
----
-'''
-
-        # Create temporary file with simple header
-        temp_filename = md_filename.replace('.md', '_temp.md')
-        temp_path = os.path.join(output_dir, temp_filename)
-
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            f.write(simple_header + body)
-
-        print_info(f"Created temporary file with simplified header: {temp_filename}")
-
-        # Render the temporary file
-        cmd = ["quarto", "render", temp_filename]
-        result = subprocess.run(cmd, cwd=output_dir, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            # Move the generated HTML to the original filename
-            temp_html = temp_path.replace('_temp.md', '_temp.html')
-            final_html = md_path_abs.replace('.md', '.html')
-
-            if os.path.exists(temp_html):
-                import shutil
-                shutil.move(temp_html, final_html)
-                print_success(f"HTML created with simplified header: {os.path.getsize(final_html) / 1024:.2f} KB")
-                print_warning(f"Note: CSS styling from header.yaml was not applied due to compatibility issue")
-
-                # Clean up temporary files
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                # Clean up quarto-generated temp directories
-                temp_files_dir = temp_path.replace('_temp.md', '_temp_files')
-                if os.path.exists(temp_files_dir):
-                    shutil.rmtree(temp_files_dir)
-
-                return final_html
-            else:
-                print_error(f"Temporary HTML not found: {temp_html}")
-                return None
-        else:
-            print_error(f"Quarto rendering failed even with simple header")
-            print_error(f"STDERR: {result.stderr}")
-
-            # Clean up temporary file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-
-            return None
-
-    except Exception as e:
-        print_error(f"Error in fallback rendering: {e}")
-        import traceback
-        print_error(traceback.format_exc())
-        return None
-
 def process_single_pdf(pdf_path, config, prompt):
     """Process single PDF file with configurable pipeline"""
     try:
@@ -1546,7 +1683,6 @@ def process_single_pdf(pdf_path, config, prompt):
         # Get pipeline configuration
         pipeline = config.get("processing_pipeline", {
             "convert_to_markdown": True,
-            "render_to_html": True
         })
 
         # Display pipeline configuration
@@ -1554,8 +1690,11 @@ def process_single_pdf(pdf_path, config, prompt):
         print_info(f"  • PDF → Markdown: {'Enabled' if pipeline['convert_to_markdown'] else 'Disabled'}")
         print_info(f"  • Metadata Extraction: {'Enabled' if pipeline.get('extract_metadata', False) else 'Disabled'}")
         print_info(f"  • Translation (Korean): {'Enabled' if pipeline.get('translate_to_korean', False) else 'Disabled'}")
-        print_info(f"  • Markdown → HTML: {'Enabled' if pipeline['render_to_html'] else 'Disabled'}")
         print()
+
+        # Initialize processing status tracking
+        total_stages = _count_active_stages(pipeline)
+        current_stage = 0
 
         # Create output directory
         output_dir = os.path.join("outputs", base_name)
@@ -1570,13 +1709,13 @@ def process_single_pdf(pdf_path, config, prompt):
             "markdown": None,
             "metadata": None,
             "translation": None,
-            "html_en": None,
-            "html_ko": None
         }
 
         # Step 1: PDF to MD (conditional)
         md_path = None
         if pipeline["convert_to_markdown"]:
+            current_stage += 1
+            write_processing_status(pdf_name, "converting", current_stage, total_stages, "PDF to Markdown")
             print_info(f"Step 1: Converting PDF to Markdown...")
             try:
                 md_path = convert_pdf_to_md(pdf_path, output_dir)
@@ -1600,8 +1739,29 @@ def process_single_pdf(pdf_path, config, prompt):
                 print_warning(f"Markdown conversion disabled and no existing file found")
                 results["markdown"] = "skipped"
 
+        # Step 1.1: Normalize heading levels (fix OCR inconsistencies)
+        if pipeline.get("normalize_headings", True) and md_path and os.path.exists(md_path):
+            try:
+                with open(md_path, 'r', encoding='utf-8') as f:
+                    md_content = f.read()
+                normalized = normalize_heading_levels(md_content)
+                if normalized != md_content:
+                    with open(md_path, 'w', encoding='utf-8') as f:
+                        f.write(normalized)
+                    # Count changed headings
+                    orig = _re.findall(r'^#{1,6}', md_content, _re.MULTILINE)
+                    norm = _re.findall(r'^#{1,6}', normalized, _re.MULTILINE)
+                    changed = sum(1 for a, b in zip(orig, norm) if a != b)
+                    print_success(f"Heading levels normalized ({changed} heading(s) adjusted)")
+                else:
+                    print_info("Headings already consistent")
+            except Exception as e:
+                print_warning(f"Heading normalization skipped: {e}")
+
         # Step 1.5: Extract metadata and optionally rename folder
         if pipeline.get("extract_metadata", False) and md_path and os.path.exists(md_path):
+            current_stage += 1
+            write_processing_status(pdf_name, "metadata", current_stage, total_stages, "Extracting Metadata")
             print_info("Step 1.5: Extracting paper metadata with AI...")
             try:
                 metadata = extract_paper_metadata(md_path, output_dir, config)
@@ -1637,10 +1797,22 @@ def process_single_pdf(pdf_path, config, prompt):
         ko_md_path = None
         if pipeline.get("translate_to_korean", False):
             if md_path and os.path.exists(md_path):
+                current_stage += 1
+                write_processing_status(pdf_name, "translating", current_stage, total_stages, "Translating to Korean")
                 print_info(f"Step 2: Translating to Korean...")
+
+                _trans_stage = current_stage
+                _trans_total = total_stages
+                def _translation_progress(sec_idx, sec_total, pct):
+                    write_processing_status(
+                        pdf_name, "translating", _trans_stage, _trans_total,
+                        f"Translating to Korean ({sec_idx}/{sec_total}, {pct:.0f}%)"
+                    )
+
                 try:
                     ko_md_path = translate_md_to_korean_openai(
-                        md_path, output_dir, config, prompt
+                        md_path, output_dir, config, prompt,
+                        progress_callback=_translation_progress
                     )
                     if ko_md_path:
                         print_success(f"Translation complete: {ko_md_path}")
@@ -1657,48 +1829,7 @@ def process_single_pdf(pdf_path, config, prompt):
         else:
             results["translation"] = "skipped"
 
-        # Step 3: Render to HTML (conditional)
-        if pipeline["render_to_html"]:
-            # Step 3a: Render English HTML
-            preserve_en = config.get("translation", {}).get("preserve_english_html", True)
-            if md_path and os.path.exists(md_path) and (preserve_en or not pipeline.get("translate_to_korean", False)):
-                print_info(f"Step 3a: Rendering English HTML...")
-                try:
-                    html_en = render_md_to_html(md_path)
-                    if html_en:
-                        print_success(f"English HTML complete: {html_en}")
-                        results["html_en"] = "success"
-                    else:
-                        print_warning(f"English HTML rendering failed")
-                        results["html_en"] = "failed"
-                except Exception as e:
-                    print_error(f"English HTML rendering error: {e}")
-                    results["html_en"] = "failed"
-            else:
-                results["html_en"] = "skipped"
-
-            # Step 3b: Render Korean HTML
-            if ko_md_path and os.path.exists(ko_md_path):
-                print_info(f"Step 3b: Rendering Korean HTML...")
-                try:
-                    html_ko = render_md_to_html(ko_md_path)
-                    if html_ko:
-                        print_success(f"Korean HTML complete: {html_ko}")
-                        results["html_ko"] = "success"
-                    else:
-                        print_warning(f"Korean HTML rendering failed")
-                        results["html_ko"] = "failed"
-                except Exception as e:
-                    print_error(f"Korean HTML rendering error: {e}")
-                    results["html_ko"] = "failed"
-            else:
-                results["html_ko"] = "skipped"
-        else:
-            print_info(f"HTML rendering disabled")
-            results["html_en"] = "skipped"
-            results["html_ko"] = "skipped"
-
-        # Step 4: Move processed PDF to output directory
+        # Step 3: Move processed PDF to output directory
         print_info(f"Moving source PDF to output directory...")
         dest_pdf = os.path.join(output_dir, pdf_name)
         try:
@@ -1721,12 +1852,17 @@ def process_single_pdf(pdf_path, config, prompt):
 
         # Return True if at least one step succeeded
         success_count = sum(1 for s in results.values() if s == "success")
+        if success_count > 0:
+            write_processing_status(pdf_name, "complete", total_stages, total_stages, "Complete")
+        else:
+            write_processing_status(pdf_name, "error", current_stage, total_stages, "Error", error="No steps succeeded")
         return success_count > 0
 
     except Exception as e:
         print_error(f"Processing error: {e}")
         import traceback
         print_error(traceback.format_exc())
+        write_processing_status(pdf_name, "error", 0, 0, "Error", error=str(e))
         return False
 
 def check_services(config):
@@ -1819,6 +1955,9 @@ def main():
 
     print_info(f"\nResults are available in the 'outputs' directory")
     print_info(f"Log saved to: {log_file}")
+
+    # Write idle status for viewer polling
+    write_processing_status(None, "idle", 0, 0, "Idle")
 
     # Close log file
     log_handle.close()

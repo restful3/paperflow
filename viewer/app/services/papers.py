@@ -31,8 +31,6 @@ def _load_paper_metadata(paper_dir: Path) -> dict | None:
 def _paper_info(paper_dir: Path, location: str) -> dict:
     """Build info dict for a single paper directory."""
     files: dict[str, bool] = {
-        "html": False,
-        "html_ko": False,
         "pdf": False,
         "md_ko": False,
         "md_en": False,
@@ -40,12 +38,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
     for f in paper_dir.iterdir():
         if not f.is_file():
             continue
-        if f.name.endswith("_ko.html"):
-            files["html_ko"] = True
-            files["html"] = True  # backward compat: at least one HTML exists
-        elif f.name.endswith(".html") and not f.name.endswith("_ko.html"):
-            files["html"] = True
-        elif f.name.endswith(".pdf"):
+        if f.name.endswith(".pdf"):
             files["pdf"] = True
         elif f.name.endswith("_ko.md"):
             files["md_ko"] = True
@@ -132,21 +125,6 @@ def _resolve_paper_dir(name: str) -> Path | None:
         if d.is_dir():
             return d
     return None
-
-
-def get_html_path(name: str) -> Path | None:
-    """Get HTML file path. Prefers _ko.html, falls back to .html."""
-    paper_dir = _resolve_paper_dir(name)
-    if not paper_dir:
-        return None
-    ko_html = None
-    en_html = None
-    for f in paper_dir.iterdir():
-        if f.name.endswith("_ko.html"):
-            ko_html = f
-        elif f.name.endswith(".html"):
-            en_html = f
-    return ko_html or en_html
 
 
 def get_pdf_path(name: str) -> Path | None:
@@ -276,3 +254,101 @@ def save_upload(filename: str, data: bytes) -> tuple[bool, str]:
         return False, f"'{filename}' already exists in upload queue."
     dest.write_bytes(data)
     return True, f"'{filename}' uploaded."
+
+
+def get_processing_status() -> dict:
+    """Read processing status file and combine with queued files in newones/."""
+    from datetime import datetime, timezone
+
+    status_path = settings.logs_dir / "processing_status.json"
+    processing = {
+        "current_file": None,
+        "stage": "idle",
+        "stage_num": 0,
+        "total_stages": 0,
+        "stage_label": "Idle",
+        "updated_at": None,
+        "error": None,
+    }
+
+    # Read status file if exists
+    if status_path.is_file():
+        try:
+            with open(status_path, "r", encoding="utf-8") as f:
+                processing = _json.load(f)
+        except Exception:
+            pass
+
+    # Check for stale status (>120s old, not idle/complete)
+    stale = False
+    if processing.get("updated_at") and processing.get("stage") not in ("idle", "complete"):
+        try:
+            updated = datetime.fromisoformat(processing["updated_at"])
+            age = (datetime.now() - updated).total_seconds()
+            if age > 600:
+                stale = True
+        except Exception:
+            pass
+
+    # List PDF files in newones/ directory (queued for processing)
+    files = []
+    newones = settings.newones_dir
+    if newones.exists():
+        pdf_files = sorted(
+            [f for f in newones.iterdir() if f.is_file() and f.name.lower().endswith(".pdf")],
+            key=lambda f: f.stat().st_mtime,
+        )
+        current_file = processing.get("current_file")
+        queue_pos = 0
+        for pdf in pdf_files:
+            size_mb = round(pdf.stat().st_size / (1024 * 1024), 1)
+            entry = {"filename": pdf.name, "size_mb": size_mb}
+
+            if current_file and pdf.name == current_file:
+                entry["status"] = "stale" if stale else "processing"
+                entry["stage"] = processing.get("stage", "")
+                entry["stage_num"] = processing.get("stage_num", 0)
+                entry["total_stages"] = processing.get("total_stages", 0)
+                entry["stage_label"] = processing.get("stage_label", "")
+                if processing.get("error"):
+                    entry["error"] = processing["error"]
+            else:
+                queue_pos += 1
+                entry["status"] = "queued"
+                entry["queue_position"] = queue_pos
+
+            files.append(entry)
+
+    return {"files": files, "processing": processing}
+
+
+def delete_queued_file(filename: str) -> tuple[bool, str]:
+    """Delete a queued PDF from newones/ directory. Only allows deleting files not currently being processed."""
+    from datetime import datetime
+
+    # Sanitize: prevent path traversal
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return False, "Invalid filename."
+
+    filepath = settings.newones_dir / filename
+    if not filepath.is_file():
+        return False, f"'{filename}' not found in queue."
+
+    # Check if this file is currently being processed
+    status_path = settings.logs_dir / "processing_status.json"
+    if status_path.is_file():
+        try:
+            with open(status_path, "r", encoding="utf-8") as f:
+                processing = _json.load(f)
+            current = processing.get("current_file")
+            stage = processing.get("stage", "idle")
+            if current == filename and stage not in ("idle", "complete", "error"):
+                return False, f"'{filename}' is currently being processed. Cannot delete."
+        except Exception:
+            pass
+
+    try:
+        filepath.unlink()
+        return True, f"'{filename}' removed from queue."
+    except Exception as e:
+        return False, f"Failed to delete '{filename}': {e}"

@@ -41,23 +41,18 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     name = unquote(paper_name)
     info = paper_svc.get_paper_info(name)
 
-    has_html = info["formats"]["html"] if info else False
     has_pdf = info["formats"]["pdf"] if info else False
     has_md_ko = info["formats"]["md_ko"] if info else False
     has_md_en = info["formats"]["md_en"] if info else False
     location = info["location"] if info else "outputs"
 
-    # Default view priority: md_ko > md_en > html > pdf
-    if has_md_ko:
-        default_view = "md-ko"
-    elif has_md_en:
-        default_view = "md-en"
-    elif has_html:
-        default_view = "html"
+    # Default view priority: md > pdf
+    if has_md_ko or has_md_en:
+        default_view = "md"
     elif has_pdf:
         default_view = "pdf"
     else:
-        default_view = "md-ko"
+        default_view = "md"
 
     paper_title = info.get("title") if info else None
     paper_title_ko = info.get("title_ko") if info else None
@@ -68,7 +63,6 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "paper_name_encoded": quote(name, safe=""),
         "paper_title": paper_title,
         "paper_title_ko": paper_title_ko,
-        "has_html": has_html,
         "has_pdf": has_pdf,
         "has_md_ko": has_md_ko,
         "has_md_en": has_md_en,

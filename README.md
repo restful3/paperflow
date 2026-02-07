@@ -47,7 +47,7 @@ graph LR
 
 **변환 파이프라인**:
 - **marker-pdf** - GPU 가속 PDF to Markdown 변환 (CUDA 전용)
-- **OpenAI API** - 메타데이터 추출 & 한국어 번역 (병렬 처리)
+- **OpenAI API** (또는 OpenAI 호환 API) - 메타데이터 추출 & 한국어 번역 (병렬 처리)
 - **Quarto** - Markdown to HTML 렌더링 엔진
 
 **웹 뷰어**:
@@ -57,7 +57,7 @@ graph LR
 - **Marked.js** - 클라이언트 사이드 Markdown 렌더링
 - **JWT** - HTTPOnly 쿠키 기반 인증
 
-**AI 기능**:
+**AI 기능** (OpenAI 및 OpenAI 호환 API 지원):
 - **RAG (Retrieval-Augmented Generation)** - 논문별 챗봇
 - **BM25 Keyword Search** - 청크 기반 문서 검색
 - **SSE (Server-Sent Events)** - 실시간 스트리밍 응답
@@ -67,7 +67,7 @@ graph LR
 | 항목 | v1.0 (Legacy) | v2.0 (Current) |
 |------|---------------|----------------|
 | **파이프라인** | PDF → MD → Korean → HTML (4단계) | PDF → MD → 메타데이터 → 번역 → HTML (4단계) |
-| **번역 엔진** | Ollama (로컬 LLM) | OpenAI API (병렬 처리, 2-4x 빠름) |
+| **번역 엔진** | Ollama (로컬 LLM) | OpenAI 호환 API (병렬 처리, 2-4x 빠름) |
 | **AI 기능** | ❌ 없음 | ✅ 메타데이터 추출, RAG 챗봇 |
 | **뷰어** | Streamlit (app.py) | FastAPI + Alpine.js (viewer/) |
 | **처리 시간** | ~15-40분/PDF | ~10-15분/PDF (병렬 번역) |
@@ -321,11 +321,12 @@ cd PaperFlow
 
 `.env` 파일 생성:
 ```env
-# OpenAI API (메타데이터 추출, 번역, RAG 챗봇)
+# OpenAI API 또는 OpenAI 호환 API (메타데이터 추출, 번역, RAG 챗봇)
+# OpenAI, Google Gemini, Anthropic 등 OpenAI 호환 엔드포인트 사용 가능
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=sk-your-api-key-here
-TRANSLATION_MODEL=gpt-4o          # 번역용 모델
-CHATBOT_MODEL=gpt-4o              # 챗봇용 모델
+TRANSLATION_MODEL=gpt-4o            # 번역용 모델
+CHATBOT_MODEL=gpt-4o                # 챗봇용 모델
 
 # 로그인 인증
 LOGIN_ID=your_id
@@ -476,13 +477,14 @@ format:
 
 ### .env
 
-OpenAI API, 로그인 인증 및 JWT 설정:
+OpenAI 호환 API, 로그인 인증 및 JWT 설정:
 ```env
-# OpenAI API
+# OpenAI 호환 API (OpenAI, Google Gemini, Anthropic 등)
+# OPENAI_BASE_URL만 변경하면 다른 OpenAI 호환 서비스로 전환 가능
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=sk-your-api-key-here
-TRANSLATION_MODEL=gpt-4o          # 번역용 모델
-CHATBOT_MODEL=gpt-4o              # RAG 챗봇용 모델
+TRANSLATION_MODEL=gpt-4o            # 번역용 모델
+CHATBOT_MODEL=gpt-4o                # RAG 챗봇용 모델
 
 # 로그인 인증
 LOGIN_ID=admin                    # 로그인 ID
@@ -688,10 +690,10 @@ graph LR
         View[paperflow-viewer<br/>No GPU<br/>Port 8090]
     end
 
-    Host[Host Machine<br/>Ollama Service]
     Vols[Shared Volumes<br/>newones/ outputs/ archives/]
+    API[OpenAI 호환 API<br/>외부 서비스]
 
-    Conv -.->|host.docker.internal| Host
+    Conv -.->|API 호출| API
     Conv <--> Vols
     View <--> Vols
 
@@ -711,7 +713,7 @@ graph LR
 ```bash
 # 1. .env 파일 설정
 cat > .env << EOF
-# OpenAI API
+# OpenAI 호환 API
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=sk-your-api-key-here
 TRANSLATION_MODEL=gpt-4o

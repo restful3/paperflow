@@ -1,9 +1,9 @@
 {
   "processing_pipeline": {
     "convert_to_markdown": true,
+    "normalize_headings": true,
     "extract_metadata": true,
-    "translate_to_korean": true,
-    "render_to_html": true
+    "translate_to_korean": true
   },
   "metadata_extraction": {
     "max_input_chars": 8000,
@@ -19,7 +19,6 @@
     "max_retries": 3,
     "retry_delay_seconds": 2,
     "timeout_seconds": 300,
-    "preserve_english_html": true,
     "max_section_chars": 3000,
     "verify_translation": true,
     "enable_parallel_translation": true,

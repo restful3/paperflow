@@ -154,44 +154,7 @@
       </div>
     </div>
 
-    <!-- Upload panel (collapsible) -->
-    <div class="mb-5" x-data="{ open: false }">
-      <button @click="open = !open"
-              class="flex items-center space-x-2 text-sm transition mb-2"
-              :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400' : 'text-gray-500 hover:text-indigo-600'">
-        <svg class="w-4 h-4 transition-transform" :class="open && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
-        <span>Upload PDF</span>
-      </button>
-      <div x-show="open" x-collapse x-cloak>
-        <div class="border-2 border-dashed rounded-xl p-6 text-center transition"
-             :class="[
-               dragOver ? ($store.darkMode.on ? 'border-indigo-400 bg-indigo-900/50' : 'border-indigo-500 bg-indigo-50') : ($store.darkMode.on ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-white')
-             ]"
-             @dragover.prevent="dragOver = true"
-             @dragleave.prevent="dragOver = false"
-             @drop.prevent="handleDrop($event)"
-             x-data="{ dragOver: false }">
-          <svg class="mx-auto w-10 h-10 mb-2" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-          </svg>
-          <p class="text-sm mb-2" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">Drag & drop PDF here, or</p>
-          <label class="inline-flex items-center px-5 py-3 sm:px-4 sm:py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium cursor-pointer hover:bg-indigo-700 transition">
-            Browse files
-            <input type="file" accept=".pdf" class="hidden" @change="handleFileSelect($event)">
-          </label>
-          <p x-show="uploading" class="mt-3 text-sm" :class="$store.darkMode.on ? 'text-indigo-400' : 'text-indigo-600'">
-            <svg class="animate-spin inline -mt-0.5 mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-            </svg>
-            Uploading...
-          </p>
-        </div>
-      </div>
-    </div>
+    <!-- Upload & Processing panel placeholder (rendered at bottom of page) -->
 
     <!-- Loading -->
     <div x-show="loading" class="flex justify-center py-12">
@@ -244,9 +207,6 @@
             <div class="flex items-center gap-2 sm:gap-1.5">
               <!-- Mobile: Text badges -->
               <div class="flex sm:hidden flex-wrap gap-1">
-                <span x-show="paper.formats.html"
-                      class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700"
-                      :class="$store.darkMode.on && 'bg-emerald-900/30 text-emerald-400'">HTML</span>
                 <span x-show="paper.formats.md_ko"
                       class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
                       :class="$store.darkMode.on && 'bg-purple-900/30 text-purple-400'">KO</span>
@@ -260,7 +220,6 @@
 
               <!-- Desktop: Dots (sm:+) -->
               <div class="hidden sm:flex items-center gap-1.5">
-                <span x-show="paper.formats.html" class="w-2 h-2 rounded-full bg-emerald-500" title="HTML"></span>
                 <span x-show="paper.formats.md_ko" class="w-2 h-2 rounded-full bg-purple-500" title="MD-KO"></span>
                 <span x-show="paper.formats.md_en" class="w-2 h-2 rounded-full bg-gray-400" title="MD-EN"></span>
                 <span x-show="paper.formats.pdf" class="w-2 h-2 rounded-full bg-blue-500" title="PDF"></span>
@@ -323,9 +282,6 @@
               <div class="flex items-center gap-1 ml-1">
                 <!-- Mobile: Text badges -->
                 <div class="flex sm:hidden gap-1">
-                  <span x-show="paper.formats.html"
-                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700"
-                        :class="$store.darkMode.on && 'bg-emerald-900/30 text-emerald-400'">HTML</span>
                   <span x-show="paper.formats.md_ko"
                         class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
                         :class="$store.darkMode.on && 'bg-purple-900/30 text-purple-400'">KO</span>
@@ -339,7 +295,6 @@
 
                 <!-- Desktop: Dots (sm:+) -->
                 <div class="hidden sm:flex gap-1">
-                  <span x-show="paper.formats.html" class="w-1.5 h-1.5 rounded-full bg-emerald-500" title="HTML"></span>
                   <span x-show="paper.formats.md_ko" class="w-1.5 h-1.5 rounded-full bg-purple-500" title="MD-KO"></span>
                   <span x-show="paper.formats.md_en" class="w-1.5 h-1.5 rounded-full bg-gray-400" title="MD-EN"></span>
                   <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
@@ -389,20 +344,180 @@
       <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="search ? 'No papers match your search.' : 'No papers yet. Upload a PDF to get started.'"></p>
     </div>
 
-    <!-- Log viewer (collapsible with auto-refresh) -->
-    <div class="mt-8">
-      <button @click="toggleLog()"
-              class="flex items-center space-x-2 text-sm transition mb-2"
-              :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400' : 'text-gray-500 hover:text-indigo-600'">
-        <svg class="w-4 h-4 transition-transform" :class="logOpen && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
-        <span>Processing Log</span>
-        <span x-show="logOpen" class="ml-1 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+    <!-- Upload & Processing Panel -->
+    <div class="mt-8 rounded-xl border shadow-sm transition-colors"
+         :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+
+      <!-- Panel header (always visible) -->
+      <button @click="togglePanel()"
+              class="w-full flex items-center justify-between px-4 py-3 transition-colors rounded-xl"
+              :class="$store.darkMode.on ? 'hover:bg-gray-750' : 'hover:bg-gray-50'">
+        <div class="flex items-center space-x-2">
+          <svg class="w-4 h-4 transition-transform" :class="panel.open && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+          <span class="text-sm font-medium" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'">Upload & Processing</span>
+          <span x-show="isProcessing" class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span x-show="queueCount > 0"
+                class="text-xs rounded-full px-2 py-0.5 font-medium"
+                :class="$store.darkMode.on ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-600'"
+                x-text="queueCount + ' in queue'"></span>
+          <span x-show="uploadQueue.filter(u => u.status === 'uploading').length > 0"
+                class="text-xs rounded-full px-2 py-0.5 font-medium"
+                :class="$store.darkMode.on ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-600'">Uploading...</span>
+        </div>
       </button>
-      <div x-show="logOpen" x-collapse x-cloak>
-        <div x-ref="logBox" class="bg-gray-900 rounded-xl p-4 max-h-80 overflow-y-auto log-box text-gray-300 whitespace-pre-wrap"
-             x-text="logContent || 'Loading...'">
+
+      <!-- Panel body -->
+      <div x-show="panel.open" x-collapse x-cloak>
+        <div class="px-4 pb-4 space-y-4">
+
+          <!-- Drop zone (compact) -->
+          <div class="border-2 border-dashed rounded-lg p-4 text-center transition"
+               :class="[
+                 panelDragOver ? ($store.darkMode.on ? 'border-indigo-400 bg-indigo-900/50' : 'border-indigo-500 bg-indigo-50') : ($store.darkMode.on ? 'border-gray-700' : 'border-gray-300')
+               ]"
+               @dragover.prevent="panelDragOver = true"
+               @dragleave.prevent="panelDragOver = false"
+               @drop.prevent="panelDragOver = false; handleDrop($event)">
+            <div class="flex items-center justify-center space-x-3">
+              <svg class="w-6 h-6 shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <span class="text-sm" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">Drop PDF files here, or</span>
+              <label class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium cursor-pointer hover:bg-indigo-700 transition">
+                Browse
+                <input type="file" accept=".pdf" multiple class="hidden" @change="handleFileSelect($event)">
+              </label>
+            </div>
+          </div>
+
+          <!-- Upload queue (client-side) -->
+          <template x-if="uploadQueue.length > 0">
+            <div class="space-y-1.5">
+              <template x-for="(item, idx) in uploadQueue" :key="item.name + idx">
+                <div class="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors"
+                     :class="$store.darkMode.on ? 'bg-gray-750' : 'bg-gray-50'">
+                  <div class="flex items-center space-x-2 min-w-0">
+                    <!-- Status icon -->
+                    <template x-if="item.status === 'uploading'">
+                      <svg class="animate-spin w-4 h-4 shrink-0 text-indigo-500" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                    </template>
+                    <template x-if="item.status === 'done'">
+                      <svg class="w-4 h-4 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                      </svg>
+                    </template>
+                    <template x-if="item.status === 'error'">
+                      <svg class="w-4 h-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                    </template>
+                    <template x-if="item.status === 'pending'">
+                      <svg class="w-4 h-4 shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                    </template>
+                    <span class="truncate" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-700'" x-text="item.name"></span>
+                    <span class="text-xs shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="item.size_mb + ' MB'"></span>
+                  </div>
+                  <div class="flex items-center space-x-2 shrink-0 ml-2">
+                    <span x-show="item.error" class="text-xs text-red-500 max-w-[150px] truncate" x-text="item.error"></span>
+                    <button x-show="item.status === 'pending'" @click="removeFromQueue(idx)"
+                            class="p-1 rounded transition"
+                            :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Processing queue (server-side, polled) -->
+          <div x-show="processingFiles.length > 0" class="space-y-2">
+            <h4 class="text-xs font-semibold uppercase tracking-wider"
+                :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Processing Queue</h4>
+            <template x-for="(pf, idx) in processingFiles" :key="pf.filename">
+              <div class="rounded-lg border px-3 py-2.5 transition-colors"
+                   :class="$store.darkMode.on ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-sm font-medium truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'" x-text="pf.filename"></span>
+                  <div class="flex items-center space-x-2 shrink-0 ml-2">
+                    <span class="text-xs" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="pf.size_mb + ' MB'"></span>
+                    <button x-show="pf.status === 'queued'"
+                            @click="deleteQueuedFile(pf.filename)"
+                            class="p-1 rounded transition"
+                            :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'"
+                            title="Remove from queue">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <!-- Processing: progress bar -->
+                <template x-if="pf.status === 'processing'">
+                  <div>
+                    <div class="w-full rounded-full h-2 overflow-hidden"
+                         :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
+                      <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
+                           :style="'width: ' + (pf.total_stages > 0 ? Math.round(pf.stage_num / pf.total_stages * 100) : 0) + '%'"></div>
+                    </div>
+                    <p class="text-xs mt-1" :class="$store.darkMode.on ? 'text-indigo-400' : 'text-indigo-600'"
+                       x-text="pf.stage_label + ' (' + pf.stage_num + '/' + pf.total_stages + ')'"></p>
+                  </div>
+                </template>
+                <!-- Queued -->
+                <template x-if="pf.status === 'queued'">
+                  <p class="text-xs" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                     x-text="'Queued (#' + pf.queue_position + ')'"></p>
+                </template>
+                <!-- Stale -->
+                <template x-if="pf.status === 'stale'">
+                  <p class="text-xs text-amber-500">Status unknown (processor may have stopped)</p>
+                </template>
+                <!-- Error -->
+                <template x-if="pf.status === 'error'">
+                  <p class="text-xs text-red-500" x-text="'Error: ' + (pf.error || 'Unknown error')"></p>
+                </template>
+              </div>
+            </template>
+          </div>
+
+          <!-- Empty processing queue message -->
+          <div x-show="processingFiles.length === 0 && uploadQueue.length === 0"
+               class="text-center py-3">
+            <p class="text-xs" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">No files in processing queue.</p>
+          </div>
+
+          <!-- Detailed Log (sub-toggle) -->
+          <div class="border-t pt-3 transition-colors"
+               :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+            <button @click="toggleLog()"
+                    class="flex items-center space-x-2 text-xs transition mb-2"
+                    :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400' : 'text-gray-500 hover:text-indigo-600'">
+              <svg class="w-3.5 h-3.5 transition-transform" :class="panel.logOpen && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+              <span>Detailed Log</span>
+              <span x-show="panel.logOpen" class="ml-1 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+            </button>
+            <div x-show="panel.logOpen" x-collapse x-cloak>
+              <div x-ref="logBox" class="bg-gray-900 rounded-lg p-3 max-h-60 overflow-y-auto log-box text-gray-300 whitespace-pre-wrap"
+                   x-text="logContent || 'Loading...'">
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -443,15 +558,27 @@ function papersApp() {
     papers: [],
     search: '',
     loading: true,
-    uploading: false,
     stats: { unread: 0, archived: 0 },
-    logContent: '',
-    logOpen: false,
-    logInterval: null,
     viewMode: localStorage.getItem('pf-view') || 'card',
     sortBy: localStorage.getItem('pf-sort') || 'name',
     sortOrder: localStorage.getItem('pf-sort-order') || 'asc',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
+
+    // Upload & Processing panel state
+    panel: { open: false, logOpen: false },
+    panelDragOver: false,
+    uploadQueue: [],
+    processingFiles: [],
+    processingInfo: {},
+    logContent: '',
+    statusInterval: null,
+    logInterval: null,
+    _lastProcessingStage: null,
+
+    get queueCount() { return this.processingFiles.length; },
+    get isProcessing() {
+      return this.processingInfo.stage && !['idle', 'complete'].includes(this.processingInfo.stage);
+    },
 
     async init() {
       await Promise.all([this.fetchPapers(), this.fetchStats()]);
@@ -460,7 +587,6 @@ function papersApp() {
     get filtered() {
       let results = this.papers;
 
-      // Search across all metadata fields
       if (this.search) {
         const q = this.search.toLowerCase();
         results = results.filter(p =>
@@ -474,7 +600,6 @@ function papersApp() {
         );
       }
 
-      // Sort
       const dir = this.sortOrder === 'asc' ? 1 : -1;
       if (this.sortBy === 'title') {
         results = [...results].sort((a, b) => {
@@ -557,48 +682,134 @@ function papersApp() {
       }
     },
 
-    async handleDrop(event) {
-      const files = event.dataTransfer.files;
-      if (files.length > 0) await this.uploadFile(files[0]);
+    // ── Upload & Processing Panel ──
+
+    togglePanel() {
+      this.panel.open = !this.panel.open;
+      if (this.panel.open) {
+        this.refreshStatus();
+        this.statusInterval = setInterval(() => this.refreshStatus(), 3000);
+      } else {
+        clearInterval(this.statusInterval);
+        this.statusInterval = null;
+        if (this.panel.logOpen) {
+          clearInterval(this.logInterval);
+          this.logInterval = null;
+        }
+      }
     },
 
-    async handleFileSelect(event) {
-      const files = event.target.files;
-      if (files.length > 0) await this.uploadFile(files[0]);
-      event.target.value = '';
-    },
-
-    async uploadFile(file) {
-      if (!file.name.toLowerCase().endsWith('.pdf')) {
+    handleDrop(event) {
+      const files = Array.from(event.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+      if (files.length === 0) {
         showToast('Only PDF files are accepted', 'warning');
         return;
       }
-      this.uploading = true;
-      try {
-        const form = new FormData();
-        form.append('file', file);
-        const resp = await fetch('/api/upload', {
-          method: 'POST',
-          credentials: 'same-origin',
-          body: form,
+      this.addFilesToQueue(files);
+    },
+
+    handleFileSelect(event) {
+      const files = Array.from(event.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+      if (files.length > 0) this.addFilesToQueue(files);
+      event.target.value = '';
+    },
+
+    addFilesToQueue(files) {
+      for (const file of files) {
+        this.uploadQueue.push({
+          file,
+          name: file.name,
+          size_mb: (file.size / (1024 * 1024)).toFixed(1),
+          status: 'pending',
+          error: null,
         });
-        if (resp.status === 401) { window.location.href = '/login'; return; }
-        const data = await resp.json();
-        if (resp.ok) {
-          showToast(data.message);
-        } else {
-          showToast(data.detail || 'Upload failed', 'error');
+      }
+      // Auto-open panel
+      if (!this.panel.open) this.togglePanel();
+      this.processUploadQueue();
+    },
+
+    async processUploadQueue() {
+      for (const item of this.uploadQueue) {
+        if (item.status !== 'pending') continue;
+        item.status = 'uploading';
+        try {
+          const form = new FormData();
+          form.append('file', item.file);
+          const resp = await fetch('/api/upload', {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: form,
+          });
+          if (resp.status === 401) { window.location.href = '/login'; return; }
+          const data = await resp.json();
+          if (resp.ok) {
+            item.status = 'done';
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+              const idx = this.uploadQueue.indexOf(item);
+              if (idx !== -1) this.uploadQueue.splice(idx, 1);
+            }, 3000);
+          } else {
+            item.status = 'error';
+            item.error = data.detail || 'Upload failed';
+          }
+        } catch (e) {
+          item.status = 'error';
+          item.error = 'Upload failed';
         }
-      } catch (e) {
-        showToast('Upload failed', 'error');
-      } finally {
-        this.uploading = false;
+      }
+      // Refresh status after uploads complete
+      this.refreshStatus();
+    },
+
+    removeFromQueue(idx) {
+      if (this.uploadQueue[idx] && this.uploadQueue[idx].status === 'pending') {
+        this.uploadQueue.splice(idx, 1);
       }
     },
 
+    async deleteQueuedFile(filename) {
+      if (!confirm(`Remove "${filename}" from processing queue?`)) return;
+      try {
+        const resp = await apiFetch(`/api/processing/queue/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        if (resp && resp.ok) {
+          const data = await resp.json();
+          showToast(data.message);
+          this.refreshStatus();
+        } else if (resp) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Failed to remove file', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to remove file', 'error');
+      }
+    },
+
+    async refreshStatus() {
+      try {
+        const resp = await apiFetch('/api/processing/status');
+        if (resp) {
+          const data = await resp.json();
+          this.processingFiles = data.files || [];
+          this.processingInfo = data.processing || {};
+
+          // Detect stage transition: processing → idle/complete
+          const currentStage = this.processingInfo.stage;
+          if (this._lastProcessingStage &&
+              !['idle', 'complete'].includes(this._lastProcessingStage) &&
+              ['idle', 'complete'].includes(currentStage)) {
+            showToast('Processing complete! Paper list updated.');
+            await Promise.all([this.fetchPapers(), this.fetchStats()]);
+          }
+          this._lastProcessingStage = currentStage;
+        }
+      } catch (e) { /* silent */ }
+    },
+
     toggleLog() {
-      this.logOpen = !this.logOpen;
-      if (this.logOpen) {
+      this.panel.logOpen = !this.panel.logOpen;
+      if (this.panel.logOpen) {
         this.loadLog();
         this.logInterval = setInterval(() => this.loadLog(), 3000);
       } else {
