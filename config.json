@@ -4,6 +4,7 @@
     "normalize_headings": true,
     "extract_metadata": true,
     "enrich_with_web_search": true,
+    "check_duplicate": true,
     "translate_to_korean": true
   },
   "metadata_extraction": {

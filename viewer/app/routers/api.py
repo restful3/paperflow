@@ -431,6 +431,20 @@ async def upload_pdf(file: UploadFile = File(...), _user: str = Depends(get_curr
     ok, msg = paper_svc.save_upload(file.filename, data)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
+
+    # Check for duplicate papers (fail-open: errors return empty list)
+    pdf_path = settings.newones_dir / file.filename
+    similar_papers = await paper_svc.check_duplicate_paper(pdf_path)
+
+    return {"ok": True, "message": msg, "similar_papers": similar_papers}
+
+
+@router.delete("/upload/{filename}")
+async def delete_uploaded(filename: str, _user: str = Depends(get_current_user_api)):
+    """Remove an uploaded file from newones/ (for duplicate skip)."""
+    ok, msg = paper_svc.delete_uploaded_file(filename)
+    if not ok:
+        raise HTTPException(status_code=404, detail=msg)
     return {"ok": True, "message": msg}
 
 

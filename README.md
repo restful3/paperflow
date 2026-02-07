@@ -311,22 +311,10 @@ httpx>=0.27.0            # Brave Search API
 git clone <repository-url>
 cd PaperFlow
 
-# .env 파일 설정
-cat > .env << 'EOF'
-# OpenAI 호환 API
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=sk-your-api-key-here
-TRANSLATION_MODEL=gpt-4o
-CHATBOT_MODEL=gpt-4o
-
-# 웹 검색 보강 (선택, 없으면 자동 건너뜀)
-BRAVE_SEARCH_API_KEY=your-brave-api-key
-
-# 로그인 인증
-LOGIN_ID=admin
-LOGIN_PASSWORD=password
-JWT_SECRET_KEY=your-random-secret-key
-EOF
+# .env 파일 설정 (.env.example 참고)
+cp .env.example .env
+# .env 파일을 편집하여 API 키, 로그인 정보 등 설정
+vi .env
 
 # 실행
 docker compose up -d

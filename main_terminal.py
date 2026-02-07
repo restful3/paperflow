@@ -70,6 +70,8 @@ def _count_active_stages(pipeline):
         count += 1
     if pipeline.get("extract_metadata", False):
         count += 1
+    if pipeline.get("check_duplicate", True) and pipeline.get("extract_metadata", False):
+        count += 1
     if pipeline.get("translate_to_korean", False):
         count += 1
     return max(count, 1)
@@ -816,6 +818,56 @@ def enrich_metadata_with_web_search(metadata, output_dir, config):
         print_warning(f"Web search enrichment failed: {e}")
 
     return metadata
+
+
+def _normalize_title(title):
+    """Normalize title for comparison: lowercase, strip punctuation/whitespace."""
+    import unicodedata
+    t = unicodedata.normalize("NFKD", title.lower().strip())
+    t = re.sub(r'[^\w\s]', '', t)
+    t = re.sub(r'\s+', ' ', t)
+    return t
+
+
+def check_duplicate_batch(metadata, current_output_dir):
+    """Check if paper with same title already exists in outputs/ or archives/.
+
+    Returns list of matching papers: [{title, folder, location}]
+    Returns empty list if no duplicates or on error (fail-open).
+    """
+    title = metadata.get("title", "")
+    if not title or len(title) < 5:
+        return []
+
+    norm_title = _normalize_title(title)
+    matches = []
+
+    for base_dir, location in [("outputs", "outputs"), ("archives", "archives")]:
+        if not os.path.isdir(base_dir):
+            continue
+        for folder in os.listdir(base_dir):
+            folder_path = os.path.join(base_dir, folder)
+            if not os.path.isdir(folder_path) or folder.startswith("."):
+                continue
+            if os.path.abspath(folder_path) == os.path.abspath(current_output_dir):
+                continue
+            meta_path = os.path.join(folder_path, "paper_meta.json")
+            if not os.path.isfile(meta_path):
+                continue
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    existing_meta = json.load(f)
+                existing_title = existing_meta.get("title", "")
+                if existing_title and _normalize_title(existing_title) == norm_title:
+                    matches.append({
+                        "title": existing_title,
+                        "folder": folder,
+                        "location": location,
+                    })
+            except Exception:
+                continue
+
+    return matches
 
 
 def sanitize_folder_name(title, max_length=80):
@@ -1993,9 +2045,32 @@ def process_single_pdf(pdf_path, config, prompt):
         else:
             results["metadata"] = "skipped"
 
-        # Step 2: Translation (optional)
+        # Step 1.7: Duplicate check (optional, requires metadata)
+        skip_translation = False
+        if pipeline.get("check_duplicate", True) and metadata:
+            current_stage += 1
+            write_processing_status(pdf_name, "checking_duplicate", current_stage, total_stages, "Checking for Duplicates")
+            print_info("Step 1.7: Checking for duplicate papers...")
+            try:
+                duplicates = check_duplicate_batch(metadata, output_dir)
+                if duplicates:
+                    for d in duplicates:
+                        print_warning(f"Duplicate detected! Same title found in: {d['location']}/{d['folder']}")
+                    print_warning("Skipping translation to save resources.")
+                    results["duplicate_check"] = "duplicate_found"
+                    skip_translation = True
+                else:
+                    print_success("No duplicates found")
+                    results["duplicate_check"] = "clear"
+            except Exception as e:
+                print_warning(f"Duplicate check error (continuing): {e}")
+                results["duplicate_check"] = "error"
+
+        # Step 2: Translation (optional, skip if duplicate found)
         ko_md_path = None
-        if pipeline.get("translate_to_korean", False):
+        if skip_translation:
+            results["translation"] = "skipped_duplicate"
+        elif pipeline.get("translate_to_korean", False):
             if md_path and os.path.exists(md_path):
                 current_stage += 1
                 write_processing_status(pdf_name, "translating", current_stage, total_stages, "Translating to Korean")

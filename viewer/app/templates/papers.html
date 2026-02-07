@@ -811,6 +811,17 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                       </svg>
                     </template>
+                    <template x-if="item.status === 'duplicate'">
+                      <svg class="animate-spin w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                    </template>
+                    <template x-if="item.status === 'skipped'">
+                      <svg class="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                      </svg>
+                    </template>
                     <span class="truncate" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-700'" x-text="item.name"></span>
                     <span class="text-xs shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="item.size_mb + ' MB'"></span>
                   </div>
@@ -941,6 +952,53 @@
     </div>
   </div>
 
+  <!-- Duplicate Detection Modal -->
+  <div x-show="dupModal.show" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       @click.self="dupModalAction('skip')">
+    <div class="fixed inset-0 bg-black/50" @click="dupModalAction('skip')"></div>
+    <div class="relative w-full max-w-md rounded-xl shadow-2xl p-6"
+         :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-white'"
+         @click.stop>
+      <div class="flex items-start space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-lg font-semibold" :class="$store.darkMode.on ? 'text-white' : 'text-gray-900'">Similar Paper Found</h3>
+          <p class="text-sm mt-0.5" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">
+            <span x-text="dupModal.filename"></span>
+            <span class="ml-1" x-text="'(' + dupModal.size_mb + ' MB)'"></span>
+          </p>
+        </div>
+      </div>
+      <div class="mb-5 space-y-2">
+        <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'">This paper appears to already exist:</p>
+        <template x-for="paper in dupModal.papers" :key="paper.folder">
+          <div class="rounded-lg border p-3"
+               :class="$store.darkMode.on ? 'border-amber-800/50 bg-amber-900/10' : 'border-amber-200 bg-amber-50'">
+            <p class="text-sm font-medium" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-800'" x-text="paper.title"></p>
+            <p class="text-xs mt-1" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+               x-text="(paper.authors && paper.authors.length > 0 ? paper.authors.slice(0, 3).join(', ') : '') + ' \u00b7 in ' + paper.location"></p>
+          </div>
+        </template>
+      </div>
+      <div class="flex justify-end space-x-3">
+        <button @click="dupModalAction('skip')"
+                class="px-5 py-3 sm:px-4 sm:py-2 rounded-lg text-sm font-medium transition"
+                :class="$store.darkMode.on ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'">
+          Skip (Remove)
+        </button>
+        <button @click="dupModalAction('keep')"
+                class="px-5 py-3 sm:px-4 sm:py-2 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition">
+          Keep Anyway
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -956,6 +1014,7 @@ function papersApp() {
     sortBy: localStorage.getItem('pf-sort') || 'date',
     sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
+    dupModal: { show: false, filename: '', size_mb: '', papers: [], resolve: null },
     colCount: window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1,
     searchFocused: false,
     selectedSuggestionIdx: -1,
@@ -1330,8 +1389,18 @@ function papersApp() {
       this.processUploadQueue();
     },
 
+    showDuplicateModal(filename, size_mb, papers) {
+      return new Promise(resolve => {
+        this.dupModal = { show: true, filename, size_mb, papers, resolve };
+      });
+    },
+    dupModalAction(action) {
+      if (this.dupModal.resolve) this.dupModal.resolve(action);
+      this.dupModal.show = false;
+    },
+
     async processUploadQueue() {
-      for (const item of this.uploadQueue) {
+      for (const item of [...this.uploadQueue]) {
         if (item.status !== 'pending') continue;
         item.status = 'uploading';
         try {
@@ -1345,6 +1414,23 @@ function papersApp() {
           if (resp.status === 401) { window.location.href = '/login'; return; }
           const data = await resp.json();
           if (resp.ok) {
+            // Check for similar papers (duplicate detection)
+            if (data.similar_papers && data.similar_papers.length > 0) {
+              item.status = 'duplicate';
+              const action = await this.showDuplicateModal(item.file.name, item.size_mb, data.similar_papers);
+              if (action === 'skip') {
+                await fetch(`/api/upload/${encodeURIComponent(item.file.name)}`, {
+                  method: 'DELETE',
+                  credentials: 'same-origin',
+                });
+                item.status = 'skipped';
+                setTimeout(() => {
+                  const idx = this.uploadQueue.indexOf(item);
+                  if (idx !== -1) this.uploadQueue.splice(idx, 1);
+                }, 3000);
+                continue;
+              }
+            }
             item.status = 'done';
             // Auto-remove after 3 seconds
             setTimeout(() => {

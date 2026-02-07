@@ -1,5 +1,6 @@
 import datetime as _dt
 import json as _json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -274,6 +275,137 @@ def save_upload(filename: str, data: bytes) -> tuple[bool, str]:
         return False, f"'{filename}' already exists in upload queue."
     dest.write_bytes(data)
     return True, f"'{filename}' uploaded."
+
+
+def _extract_pdf_text(pdf_path: Path, max_pages: int = 3) -> str:
+    """Extract text from first few pages of PDF using PyPDF2."""
+    try:
+        from PyPDF2 import PdfReader
+        reader = PdfReader(str(pdf_path))
+        text = ""
+        for page in reader.pages[:max_pages]:
+            text += page.extract_text() or ""
+        return text[:3000]
+    except Exception:
+        return ""
+
+
+def _get_existing_papers_summary() -> list[dict]:
+    """Collect title+authors from all existing paper_meta.json files."""
+    papers = []
+    for base, location in [(settings.outputs_dir, "outputs"), (settings.archives_dir, "archives")]:
+        if not base.exists():
+            continue
+        for paper_dir in base.iterdir():
+            if not paper_dir.is_dir() or paper_dir.name.startswith("."):
+                continue
+            meta = _load_paper_metadata(paper_dir)
+            if meta and meta.get("title"):
+                papers.append({
+                    "title": meta["title"],
+                    "authors": meta.get("authors", []),
+                    "location": location,
+                    "folder": paper_dir.name,
+                })
+    return papers
+
+
+async def check_duplicate_paper(pdf_path: Path) -> list[dict]:
+    """Extract title/authors from uploaded PDF via AI, compare against existing papers.
+
+    Returns list of similar papers: [{title, authors, location, folder}]
+    Returns empty list if no duplicates or on any error (fail-open).
+    """
+    text = _extract_pdf_text(pdf_path)
+    if not text.strip():
+        return []
+
+    existing = _get_existing_papers_summary()
+    if not existing:
+        return []
+
+    existing_list = "\n".join(
+        f"- [{i}] \"{p['title']}\" by {', '.join(p['authors'][:3]) if p['authors'] else 'Unknown'}"
+        for i, p in enumerate(existing)
+    )
+
+    prompt = f"""From the following PDF text, extract the paper title and authors.
+Then compare against the existing papers list below and identify any that appear to be the same paper (same title or very similar title with same authors).
+
+PDF text (first pages):
+---
+{text}
+---
+
+Existing papers:
+{existing_list}
+
+Respond in JSON format only:
+{{
+  "extracted_title": "the paper title",
+  "extracted_authors": ["author1", "author2"],
+  "matches": [0, 3]
+}}
+
+Rules:
+- A match means the same paper (not just related topic)
+- Consider title variations (e.g., with/without subtitle, abbreviations)
+- If unsure, do NOT include as match
+- Return empty matches [] if no duplicates found"""
+
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(
+            base_url=os.getenv("OPENAI_BASE_URL", ""),
+            api_key=os.getenv("OPENAI_API_KEY", "")
+        )
+
+        response = await client.chat.completions.create(
+            model=os.getenv("TRANSLATION_MODEL", "gemini-2.5-flash"),
+            messages=[
+                {"role": "system", "content": "You are a metadata extraction assistant. Respond only in valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=512,
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        if result_text.startswith("```"):
+            result_text = result_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        result = _json.loads(result_text)
+        matches = result.get("matches", [])
+
+        if not matches:
+            return []
+
+        similar = []
+        for idx in matches:
+            if 0 <= idx < len(existing):
+                paper = existing[idx]
+                similar.append({
+                    "title": paper["title"],
+                    "authors": paper["authors"],
+                    "location": paper["location"],
+                    "folder": paper["folder"],
+                })
+        return similar
+
+    except Exception:
+        return []
+
+
+def delete_uploaded_file(filename: str) -> tuple[bool, str]:
+    """Remove an uploaded file from newones/ (for duplicate skip)."""
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return False, "Invalid filename."
+    path = settings.newones_dir / filename
+    if path.is_file():
+        path.unlink()
+        return True, f"'{filename}' removed."
+    return False, "File not found in upload queue."
 
 
 def get_processing_status() -> dict:
