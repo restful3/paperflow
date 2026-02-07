@@ -984,6 +984,9 @@ function viewerApp() {
     TOUCH_MOVE_THRESHOLD: 10,    // px - Allow 10px movement for tap
     TOUCH_TIME_LIMIT: 500,       // ms - Tap must complete within 500ms
 
+    // Server-side reading progress (fallback for cross-browser)
+    serverProgress: {{ server_progress | default(0) }},
+
     async init() {
       // Configure marked.js renderer: add id to headings for TOC
       const renderer = new marked.Renderer();
@@ -1294,9 +1297,12 @@ function viewerApp() {
           });
 
           // Clean up citation/section links pointing to non-existent page anchors
-          // e.g. [\[1\]](#page-35-1) → \[1\], [6\]](#page-35-6) → 6\], [3.1](#page-3-0) → 3.1
-          // Uses (?:[^\]\\]|\\.)* to handle escaped brackets \] inside link text
-          text = text.replace(/\[((?:[^\]\\]|\\.)*)\]\(#page-[^)]+\)/g, '$1');
+          // e.g. [\[1\]](#page-35-1) → [1], [6\]](#page-35-6) → 6], [3.1](#page-3-0) → 3.1
+          // Also unescape \( \) \[ \] in link text to prevent protectMath from
+          // treating citation parentheses like \(Author, 2024\) as LaTeX math
+          text = text.replace(/\[((?:[^\]\\]|\\.)*)\]\(#page-[^)]+\)/g, (m, inner) => {
+            return inner.replace(/\\([()\[\]])/g, '$1');
+          });
 
           // Protect math expressions before marked.js parsing
           const { text: safeText, placeholders } = this.protectMath(text);
@@ -1374,13 +1380,41 @@ function viewerApp() {
     restoreScrollPosition(viewType) {
       const container = document.querySelector('.markdown-container');
       if (!container) return;
+
+      // Determine target: localStorage pixel position or server progress %
       const saved = localStorage.getItem(this._scrollSaveKey(viewType));
-      if (saved) {
-        const pos = parseInt(saved);
-        if (pos > 0) {
-          container.scrollTop = pos;
+      const hasSavedPx = saved && parseInt(saved) > 0;
+      const hasServerProgress = this.serverProgress > 0;
+      if (!hasSavedPx && !hasServerProgress) return;
+
+      // Retry scroll restoration until content is fully laid out
+      const tryRestore = (attemptsLeft) => {
+        const scrollable = container.scrollHeight - container.clientHeight;
+        if (scrollable <= 0 && attemptsLeft > 0) {
+          // Content not rendered yet, retry
+          requestAnimationFrame(() => tryRestore(attemptsLeft - 1));
+          return;
         }
-      }
+
+        let targetPos;
+        if (hasSavedPx) {
+          targetPos = parseInt(saved);
+        } else {
+          // Fallback: use server progress % to calculate pixel position
+          targetPos = Math.round((this.serverProgress / 100) * scrollable);
+        }
+
+        if (targetPos <= 0) return;
+        container.scrollTop = targetPos;
+
+        // Verify scroll was applied; if not, content may still be loading
+        if (attemptsLeft > 0 && container.scrollTop < targetPos * 0.8) {
+          requestAnimationFrame(() => tryRestore(attemptsLeft - 1));
+        }
+      };
+
+      // Start with a small delay to let browser complete initial layout
+      requestAnimationFrame(() => tryRestore(15));
     },
 
     setupScrollSave(viewType) {

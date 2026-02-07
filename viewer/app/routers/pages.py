@@ -57,6 +57,10 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     paper_title = info.get("title") if info else None
     paper_title_ko = info.get("title_ko") if info else None
 
+    # Server-side reading progress (fallback when localStorage is empty)
+    all_progress = paper_svc.get_all_progress()
+    server_progress = all_progress.get(name, 0)
+
     return templates.TemplateResponse("viewer.html", {
         "request": request,
         "paper_name": name,
@@ -68,4 +72,5 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "has_md_en": has_md_en,
         "location": location,
         "default_view": default_view,
+        "server_progress": server_progress,
     })
