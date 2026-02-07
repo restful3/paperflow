@@ -26,47 +26,59 @@ PaperFlow는 학술 논문 PDF를 구조화된 Markdown과 렌더링된 HTML로 
 graph LR
     A[PDF Files] -->|Watch Mode| B[Batch Processor]
     B -->|marker-pdf| C[Markdown]
-    C -->|Quarto| D[HTML]
-    D --> E[FastAPI Viewer]
-    E -->|Browser| F[User]
+    C -->|AI Metadata| D[Paper Info]
+    D -->|AI Translation| E[Korean MD]
+    E -->|Quarto| F[HTML EN/KO]
+    F --> G[FastAPI Viewer]
+    G -->|RAG Chatbot| H[User]
 
     style B fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
-    style E fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style D fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style E fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style G fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 | 컴포넌트 | 파일 | 역할 |
 |----------|------|------|
-| **📄 Batch Processor** | `main_terminal.py` | PDF → Markdown → HTML 변환 파이프라인 |
-| **🌐 Web Viewer** | `viewer/` | FastAPI + Alpine.js 기반 논문 열람/관리 UI |
+| **📄 Batch Processor** | `main_terminal.py` | PDF → MD → 메타데이터 추출 → 한국어 번역 → HTML |
+| **🌐 Web Viewer** | `viewer/` | FastAPI + Alpine.js + RAG 챗봇 기반 UI |
 
 ### 🛠️ 기술 스택
 
 **변환 파이프라인**:
 - **marker-pdf** - GPU 가속 PDF to Markdown 변환 (CUDA 전용)
+- **OpenAI API** - 메타데이터 추출 & 한국어 번역 (병렬 처리)
 - **Quarto** - Markdown to HTML 렌더링 엔진
 
 **웹 뷰어**:
 - **FastAPI** - 비동기 웹 프레임워크
 - **Alpine.js** - 경량 리액티브 프론트엔드
 - **TailwindCSS** - 유틸리티 CSS 프레임워크
+- **Marked.js** - 클라이언트 사이드 Markdown 렌더링
 - **JWT** - HTTPOnly 쿠키 기반 인증
+
+**AI 기능**:
+- **RAG (Retrieval-Augmented Generation)** - 논문별 챗봇
+- **BM25 Keyword Search** - 청크 기반 문서 검색
+- **SSE (Server-Sent Events)** - 실시간 스트리밍 응답
 
 ### ✨ v2.0 주요 변경사항
 
 | 항목 | v1.0 (Legacy) | v2.0 (Current) |
 |------|---------------|----------------|
-| **파이프라인** | PDF → MD → Korean → HTML (4단계) | PDF → MD → HTML (2단계) |
-| **처리 시간** | ~15-40분/PDF | ~2-5분/PDF (⚡ 5-10x 빠름) |
-| **번역** | Ollama LLM 한국어 번역 | ❌ 제거됨 (영문 직접 렌더링) |
+| **파이프라인** | PDF → MD → Korean → HTML (4단계) | PDF → MD → 메타데이터 → 번역 → HTML (4단계) |
+| **번역 엔진** | Ollama (로컬 LLM) | OpenAI API (병렬 처리, 2-4x 빠름) |
+| **AI 기능** | ❌ 없음 | ✅ 메타데이터 추출, RAG 챗봇 |
 | **뷰어** | Streamlit (app.py) | FastAPI + Alpine.js (viewer/) |
-| **플랫폼** | Linux + macOS | Linux 전용 (CUDA GPU) |
-| **출력 파일** | `*_ko.md`, `*_ko.html` | `*.md`, `*.html` |
+| **처리 시간** | ~15-40분/PDF | ~10-15분/PDF (병렬 번역) |
+| **출력 파일** | `*_ko.md`, `*_ko.html` | `*.md`, `*.html`, `*_ko.md`, `*_ko.html`, `paper_meta.json` |
+| **챗봇** | ❌ 없음 | ✅ 논문별 RAG 챗봇 (Markdown 렌더링) |
 
 ---
 
 ## 🔄 처리 파이프라인
 
-### 2단계 변환 프로세스
+### 4단계 변환 프로세스
 
 ```mermaid
 flowchart TD
@@ -82,8 +94,21 @@ flowchart TD
     GPU1 --> Extract[텍스트/이미지/메타데이터 추출]
     Extract --> Cleanup1[GPU 메모리 정리<br/>-4-8GB VRAM]
 
-    Cleanup1 --> Stage2[Stage 2: Markdown → HTML]
-    Stage2 --> Quarto[Quarto 렌더링]
+    Cleanup1 --> Stage2[Stage 2: 메타데이터 추출]
+    Stage2 --> AI1[OpenAI API 호출]
+    AI1 --> Meta[제목/저자/초록/카테고리]
+    Meta --> Rename[폴더명 변경<br/>PDF명 → 논문 제목]
+
+    Rename --> Stage3[Stage 3: 한국어 번역]
+    Stage3 --> Parallel{긴 섹션?}
+    Parallel -->|Yes| AsyncAPI[병렬 번역<br/>AsyncOpenAI<br/>최대 3 워커]
+    Parallel -->|No| SeqAPI[순차 번역]
+    AsyncAPI --> Verify[번역 품질 검증]
+    SeqAPI --> Verify
+    Verify --> KoreanMD[*_ko.md 생성]
+
+    KoreanMD --> Stage4[Stage 4: HTML 렌더링]
+    Stage4 --> Quarto[Quarto 렌더링<br/>EN + KO]
     Quarto --> Fallback{YAML 오류?}
     Fallback -->|Yes| Retry[간소화된 헤더로 재시도]
     Fallback -->|No| Success
@@ -95,9 +120,12 @@ flowchart TD
     End --> Watch
 
     style Stage1 fill:#4CAF50,stroke:#333,stroke-width:3px,color:#fff
-    style Stage2 fill:#2196F3,stroke:#333,stroke-width:3px,color:#fff
+    style Stage2 fill:#FF9800,stroke:#333,stroke-width:3px,color:#fff
+    style Stage3 fill:#9C27B0,stroke:#333,stroke-width:3px,color:#fff
+    style Stage4 fill:#2196F3,stroke:#333,stroke-width:3px,color:#fff
+    style AsyncAPI fill:#E91E63,stroke:#333,stroke-width:2px,color:#fff
     style Success fill:#8BC34A,stroke:#333,stroke-width:2px
-    style Cleanup1 fill:#FF9800,stroke:#333,stroke-width:2px
+    style Cleanup1 fill:#FF5722,stroke:#333,stroke-width:2px
 ```
 
 ### 파이프라인 상세
