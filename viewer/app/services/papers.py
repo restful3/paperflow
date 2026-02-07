@@ -78,6 +78,24 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["categories"] = []
         info["original_filename"] = None
 
+    # Check for chat history
+    chat_history_file = paper_dir / "chat_history.json"
+    has_chat_history = chat_history_file.exists()
+    chat_message_count = 0
+
+    if has_chat_history:
+        try:
+            with open(chat_history_file, "r", encoding="utf-8") as f:
+                chat_data = _json.load(f)
+                chat_message_count = len(chat_data.get("messages", []))
+        except Exception:
+            pass
+
+    info["chat"] = {
+        "has_history": has_chat_history,
+        "message_count": chat_message_count
+    }
+
     return info
 
 
@@ -202,6 +220,22 @@ def delete_paper(name: str) -> tuple[bool, str]:
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return False, f"Paper '{name}' not found."
+
+    # Clean up chatbot files before deletion
+    chat_history_file = paper_dir / "chat_history.json"
+    if chat_history_file.exists():
+        try:
+            chat_history_file.unlink()
+        except Exception:
+            pass  # Continue even if deletion fails
+
+    chat_chunks_file = paper_dir / "chat_chunks.json"
+    if chat_chunks_file.exists():
+        try:
+            chat_chunks_file.unlink()
+        except Exception:
+            pass  # Continue even if deletion fails
+
     size = _dir_size_mb(paper_dir)
     shutil.rmtree(str(paper_dir))
     return True, f"'{name}' deleted ({size:.1f} MB freed)."

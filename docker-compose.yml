@@ -46,4 +46,7 @@ services:
       - .env
     environment:
       - BASE_DIR=/data
+      - OPENAI_BASE_URL=http://host.docker.internal:8317/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
