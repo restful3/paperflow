@@ -4,6 +4,7 @@ from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse, Response
+from pydantic import BaseModel
 
 from ..auth import create_token, set_auth_cookie, clear_auth_cookie
 from ..config import settings
@@ -423,6 +424,28 @@ async def serve_md_en(name: str, _user: str = Depends(get_current_user_api)):
     if not path:
         raise HTTPException(status_code=404, detail="English markdown file not found")
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
+class MarkdownUpdateRequest(BaseModel):
+    content: str
+
+
+@router.put("/papers/{name:path}/markdown/{md_type}")
+async def update_markdown(
+    name: str,
+    md_type: str,
+    payload: MarkdownUpdateRequest,
+    _user: str = Depends(get_current_user_api),
+):
+    name = unquote(name)
+    if md_type not in ("ko", "en"):
+        raise HTTPException(status_code=400, detail="md_type must be 'ko' or 'en'")
+    if not payload.content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+    ok, msg = paper_svc.save_markdown(name, md_type, payload.content)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"ok": True, "message": msg}
 
 
 @router.get("/papers/{name:path}/assets/{filename:path}")

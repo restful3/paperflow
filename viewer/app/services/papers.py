@@ -179,6 +179,60 @@ def get_md_en_path(name: str) -> Path | None:
     return None
 
 
+def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
+    """Save edited markdown content with timestamped backup.
+
+    Args:
+        name: Paper folder name.
+        md_type: "ko" or "en".
+        content: New markdown content.
+    """
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return False, f"Paper '{name}' not found."
+
+    # Find the target file
+    target = None
+    if md_type == "ko":
+        for f in paper_dir.iterdir():
+            if f.name.endswith("_ko.md"):
+                target = f
+                break
+    else:
+        for f in paper_dir.iterdir():
+            if f.name.endswith(".md") and not f.name.endswith("_ko.md"):
+                target = f
+                break
+
+    if not target:
+        label = "Korean" if md_type == "ko" else "English"
+        return False, f"{label} markdown file not found."
+
+    # Create timestamped backup
+    timestamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = target.with_suffix(f".{timestamp}.bak")
+    try:
+        shutil.copy2(str(target), str(backup_path))
+    except Exception as e:
+        return False, f"Failed to create backup: {e}"
+
+    # Write new content
+    try:
+        target.write_text(content, encoding="utf-8")
+    except Exception as e:
+        return False, f"Failed to save: {e}"
+
+    # Invalidate RAG chat chunks cache
+    chat_chunks_file = paper_dir / "chat_chunks.json"
+    if chat_chunks_file.exists():
+        try:
+            chat_chunks_file.unlink()
+        except Exception:
+            pass
+
+    return True, f"Saved. Backup: {backup_path.name}"
+
+
 def get_asset_path(name: str, filename: str) -> Path | None:
     """Get path to an asset (image) in a paper directory."""
     paper_dir = _resolve_paper_dir(name)

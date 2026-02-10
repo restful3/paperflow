@@ -1,4 +1,4 @@
-# PaperFlow v2.5
+# PaperFlow v2.6
 
 <div align="center">
 
@@ -25,7 +25,7 @@ PaperFlow는 학술 논문 PDF를 구조화된 Markdown으로 변환하고, AI�
 ```mermaid
 graph LR
     A[PDF Files] -->|Watch Mode| B[Batch Processor]
-    B -->|marker-pdf| C[Markdown]
+    B -->|marker-pdf<br/>or MinerU| C[Markdown]
     C -->|AI| D[Metadata + Web Search]
     D -->|AI| E[Korean Translation]
     E --> F[FastAPI Viewer]
@@ -45,7 +45,9 @@ graph LR
 ### 기술 스택
 
 **변환 파이프라인**:
-- **marker-pdf** - GPU 가속 PDF to Markdown 변환 (CUDA 전용)
+- **PDF 변환 엔진** (택 1, `.env`에서 선택):
+  - **marker-pdf** - 빠른 변환, 일반 문서에 적합
+  - **MinerU** - 수식/테이블 인식 우수, 복잡한 학술 논문에 적합
 - **OpenAI 호환 API** - 메타데이터 추출 & 한국어 번역
 - **Brave Search API** - 논문 메타데이터 웹 검색 보강 (venue, DOI, year)
 
@@ -59,10 +61,22 @@ graph LR
 - **RAG 챗봇** - 논문별 AI 챗봇 (BM25 검색 + OpenAI API + SSE 스트리밍)
 - **웹 검색 보강** - Brave Search로 RAG 컨텍스트 및 메타데이터 보강
 
-### v2.5 주요 변경사항 (v2.0 대비)
+### v2.6 주요 변경사항
 
-| 항목 | v2.0 | v2.5 (Current) |
+| 항목 | v2.5 | v2.6 (Current) |
 |------|------|----------------|
+| **PDF 변환** | marker-pdf만 지원 | **marker-pdf / MinerU 선택** (`.env`에서 설정) |
+| **MinerU 지원** | - | pipeline/hybrid/vlm 백엔드, 수식/테이블 인식 강화 |
+| **설치** | 단일 requirements.txt | **엔진별 분리** (requirements-marker.txt / requirements-mineru.txt) |
+| **Docker 빌드** | 고정 | **`PDF_CONVERTER` ARG로 선택적 설치** (이미지 크기 절약) |
+| **변환 진행률** | 단계 표시만 | **실시간 세부 진행률** (Layout/OCR/Formula 단계별 %) |
+| **이미지 서빙** | 플랫 구조만 | **하위 디렉토리** (MinerU `images/` 폴더) 지원 |
+
+<details>
+<summary>v2.5 변경사항 (v2.0 대비)</summary>
+
+| 항목 | v2.0 | v2.5 |
+|------|------|------|
 | **파이프라인** | PDF → MD → Metadata → Translation → HTML (4단계) | PDF → MD → Normalize → Metadata + Web Search → Translation (3단계) |
 | **렌더링** | Quarto HTML (서버 사이드) | marked.js + KaTeX (클라이언트 사이드) |
 | **뷰어 모드** | HTML/PDF/Split | MD-KO/MD-EN/PDF/Split |
@@ -71,6 +85,8 @@ graph LR
 | **챗봇** | RAG 전용 | RAG + 조건부 웹 검색 보강 |
 | **UI** | 기본 | 콘텐츠 폭 조절, 읽기 진행률 (서버 동기화), 연도별 정렬 |
 | **출력 파일** | `*.md`, `*.html`, `*_ko.md`, `*_ko.html` | `*.md`, `*_ko.md` (HTML 파일 없음) |
+
+</details>
 
 ---
 
@@ -88,9 +104,12 @@ flowchart TD
     Detect -->|No| Poll
 
     Stage1[Stage 1: PDF → Markdown]
-    Stage1 --> GPU1[marker-pdf 로드<br/>+4-8GB VRAM]
+    Stage1 --> Engine{PDF_CONVERTER?}
+    Engine -->|marker| GPU1[marker-pdf<br/>+4-8GB VRAM]
+    Engine -->|mineru| GPU2[MinerU<br/>Layout/OCR/Formula]
     GPU1 --> Extract[텍스트/이미지/메타데이터 추출]
-    Extract --> Cleanup1[GPU 메모리 정리<br/>-4-8GB VRAM]
+    GPU2 --> Extract
+    Extract --> Cleanup1[GPU 메모리 정리<br/>VRAM 해제]
 
     Cleanup1 --> Normalize[헤딩 레벨 정규화<br/>OCR 교정]
 
@@ -125,17 +144,22 @@ flowchart TD
 ### 파이프라인 상세
 
 #### Stage 1: PDF → Markdown
-**함수**: `convert_pdf_to_md()` + `normalize_heading_levels()`
+**함수**: `convert_pdf_to_md_dispatch()` → `convert_pdf_to_md()` 또는 `convert_pdf_to_md_mineru()`
+
+`.env`의 `PDF_CONVERTER` 값에 따라 변환 엔진이 결정됩니다:
+
+| 엔진 | 설정값 | 특징 | VRAM |
+|------|--------|------|------|
+| **marker-pdf** | `marker` (기본) | 빠른 변환, 일반 문서에 적합 | ~4-8GB |
+| **MinerU** | `mineru` | 수식/테이블 인식 우수, Layout-OCR-Formula 단계별 처리 | ~6-10GB |
 
 - **입력**: PDF 파일
 - **처리**:
-  - marker-pdf 라이브러리 (GPU 전용, CUDA)
-  - 텍스트, 이미지(JPEG), 메타데이터(JSON) 추출
+  - **marker-pdf**: 단일 호출로 텍스트/이미지(JPEG)/메타데이터(JSON) 추출
+  - **MinerU**: Layout Predict → Formula Detection → OCR → Post-processing 단계별 실행, 실시간 진행률 표시
   - **헤딩 정규화**: OCR 결과의 불일치 헤딩 레벨 자동 교정
-    - 섹션 번호 패턴 분석 (1, 1.1, I, II, A.)
-    - 올바른 헤딩 계층 구조로 재매핑
-- **출력**: `*.md`, `*.json`, `*.jpeg`
-- **GPU 메모리**: 변환 후 모델 삭제 + `torch.cuda.empty_cache()`로 ~4-8GB VRAM 해제
+- **출력**: `*.md`, `*.json`, 이미지 (marker: `*.jpeg`, MinerU: `images/*.jpg`)
+- **GPU 메모리**: 변환 후 `torch.cuda.empty_cache()`로 VRAM 해제
 
 #### Stage 2: 메타데이터 추출 + 웹 검색 보강 (AI)
 **함수**: `extract_paper_metadata()` + `enrich_metadata_with_web_search()`
@@ -195,7 +219,7 @@ flowchart TD
 - **언어 토글**: EN/KO 버튼으로 UI 전체 및 논문 제목/초록 전환
 - **콘텐츠 폭 조절**: S(720px) / M(900px) / L(1200px) 프리셋 (localStorage 저장)
 - **글꼴 크기 조절**: 5단계 프리셋 (90%-150%)
-- **읽기 진행률**: 서버 동기화로 크로스 브라우저 유지 (max-wins 병합), 카드/목록에 배지 표시
+- **읽기 진행률**: 서버 동기화로 크로스 브라우저 유지, 카드/목록에 배지 표시
 - **클라이언트 사이드 TOC**: 헤딩 기반 자동 생성, IntersectionObserver 스크롤 스파이
 - **읽기 위치 기억**: localStorage 기반 스크롤 위치 저장/복원
 - **모바일 최적화**: 스크롤 시 상단바 자동 숨김 (< 768px)
@@ -280,13 +304,19 @@ outputs/Paper Title/
 
 ### Python 패키지
 
-**Batch Processor** (`requirements.txt`):
+**Batch Processor** (엔진별 분리 설치):
 ```
-marker-pdf>=0.2.17       # PDF → Markdown (CUDA)
+# 공통 (requirements.txt)
 torch>=2.0.0             # GPU 가속
 openai>=1.12.0           # AI 메타데이터 추출 & 번역
 python-dotenv>=1.0.0
 pypdf2>=3.0.0
+
+# marker-pdf 선택 시 (requirements-marker.txt)
+marker-pdf>=0.2.17
+
+# MinerU 선택 시 (requirements-mineru.txt)
+mineru[all]>=2.0.0       # pipeline/hybrid/vlm 백엔드 포함
 ```
 
 **Web Viewer** (`viewer/requirements.txt`):
@@ -313,17 +343,20 @@ cd PaperFlow
 
 # .env 파일 설정 (.env.example 참고)
 cp .env.example .env
-# .env 파일을 편집하여 API 키, 로그인 정보 등 설정
 vi .env
+# PDF_CONVERTER=marker  (기본값, 빠른 변환)
+# PDF_CONVERTER=mineru  (수식/테이블 인식 강화)
 
-# 실행
-docker compose up -d
+# 빌드 및 실행 (선택한 엔진만 설치됨)
+docker compose build && docker compose up -d
 
 # PDF 추가 → 자동 처리
 cp your_paper.pdf newones/
 
 # 브라우저에서 http://localhost:8090 접속
 ```
+
+> **엔진 변경 시**: `.env`에서 `PDF_CONVERTER` 값을 변경한 뒤 `docker compose build && docker compose up -d`로 재빌드가 필요합니다. Docker 빌드 시 선택된 엔진의 패키지만 설치되므로 이미지 크기가 최적화됩니다.
 
 ### 2. 로컬 개발 (Docker 없이)
 
@@ -350,13 +383,15 @@ outputs/Sanitized Paper Title/     # PDF 파일명 → 논문 제목으로 변�
   ├── your_paper.pdf           # 원본 PDF (newones/에서 이동)
   ├── your_paper.md            # 영문 Markdown
   ├── your_paper_ko.md         # 한국어 Markdown (번역)
-  ├── your_paper.json          # marker-pdf 메타데이터
+  ├── your_paper.json          # 변환 메타데이터
   ├── paper_meta.json          # AI+웹 검색 메타데이터
   │                            #   (title, authors, abstract, categories,
   │                            #    venue, DOI, publication_year, paper_url)
   ├── chat_chunks.json         # RAG 청크 캐시 (자동 생성)
   ├── chat_history.json        # 챗봇 대화 기록
-  └── *.jpeg                   # 추출된 이미지
+  ├── *.jpeg                   # 추출 이미지 (marker-pdf)
+  └── images/                  # 추출 이미지 (MinerU)
+      └── *.jpg
 
 reading_progress.json            # 읽기 진행률 (서버 동기화, 전체 논문 통합)
 archives/                        # "Archive" 버튼으로 이동된 논문
@@ -375,7 +410,15 @@ archives/                        # "Archive" 버튼으로 이동된 논문
     "normalize_headings": true,
     "extract_metadata": true,
     "enrich_with_web_search": true,
+    "check_duplicate": true,
     "translate_to_korean": true
+  },
+  "converter": {
+    "mineru": {
+      "backend": "pipeline",
+      "parse_method": "auto",
+      "lang": "en"
+    }
   },
   "metadata_extraction": {
     "temperature": 0.1,
@@ -406,6 +449,17 @@ archives/                        # "Archive" 버튼으로 이동된 논문
 | `extract_metadata` | `true` | AI 메타데이터 추출 |
 | `enrich_with_web_search` | `true` | Brave Search로 메타데이터 보강 |
 | `translate_to_korean` | `true` | 한국어 번역 |
+| `check_duplicate` | `true` | 중복 논문 감지 |
+
+#### Converter (MinerU 전용)
+
+MinerU 엔진 선택 시(`PDF_CONVERTER=mineru`) 적용되는 설정입니다. marker-pdf는 별도 설정 없이 기본값으로 동작합니다.
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `backend` | `pipeline` | 변환 백엔드 (`pipeline`: CPU+GPU 혼합, `hybrid-auto-engine`: GPU 집중, `vlm-transformers`: VLM 기반) |
+| `parse_method` | `auto` | 파싱 방식 (`auto`, `ocr`, `txt`) |
+| `lang` | `en` | 문서 언어 (`en`, `zh`, `ja`, `ko` 등) |
 
 #### Metadata Extraction
 
@@ -432,6 +486,9 @@ archives/                        # "Archive" 버튼으로 이동된 논문
 ### .env
 
 ```env
+# PDF 변환 엔진 선택 (빌드 시 해당 엔진만 설치됨)
+PDF_CONVERTER=marker                 # "marker" 또는 "mineru"
+
 # OpenAI 호환 API (OpenAI, Google Gemini, Anthropic 등)
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=sk-your-api-key-here
@@ -465,7 +522,7 @@ graph TB
 
     subgraph "Batch Processor (main_terminal.py)"
         Watch[Watch Mode<br/>5s Polling]
-        S1[Stage 1<br/>PDF → MD<br/>marker-pdf + Heading Norm.]
+        S1[Stage 1<br/>PDF → MD<br/>marker-pdf / MinerU]
         S2[Stage 2<br/>Metadata<br/>AI + Brave Search]
         S3[Stage 3<br/>Translation<br/>Korean MD]
 
@@ -510,21 +567,21 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant P as PDF Processing
-    participant M as marker-pdf
+    participant E as marker-pdf / MinerU
     participant G as GPU Memory
 
     Note over P,G: PDF 1 시작
-    P->>M: PDF 로드
-    M->>G: 모델 로드 (+4-8GB VRAM)
-    M->>M: PDF → MD 변환
-    M->>G: del models + empty_cache() (-4-8GB)
-    Note over M,G: GPU 메모리 해제
+    P->>E: PDF 로드
+    E->>G: 모델 로드 (marker ~4-8GB, MinerU ~6-10GB)
+    E->>E: PDF → MD 변환
+    E->>G: empty_cache() + VRAM 해제
+    Note over E,G: GPU 메모리 해제
 
     P->>P: 메타데이터 + 번역 (API, VRAM 미사용)
 
     Note over P,G: PDF 2 시작 (별도 프로세스)
-    P->>M: PDF 로드
-    M->>G: 모델 로드 (+4-8GB VRAM)
+    P->>E: PDF 로드
+    E->>G: 모델 로드
 ```
 
 ### API 엔드포인트
@@ -538,7 +595,7 @@ sequenceDiagram
 | `GET` | `/api/papers/{name}/md-ko` | 한국어 Markdown 서빙 |
 | `GET` | `/api/papers/{name}/md-en` | 영문 Markdown 서빙 |
 | `GET` | `/api/papers/{name}/pdf` | PDF 파일 서빙 |
-| `GET` | `/api/papers/{name}/assets/{file}` | 이미지 등 에셋 서빙 |
+| `GET` | `/api/papers/{name}/assets/{file}` | 이미지 등 에셋 서빙 (하위 디렉토리 지원) |
 | `POST` | `/api/papers/{name}/archive` | 아카이브로 이동 |
 | `POST` | `/api/papers/{name}/restore` | 읽을 논문으로 복원 |
 | `DELETE` | `/api/papers/{name}` | 영구 삭제 |
@@ -546,7 +603,7 @@ sequenceDiagram
 | `GET` | `/api/papers/{name}/chat/history` | 대화 기록 조회 |
 | `DELETE` | `/api/papers/{name}/chat/history` | 대화 기록 삭제 |
 | `POST` | `/api/papers/{name}/enrich` | 웹 검색 메타데이터 보강 |
-| `POST` | `/api/papers/{name}/progress` | 읽기 진행률 저장 (max-wins) |
+| `POST` | `/api/papers/{name}/progress` | 읽기 진행률 저장 |
 | `GET` | `/api/progress` | 전체 읽기 진행률 조회 |
 | `GET` | `/api/processing/status` | 처리 큐 상태 |
 | `DELETE` | `/api/processing/queue/{file}` | 처리 큐에서 제거 |
@@ -562,8 +619,10 @@ sequenceDiagram
 PaperFlow/
 ├── main_terminal.py         # Batch Processor (PDF → MD → Metadata → Translation)
 ├── config.json              # 파이프라인 설정
-├── requirements.txt         # Python 패키지 (Processor)
-├── .env                     # 환경변수 (gitignore)
+├── requirements.txt         # 공통 Python 패키지
+├── requirements-marker.txt  # marker-pdf 전용 패키지
+├── requirements-mineru.txt  # MinerU 전용 패키지
+├── .env                     # 환경변수 (gitignore, PDF_CONVERTER 설정 포함)
 │
 ├── run_batch.sh             # 일회성 배치 처리
 ├── run_batch_watch.sh       # Watch 모드 (연속 처리)
@@ -634,15 +693,19 @@ graph LR
 
 | 서비스 | 컨테이너 | 포트 | GPU | 역할 |
 |--------|----------|------|-----|------|
-| `paperflow-converter` | `paperflow_converter` | - | 필수 | PDF 변환 (Watch 모드) |
+| `paperflow-converter` | `paperflow_converter` | - | 필수 | PDF 변환 (Watch 모드, marker-pdf 또는 MinerU) |
 | `paperflow-viewer` | `paperflow_viewer` | 8090 | 불필요 | 웹 뷰어 (FastAPI) |
+
+> Converter 이미지는 `.env`의 `PDF_CONVERTER` 값에 따라 빌드됩니다. `docker compose build` 시 `--build-arg PDF_CONVERTER=mineru`가 자동 전달되어 선택한 엔진의 패키지만 설치됩니다.
 
 ### 실행
 
 ```bash
 # 1. .env 파일 설정 (위 "빠른 시작" 참조)
-# 2. Docker Compose 실행
-docker compose up -d
+#    PDF_CONVERTER=marker 또는 PDF_CONVERTER=mineru
+
+# 2. Docker Compose 빌드 및 실행 (선택한 엔진만 설치)
+docker compose build && docker compose up -d
 
 # 3. PDF 추가 → 자동 처리
 cp your_paper.pdf newones/
@@ -651,6 +714,9 @@ cp your_paper.pdf newones/
 docker compose logs -f
 
 # 5. 브라우저 접속: http://localhost:8090
+
+# 엔진 변경 시: .env 수정 후 재빌드 필요
+docker compose build && docker compose up -d
 ```
 
 ### 볼륨 마운트
@@ -661,6 +727,7 @@ docker compose logs -f
 | `outputs/` | `/app/outputs`, `/data/outputs` | 처리 결과 |
 | `archives/` | `/data/archives` (viewer only) | 아카이브 |
 | `logs/` | `/app/logs`, `/data/logs` | 처리 로그 |
+| `model_cache/` | `/root/.cache` (converter) | marker-pdf / MinerU 모델 캐시 |
 
 ---
 
@@ -716,6 +783,23 @@ curl $OPENAI_BASE_URL/models -H "Authorization: Bearer $OPENAI_API_KEY"
 docker compose logs paperflow-viewer | grep -i error
 ```
 
+### MinerU 관련
+
+```bash
+# "MinerU library not installed!" 오류
+# → .env에 PDF_CONVERTER=mineru 설정 후 재빌드 필요
+docker compose build && docker compose up -d
+
+# MinerU 첫 실행 시 모델 다운로드 (수 분 소요)
+# → model_cache/ 볼륨에 캐시되므로 이후 빠름
+docker compose logs -f paperflow-converter
+
+# MinerU 백엔드 변경
+# → config.json의 converter.mineru.backend 수정
+# pipeline: CPU+GPU 혼합 (기본, ~6GB VRAM)
+# hybrid-auto-engine: GPU 집중 (~10GB VRAM)
+```
+
 ### 번역 실패
 
 1. `config.json`에서 `translate_to_korean: true` 확인
@@ -733,6 +817,7 @@ MIT License
 ## Acknowledgments
 
 - [Marker-pdf](https://github.com/datalab-to/marker) - PDF to Markdown 변환
+- [MinerU](https://github.com/opendatalab/MinerU) - 고품질 PDF 파싱 (수식/테이블 강화)
 - [FastAPI](https://fastapi.tiangolo.com/) - 웹 프레임워크
 - [TailwindCSS](https://tailwindcss.com/) - CSS 프레임워크
 - [Alpine.js](https://alpinejs.dev/) - 경량 JS 프레임워크
@@ -746,6 +831,6 @@ MIT License
 
 **Made with care for researchers and paper readers**
 
-[맨 위로](#paperflow-v25)
+[맨 위로](#paperflow-v26)
 
 </div>

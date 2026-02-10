@@ -21,6 +21,7 @@ source .venv/bin/activate
 # Create required directories
 mkdir -p newones
 mkdir -p outputs
+mkdir -p logs
 
 # Check if newones directory has PDF files
 pdf_count=$(find newones -maxdepth 1 -name "*.pdf" 2>/dev/null | wc -l)

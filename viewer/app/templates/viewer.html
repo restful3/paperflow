@@ -215,7 +215,7 @@
       </div>
 
       <!-- Star rating + View mode tabs -->
-      <div class="flex gap-1 overflow-x-auto pb-1 px-1 scrollbar-hide mb-2 max-w-full">
+      <div x-show="!editMode" class="flex gap-1 overflow-x-auto pb-1 px-1 scrollbar-hide mb-2 max-w-full">
         <!-- Star rating (mobile) -->
         <div class="flex items-center gap-0 shrink-0 mr-1" @mouseleave="hoverStar = 0">
           <template x-for="s in [1,2,3,4,5]" :key="s">
@@ -352,6 +352,17 @@
           <span>Font Size</span>
         </button>
 
+        <!-- Edit (markdown views only) -->
+        <button x-show="(view === 'md' || view === 'split') && !editMode && (hasMdKo || hasMdEn)"
+                @click="enterEditMode(); mobileMenuOpen = false"
+                class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
+                :class="$store.darkMode.on ? 'bg-gray-600 text-amber-400 hover:bg-gray-500' : 'bg-white text-amber-600 hover:bg-amber-50'">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+          <span>Edit</span>
+        </button>
+
         <!-- PDF Download -->
         <template x-if="hasPdf">
           <a :href="pdfUrl" download
@@ -400,7 +411,7 @@
       </div>
 
       <!-- View toggle -->
-      <div class="flex rounded-lg p-0.5 shrink-0"
+      <div x-show="!editMode" class="flex rounded-lg p-0.5 shrink-0"
            :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-100'">
         <template x-if="hasMdKo || hasMdEn">
           <button @click="switchView('md')"
@@ -434,8 +445,19 @@
       <!-- Separator -->
       <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
 
+      <!-- Edit button (markdown views only) -->
+      <button x-show="(view === 'md' || view === 'split') && !editMode && (hasMdKo || hasMdEn)"
+              @click="enterEditMode()"
+              class="p-1.5 rounded-lg transition shrink-0"
+              :class="$store.darkMode.on ? 'text-gray-400 hover:text-amber-400 hover:bg-gray-700' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'"
+              title="Edit markdown">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+      </button>
+
       <!-- TOC toggle (markdown views) -->
-      <button x-show="view === 'md' || view === 'split'"
+      <button x-show="(view === 'md' || view === 'split') && !editMode"
               @click="toggleToc()"
               class="p-1.5 rounded-lg transition shrink-0"
               :class="tocVisible
@@ -597,7 +619,7 @@
     </div>
 
     <!-- Markdown view (language controlled by EN/KO toggle) -->
-    <template x-if="view === 'md'">
+    <template x-if="view === 'md' && !editMode">
       <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
            :class="$store.darkMode.on && 'dark'"
            x-html="activeMdContent"
@@ -609,7 +631,7 @@
     </template>
 
     <!-- PDF view -->
-    <template x-if="view === 'pdf'">
+    <template x-if="view === 'pdf' && !editMode">
       <div class="relative w-full h-full"
            @touchstart="handleTouchStart($event)"
            @touchmove="handleTouchMove($event)"
@@ -621,7 +643,7 @@
     </template>
 
     <!-- Split view (MD + PDF) -->
-    <template x-if="view === 'split'">
+    <template x-if="view === 'split' && !editMode">
       <div class="w-full h-full">
         <!-- Mobile: Show warning (< md:768px) -->
         <div class="flex md:hidden flex-col items-center justify-center p-8 text-center h-full">
@@ -649,8 +671,76 @@
       </div>
     </template>
 
+    <!-- Editor view -->
+    <template x-if="editMode">
+      <div class="w-full h-full flex flex-col">
+        <!-- Editor toolbar -->
+        <div class="flex items-center justify-between px-4 py-2 border-b shrink-0"
+             :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-semibold px-2 py-1 rounded"
+                  :class="editType === 'ko'
+                    ? ($store.darkMode.on ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-700')
+                    : ($store.darkMode.on ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700')"
+                  x-text="editType === 'ko' ? 'Korean' : 'English'"></span>
+            <span x-show="editDirty" class="text-xs text-amber-500 font-medium">Unsaved</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button x-show="hasMdKo && hasMdEn"
+                    @click="switchEditLang()"
+                    class="px-2 py-1 rounded text-xs font-medium transition"
+                    :class="$store.darkMode.on ? 'text-gray-300 border border-gray-600 hover:border-gray-400' : 'text-gray-600 border border-gray-300 hover:border-gray-500'"
+                    x-text="editType === 'ko' ? 'EN' : 'KO'"></button>
+            <button @click="saveEdit()"
+                    :disabled="!editDirty || editSaving"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition"
+                    :class="(!editDirty || editSaving) ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'">
+              <span x-show="!editSaving">Save</span>
+              <span x-show="editSaving">Saving...</span>
+            </button>
+            <button @click="cancelEdit()"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                    :class="$store.darkMode.on ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Editor + Preview split -->
+        <div class="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+          <!-- Editor pane -->
+          <div class="w-full md:w-1/2 h-1/2 md:h-full flex flex-col overflow-hidden border-b md:border-b-0 md:border-r"
+               :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-300'">
+            <div class="px-3 py-1 text-xs font-semibold uppercase tracking-wider border-b shrink-0"
+                 :class="$store.darkMode.on ? 'text-gray-500 border-gray-700 bg-gray-800' : 'text-gray-400 border-gray-200 bg-gray-50'">
+              Editor
+            </div>
+            <textarea x-model="editContent"
+                      @input="onEditInput()"
+                      @keydown.tab.prevent="handleEditorTab($event)"
+                      class="w-full p-4 font-mono text-sm resize-none focus:outline-none border-0"
+                      :class="$store.darkMode.on ? 'bg-gray-900 text-gray-200 placeholder-gray-600' : 'bg-white text-gray-800 placeholder-gray-400'"
+                      placeholder="Enter markdown content..."
+                      spellcheck="false"
+                      style="tab-size: 2; flex: 1 1 0; min-height: 0; overflow-y: scroll;"></textarea>
+          </div>
+
+          <!-- Preview pane -->
+          <div class="w-full md:w-1/2 h-1/2 md:h-full flex flex-col min-h-0">
+            <div class="px-3 py-1 text-xs font-semibold uppercase tracking-wider border-b shrink-0"
+                 :class="$store.darkMode.on ? 'text-gray-500 border-gray-700 bg-gray-800' : 'text-gray-400 border-gray-200 bg-gray-50'">
+              Preview
+            </div>
+            <div class="markdown-container flex-1 px-4 py-6 overflow-y-auto min-h-0"
+                 :class="$store.darkMode.on && 'dark'"
+                 x-html="editPreviewHtml"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- No content -->
-    <template x-if="!hasPdf && !hasMdKo && !hasMdEn">
+    <template x-if="!hasPdf && !hasMdKo && !hasMdEn && !editMode">
       <div class="flex-1 flex items-center justify-center text-sm"
            :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">
         No viewable files found for this paper.
@@ -660,7 +750,7 @@
 
   <!-- Chatbot Button (bottom-right, mobile-aware) -->
   <div x-data="chatButton()"
-       x-show="hasMdKo || hasMdEn"
+       x-show="(hasMdKo || hasMdEn) && !editMode"
        class="fixed z-40 transition-all duration-300"
        :class="[
          isMobile()
@@ -961,6 +1051,20 @@ function viewerApp() {
     mdEnContent: '',
     splitMdContent: '',
 
+    // Editor state
+    rawMdKo: '',
+    rawMdEn: '',
+    editMode: false,
+    editType: '',
+    editContent: '',
+    editOriginalContent: '',
+    editDirty: false,
+    editPreviewHtml: '',
+    editSaving: false,
+    _editPreviewTimer: null,
+    _beforeUnloadHandler: null,
+    _editorKeyHandler: null,
+
     get activeMdContent() {
       if (this.$store.lang.ko) {
         return this.hasMdKo ? this.mdKoContent : this.mdEnContent;
@@ -1218,6 +1322,14 @@ function viewerApp() {
       // Forward wheel events from outside markdown container to it
       // This prevents overscroll when cursor is on the empty space around the content
       this.$el.addEventListener('wheel', (e) => {
+        if (this.editMode) {
+          // In edit mode: block wheel on empty margins, allow on textarea/preview
+          const ta = this.$el.querySelector('textarea');
+          const preview = this.$el.querySelector('.markdown-container');
+          if ((ta && ta.contains(e.target)) || (preview && preview.contains(e.target))) return;
+          e.preventDefault();
+          return;
+        }
         if (this.view !== 'md') return;
         const md = this.$el.querySelector('.markdown-container');
         if (md && !md.contains(e.target)) {
@@ -1354,6 +1466,10 @@ function viewerApp() {
         const resp = await apiFetch(url);
         if (resp && resp.ok) {
           let text = await resp.text();
+
+          // Cache raw markdown for editor
+          if (type === 'md-ko') this.rawMdKo = text;
+          else this.rawMdEn = text;
 
           // Remove YAML frontmatter (between --- delimiters)
           const yamlPattern = /^---\s*\n[\s\S]*?\n---\s*\n/;
@@ -1692,6 +1808,191 @@ function viewerApp() {
       const idx = this.contentWidthLevels.findIndex(l => l.value === this.contentWidth);
       const next = (idx + 1) % this.contentWidthLevels.length;
       this.setContentWidth(this.contentWidthLevels[next].value);
+    },
+
+    // ── Editor functions ─────────────────────────────────────────────
+
+    enterEditMode() {
+      const wantKo = this.$store.lang.ko;
+      if (wantKo && this.hasMdKo) {
+        this.editType = 'ko';
+        this.editContent = this.rawMdKo;
+      } else if (!wantKo && this.hasMdEn) {
+        this.editType = 'en';
+        this.editContent = this.rawMdEn;
+      } else if (this.hasMdKo) {
+        this.editType = 'ko';
+        this.editContent = this.rawMdKo;
+      } else if (this.hasMdEn) {
+        this.editType = 'en';
+        this.editContent = this.rawMdEn;
+      } else {
+        showToast('No markdown file available to edit', 'error');
+        return;
+      }
+
+      if (!this.editContent) {
+        this.loadRawForEdit().then(() => this._activateEditor());
+        return;
+      }
+      this._activateEditor();
+    },
+
+    async loadRawForEdit() {
+      const url = this.editType === 'ko' ? this.mdKoUrl : this.mdEnUrl;
+      try {
+        const resp = await apiFetch(url);
+        if (resp && resp.ok) {
+          const text = await resp.text();
+          if (this.editType === 'ko') this.rawMdKo = text;
+          else this.rawMdEn = text;
+          this.editContent = text;
+        }
+      } catch (e) {
+        showToast('Failed to load markdown for editing', 'error');
+      }
+    },
+
+    _activateEditor() {
+      this.editOriginalContent = this.editContent;
+      this.editDirty = false;
+      this.editMode = true;
+      this.updateEditPreview();
+
+      this._beforeUnloadHandler = (e) => {
+        if (this.editDirty) { e.preventDefault(); e.returnValue = ''; }
+      };
+      window.addEventListener('beforeunload', this._beforeUnloadHandler);
+
+      this._editorKeyHandler = (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          this.saveEdit();
+        }
+        if (e.key === 'Escape' && this.editMode) {
+          this.cancelEdit();
+        }
+      };
+      window.addEventListener('keydown', this._editorKeyHandler);
+    },
+
+    exitEditMode() {
+      const wasType = this.editType;
+      this.editMode = false;
+      this.editDirty = false;
+      this.editContent = '';
+      this.editOriginalContent = '';
+      this.editType = '';
+      this.editPreviewHtml = '';
+      if (this._beforeUnloadHandler) {
+        window.removeEventListener('beforeunload', this._beforeUnloadHandler);
+        this._beforeUnloadHandler = null;
+      }
+      if (this._editorKeyHandler) {
+        window.removeEventListener('keydown', this._editorKeyHandler);
+        this._editorKeyHandler = null;
+      }
+      if (this._editPreviewTimer) {
+        clearTimeout(this._editPreviewTimer);
+        this._editPreviewTimer = null;
+      }
+      // Reload rendered markdown if cache was invalidated (after save)
+      const cacheEmpty = (wasType === 'ko' && !this.mdKoContent) || (wasType === 'en' && !this.mdEnContent);
+      if (cacheEmpty) {
+        const mdType = wasType === 'ko' ? 'md-ko' : 'md-en';
+        this.loadMarkdown(mdType).then(() => {
+          this.$nextTick(() => { this.extractTocItems(); this.setupTocObserver(); });
+        });
+      }
+    },
+
+    cancelEdit() {
+      if (this.editDirty) {
+        if (!confirm('Unsaved changes will be lost. Continue?')) return;
+      }
+      this.exitEditMode();
+    },
+
+    onEditInput() {
+      this.editDirty = this.editContent !== this.editOriginalContent;
+      if (this._editPreviewTimer) clearTimeout(this._editPreviewTimer);
+      this._editPreviewTimer = setTimeout(() => this.updateEditPreview(), 400);
+    },
+
+    updateEditPreview() {
+      let text = this.editContent;
+      // Same pipeline as loadMarkdown()
+      text = text.replace(/^---\s*\n[\s\S]*?\n---\s*\n/, '');
+      text = text.replace(/```\n([\s\S]*?<sup>[\s\S]*?)\n```/g, (m, c) => c);
+      text = text.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (m, alt, src) => {
+        return `![${alt}](/api/papers/${name}/assets/${encodeURIComponent(src)})`;
+      });
+      text = text.replace(/\[((?:[^\]\\]|\\.)*)\]\(#page-[^)]+\)/g, (m, inner) => {
+        return inner.replace(/\\([()\[\]])/g, '$1');
+      });
+      const { text: safeText, placeholders } = this.protectMath(text);
+      this._resetSlugs();
+      let html = marked.parse(safeText);
+      html = this.restoreMath(html, placeholders);
+      this.editPreviewHtml = html;
+    },
+
+    async saveEdit() {
+      if (this.editSaving || !this.editDirty) return;
+      this.editSaving = true;
+      const savedType = this.editType; // capture before exitEditMode resets it
+      try {
+        const resp = await apiFetch(`/api/papers/${name}/markdown/${savedType}`, {
+          method: 'PUT',
+          body: JSON.stringify({ content: this.editContent })
+        });
+        if (resp && resp.ok) {
+          const data = await resp.json();
+          showToast(data.message || 'Saved', 'success');
+          // Update raw cache
+          if (savedType === 'ko') this.rawMdKo = this.editContent;
+          else this.rawMdEn = this.editContent;
+          // Invalidate rendered HTML cache
+          if (savedType === 'ko') this.mdKoContent = '';
+          else this.mdEnContent = '';
+          // Stay in edit mode, just reset dirty state
+          this.editOriginalContent = this.editContent;
+          this.editDirty = false;
+          // Update preview
+          this.updateEditPreview();
+        } else if (resp) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Save failed', 'error');
+        }
+      } catch (e) {
+        showToast('Save failed: ' + e.message, 'error');
+      } finally {
+        this.editSaving = false;
+      }
+    },
+
+    handleEditorTab(event) {
+      const ta = event.target;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      event.preventDefault();
+      this.editContent = this.editContent.substring(0, start) + '  ' + this.editContent.substring(end);
+      this.$nextTick(() => { ta.selectionStart = ta.selectionEnd = start + 2; });
+      this.onEditInput();
+    },
+
+    async switchEditLang() {
+      if (this.editDirty && !confirm('Discard changes and switch language?')) return;
+      this.editType = this.editType === 'ko' ? 'en' : 'ko';
+      const raw = this.editType === 'ko' ? this.rawMdKo : this.rawMdEn;
+      if (raw) {
+        this.editContent = raw;
+      } else {
+        await this.loadRawForEdit();
+      }
+      this.editOriginalContent = this.editContent;
+      this.editDirty = false;
+      this.updateEditPreview();
     },
 
     // Helper: Check if mobile viewport
