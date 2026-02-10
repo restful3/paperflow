@@ -791,15 +791,23 @@
        x-init="init()">
     <button @click="openChat()"
             class="group relative w-14 h-14 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center"
-            :class="$store.darkMode.on ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700'"
+            :class="$store.darkMode.on ? 'bg-slate-700 hover:bg-slate-600' : 'bg-indigo-600 hover:bg-indigo-700'"
             title="Chat with paper"
             role="button"
             aria-label="Open chat with paper">
-      <!-- Chat icon -->
-      <svg class="w-6 h-6 text-white transition-transform group-hover:scale-110"
+      <!-- Chat icon: light/dark mode variants -->
+      <svg x-show="!$store.darkMode.on" class="w-6 h-6 text-white transition-transform group-hover:scale-110"
            fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+      </svg>
+      <svg x-show="$store.darkMode.on" class="w-6 h-6 text-cyan-200 transition-transform group-hover:scale-110"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect x="5" y="7" width="14" height="10" rx="2" stroke-width="2"></rect>
+        <path d="M12 4v3" stroke-width="2" stroke-linecap="round"></path>
+        <circle cx="10" cy="12" r="1"></circle>
+        <circle cx="14" cy="12" r="1"></circle>
+        <path d="M9.5 15h5" stroke-width="2" stroke-linecap="round"></path>
       </svg>
     </button>
   </div>
@@ -833,9 +841,16 @@
       <div class="flex items-center justify-between px-4 py-3 border-b shrink-0"
            :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
         <div class="flex items-center gap-2">
-          <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg x-show="!$store.darkMode.on" class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+          <svg x-show="$store.darkMode.on" class="w-5 h-5 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="5" y="7" width="14" height="10" rx="2" stroke-width="2"></rect>
+            <path d="M12 4v3" stroke-width="2" stroke-linecap="round"></path>
+            <circle cx="10" cy="12" r="1"></circle>
+            <circle cx="14" cy="12" r="1"></circle>
+            <path d="M9.5 15h5" stroke-width="2" stroke-linecap="round"></path>
           </svg>
           <h3 class="font-semibold text-sm">Paper Chat</h3>
         </div>

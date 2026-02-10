@@ -1,4 +1,4 @@
-# PaperFlow v2.6
+# PaperFlow v2.7
 
 <div align="center">
 
@@ -61,16 +61,29 @@ graph LR
 - **RAG 챗봇** - 논문별 AI 챗봇 (BM25 검색 + OpenAI API + SSE 스트리밍)
 - **웹 검색 보강** - Brave Search로 RAG 컨텍스트 및 메타데이터 보강
 
-### v2.6 주요 변경사항
+### v2.7 주요 변경사항
 
-| 항목 | v2.5 | v2.6 (Current) |
+| 항목 | v2.6 | v2.7 (Current) |
 |------|------|----------------|
+| **마크다운 편집기** | - | **인라인 편집** (textarea + 실시간 프리뷰, Ctrl+S 저장, 타임스탬프 백업) |
+| **해설판 보기** | - | **Easy 토글** (`_ko_explained.md` / `_explained.md` 파일 지원) |
+| **Easy 버튼** | - | **3상태 UX**: 회색(비활성) → 검은색(활성화 가능) → 앰버(해설판 보기 중) |
+| **편집 백업** | - | **자동 백업**: 저장 시 `_backup_YYYYMMDD_HHMMSS.md` 생성 |
+| **RAG 캐시** | 수동 관리 | **편집 저장 시 자동 무효화** (chat_chunks.json 삭제) |
+
+<details>
+<summary>v2.6 변경사항 (v2.5 대비)</summary>
+
+| 항목 | v2.5 | v2.6 |
+|------|------|------|
 | **PDF 변환** | marker-pdf만 지원 | **marker-pdf / MinerU 선택** (`.env`에서 설정) |
 | **MinerU 지원** | - | pipeline/hybrid/vlm 백엔드, 수식/테이블 인식 강화 |
 | **설치** | 단일 requirements.txt | **엔진별 분리** (requirements-marker.txt / requirements-mineru.txt) |
 | **Docker 빌드** | 고정 | **`PDF_CONVERTER` ARG로 선택적 설치** (이미지 크기 절약) |
 | **변환 진행률** | 단계 표시만 | **실시간 세부 진행률** (Layout/OCR/Formula 단계별 %) |
 | **이미지 서빙** | 플랫 구조만 | **하위 디렉토리** (MinerU `images/` 폴더) 지원 |
+
+</details>
 
 <details>
 <summary>v2.5 변경사항 (v2.0 대비)</summary>
@@ -222,6 +235,10 @@ flowchart TD
 - **읽기 진행률**: 서버 동기화로 크로스 브라우저 유지, 카드/목록에 배지 표시
 - **클라이언트 사이드 TOC**: 헤딩 기반 자동 생성, IntersectionObserver 스크롤 스파이
 - **읽기 위치 기억**: localStorage 기반 스크롤 위치 저장/복원
+- **마크다운 편집기**: 인라인 편집 (textarea + 실시간 프리뷰, Ctrl+S 저장, Esc 취소)
+- **편집 백업**: 저장 시 타임스탬프 백업 자동 생성 (`_backup_YYYYMMDD_HHMMSS.md`)
+- **RAG 캐시 무효화**: 편집 저장 시 chat_chunks.json 자동 삭제
+- **해설판 보기 (Easy)**: `_ko_explained.md` / `_explained.md` 파일 지원, 3상태 토글 버튼
 - **모바일 최적화**: 스크롤 시 상단바 자동 숨김 (< 768px)
 - **다크 모드**: 테마 전환 (localStorage 저장)
 - **PDF 업로드**: 드래그 앤 드롭, `newones/`에 자동 저장
@@ -383,12 +400,15 @@ outputs/Sanitized Paper Title/     # PDF 파일명 → 논문 제목으로 변�
   ├── your_paper.pdf           # 원본 PDF (newones/에서 이동)
   ├── your_paper.md            # 영문 Markdown
   ├── your_paper_ko.md         # 한국어 Markdown (번역)
+  ├── your_paper_explained.md  # 영문 해설판 (선택)
+  ├── your_paper_ko_explained.md # 한국어 해설판 (선택)
   ├── your_paper.json          # 변환 메타데이터
   ├── paper_meta.json          # AI+웹 검색 메타데이터
   │                            #   (title, authors, abstract, categories,
   │                            #    venue, DOI, publication_year, paper_url)
   ├── chat_chunks.json         # RAG 청크 캐시 (자동 생성)
   ├── chat_history.json        # 챗봇 대화 기록
+  ├── *_backup_*.md            # 편집 백업 (자동 생성)
   ├── *.jpeg                   # 추출 이미지 (marker-pdf)
   └── images/                  # 추출 이미지 (MinerU)
       └── *.jpg
@@ -594,6 +614,9 @@ sequenceDiagram
 | `GET` | `/api/papers/{name}/info` | 논문 메타데이터 |
 | `GET` | `/api/papers/{name}/md-ko` | 한국어 Markdown 서빙 |
 | `GET` | `/api/papers/{name}/md-en` | 영문 Markdown 서빙 |
+| `GET` | `/api/papers/{name}/md-ko-explained` | 한국어 해설판 Markdown 서빙 |
+| `GET` | `/api/papers/{name}/md-en-explained` | 영문 해설판 Markdown 서빙 |
+| `PUT` | `/api/papers/{name}/markdown/{md_type}` | Markdown 편집 저장 (백업 생성, RAG 캐시 무효화) |
 | `GET` | `/api/papers/{name}/pdf` | PDF 파일 서빙 |
 | `GET` | `/api/papers/{name}/assets/{file}` | 이미지 등 에셋 서빙 (하위 디렉토리 지원) |
 | `POST` | `/api/papers/{name}/archive` | 아카이브로 이동 |
@@ -831,6 +854,6 @@ MIT License
 
 **Made with care for researchers and paper readers**
 
-[맨 위로](#paperflow-v26)
+[맨 위로](#paperflow-v27)
 
 </div>
