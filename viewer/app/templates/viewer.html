@@ -295,6 +295,22 @@
           <span x-text="$store.lang.ko ? 'EN' : 'KO'">EN</span>
         </button>
 
+        <!-- Easy (explained) Toggle -->
+        <button x-show="!editMode"
+                @click="toggleExplained(); mobileMenuOpen = false"
+                :disabled="!hasMdKoExplained && !hasMdEnExplained"
+                class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
+                :class="!(hasMdKoExplained || hasMdEnExplained)
+                  ? ($store.darkMode.on ? 'bg-gray-700 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-300 cursor-not-allowed')
+                  : explainedMode
+                    ? ($store.darkMode.on ? 'bg-amber-900 text-amber-300 hover:bg-amber-800' : 'bg-amber-100 text-amber-700 hover:bg-amber-200')
+                    : ($store.darkMode.on ? 'bg-gray-600 text-gray-100 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50')">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          <span x-text="explainedMode ? 'Original' : 'Easy'">Easy</span>
+        </button>
+
         <!-- Dark Mode Toggle -->
         <button @click="$store.darkMode.toggle(); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
@@ -353,7 +369,7 @@
         </button>
 
         <!-- Edit (markdown views only) -->
-        <button x-show="(view === 'md' || view === 'split') && !editMode && (hasMdKo || hasMdEn)"
+        <button x-show="(view === 'md' || view === 'split') && !editMode && !explainedMode && (hasMdKo || hasMdEn)"
                 @click="enterEditMode(); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
                 :class="$store.darkMode.on ? 'bg-gray-600 text-amber-400 hover:bg-gray-500' : 'bg-white text-amber-600 hover:bg-amber-50'">
@@ -446,7 +462,7 @@
       <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
 
       <!-- Edit button (markdown views only) -->
-      <button x-show="(view === 'md' || view === 'split') && !editMode && (hasMdKo || hasMdEn)"
+      <button x-show="(view === 'md' || view === 'split') && !editMode && !explainedMode && (hasMdKo || hasMdEn)"
               @click="enterEditMode()"
               class="p-1.5 rounded-lg transition shrink-0"
               :class="$store.darkMode.on ? 'text-gray-400 hover:text-amber-400 hover:bg-gray-700' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'"
@@ -475,6 +491,20 @@
               :class="$store.darkMode.on ? 'text-gray-300 border-gray-600 hover:border-gray-400' : 'text-gray-500 border-gray-300 hover:border-gray-500'"
               :title="$store.lang.ko ? 'Switch to English' : 'Switch to Korean'"
               x-text="$store.lang.ko ? 'KO' : 'EN'">
+      </button>
+
+      <!-- Easy (explained) toggle -->
+      <button x-show="!editMode"
+              @click="toggleExplained()"
+              :disabled="!hasMdKoExplained && !hasMdEnExplained"
+              class="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full border transition"
+              :class="!(hasMdKoExplained || hasMdEnExplained)
+                ? ($store.darkMode.on ? 'text-gray-600 border-gray-700 cursor-not-allowed' : 'text-gray-300 border-gray-200 cursor-not-allowed')
+                : explainedMode
+                  ? ($store.darkMode.on ? 'bg-amber-900 text-amber-300 border-amber-700' : 'bg-amber-100 text-amber-700 border-amber-300')
+                  : ($store.darkMode.on ? 'text-gray-100 border-gray-400 hover:border-gray-200' : 'text-gray-700 border-gray-400 hover:border-gray-600')"
+              :title="!(hasMdKoExplained || hasMdEnExplained) ? 'No easy explanation available' : (explainedMode ? 'Switch to original' : 'Switch to easy explanation')">
+        Easy
       </button>
 
       <!-- Dark mode toggle -->
@@ -1043,12 +1073,17 @@ function viewerApp() {
     hasPdf: {{ 'true' if has_pdf else 'false' }},
     hasMdKo: {{ 'true' if has_md_ko else 'false' }},
     hasMdEn: {{ 'true' if has_md_en else 'false' }},
+    hasMdKoExplained: {{ 'true' if has_md_ko_explained else 'false' }},
+    hasMdEnExplained: {{ 'true' if has_md_en_explained else 'false' }},
+    explainedMode: false,
     location: '{{ location }}',
     pdfUrl: '/api/papers/' + name + '/pdf',
     mdKoUrl: '/api/papers/' + name + '/md-ko',
     mdEnUrl: '/api/papers/' + name + '/md-en',
     mdKoContent: '',
     mdEnContent: '',
+    mdKoExplainedContent: '',
+    mdEnExplainedContent: '',
     splitMdContent: '',
 
     // Editor state
@@ -1066,6 +1101,10 @@ function viewerApp() {
     _editorKeyHandler: null,
 
     get activeMdContent() {
+      if (this.explainedMode) {
+        if (this.$store.lang.ko && this.mdKoExplainedContent) return this.mdKoExplainedContent;
+        if (!this.$store.lang.ko && this.mdEnExplainedContent) return this.mdEnExplainedContent;
+      }
       if (this.$store.lang.ko) {
         return this.hasMdKo ? this.mdKoContent : this.mdEnContent;
       } else {
@@ -1206,6 +1245,11 @@ function viewerApp() {
       };
       marked.setOptions({ renderer });
       this._resetSlugs = renderer._resetSlugs;
+
+      // Restore explained mode preference
+      if ((this.hasMdKoExplained || this.hasMdEnExplained) && localStorage.getItem('pf-explained') === 'true') {
+        this.explainedMode = true;
+      }
 
       // Load star rating
       this.loadRating();
@@ -1447,6 +1491,22 @@ function viewerApp() {
 
     async loadMdForCurrentLang() {
       const wantKo = this.$store.lang.ko;
+
+      // Load explained version if in explained mode
+      if (this.explainedMode) {
+        if (wantKo && this.hasMdKoExplained) {
+          if (!this.mdKoExplainedContent) await this.loadMarkdown('md-ko-explained');
+          // Also ensure original is loaded for fallback
+          if (wantKo && this.hasMdKo && !this.mdKoContent) await this.loadMarkdown('md-ko');
+          return;
+        } else if (!wantKo && this.hasMdEnExplained) {
+          if (!this.mdEnExplainedContent) await this.loadMarkdown('md-en-explained');
+          if (!wantKo && this.hasMdEn && !this.mdEnContent) await this.loadMarkdown('md-en');
+          return;
+        }
+        // Explained not available for current lang, fall through to original
+      }
+
       if (wantKo && this.hasMdKo) {
         if (!this.mdKoContent) await this.loadMarkdown('md-ko');
       } else if (!wantKo && this.hasMdEn) {
@@ -1460,8 +1520,42 @@ function viewerApp() {
       }
     },
 
+    async toggleExplained() {
+      if (!this.hasMdKoExplained && !this.hasMdEnExplained) return;
+      const newMode = !this.explainedMode;
+      if (newMode) {
+        const wantKo = this.$store.lang.ko;
+        const hasExplained = (wantKo && this.hasMdKoExplained) || (!wantKo && this.hasMdEnExplained);
+        if (!hasExplained) {
+          const otherHas = (wantKo && this.hasMdEnExplained) || (!wantKo && this.hasMdKoExplained);
+          if (otherHas) {
+            showToast('Easy version not available in ' + (wantKo ? 'Korean' : 'English') + '. Try switching language.', 'warning');
+          } else {
+            showToast('Easy version not available', 'warning');
+          }
+          return;
+        }
+      }
+      this.explainedMode = newMode;
+      localStorage.setItem('pf-explained', newMode ? 'true' : 'false');
+      await this.loadMdForCurrentLang();
+      if (this.view === 'split') {
+        this.splitMdContent = this.activeMdContent;
+      }
+      this.$nextTick(() => {
+        this.extractTocItems();
+        this.setupTocObserver();
+      });
+    },
+
     async loadMarkdown(type) {
-      const url = type === 'md-ko' ? this.mdKoUrl : this.mdEnUrl;
+      const urlMap = {
+        'md-ko': this.mdKoUrl,
+        'md-en': this.mdEnUrl,
+        'md-ko-explained': '/api/papers/' + name + '/md-ko-explained',
+        'md-en-explained': '/api/papers/' + name + '/md-en-explained',
+      };
+      const url = urlMap[type] || this.mdEnUrl;
       try {
         const resp = await apiFetch(url);
         if (resp && resp.ok) {
@@ -1469,7 +1563,7 @@ function viewerApp() {
 
           // Cache raw markdown for editor
           if (type === 'md-ko') this.rawMdKo = text;
-          else this.rawMdEn = text;
+          else if (type === 'md-en') this.rawMdEn = text;
 
           // Remove YAML frontmatter (between --- delimiters)
           const yamlPattern = /^---\s*\n[\s\S]*?\n---\s*\n/;
@@ -1503,11 +1597,13 @@ function viewerApp() {
           // Restore math expressions with KaTeX rendering
           html = this.restoreMath(html, placeholders);
 
-          if (type === 'md-ko') {
-            this.mdKoContent = html;
-          } else {
-            this.mdEnContent = html;
-          }
+          const contentMap = {
+            'md-ko': 'mdKoContent',
+            'md-en': 'mdEnContent',
+            'md-ko-explained': 'mdKoExplainedContent',
+            'md-en-explained': 'mdEnExplainedContent',
+          };
+          this[contentMap[type] || 'mdEnContent'] = html;
           // Extract TOC items, setup scroll spy, restore scroll position
           this.$nextTick(() => {
             this.extractTocItems();
@@ -1517,27 +1613,32 @@ function viewerApp() {
           });
         } else {
           const errorMsg = `<p style="color: red;">Failed to load markdown file.</p>`;
-          if (type === 'md-ko') {
-            this.mdKoContent = errorMsg;
-          } else {
-            this.mdEnContent = errorMsg;
-          }
+          const contentMap = {
+            'md-ko': 'mdKoContent',
+            'md-en': 'mdEnContent',
+            'md-ko-explained': 'mdKoExplainedContent',
+            'md-en-explained': 'mdEnExplainedContent',
+          };
+          this[contentMap[type] || 'mdEnContent'] = errorMsg;
         }
       } catch (e) {
         console.error('Error loading markdown:', e);
         const errorMsg = `<p style="color: red;">Error loading markdown: ${e.message}</p>`;
-        if (type === 'md-ko') {
-          this.mdKoContent = errorMsg;
-        } else {
-          this.mdEnContent = errorMsg;
-        }
+        const contentMap = {
+          'md-ko': 'mdKoContent',
+          'md-en': 'mdEnContent',
+          'md-ko-explained': 'mdKoExplainedContent',
+          'md-en-explained': 'mdEnExplainedContent',
+        };
+        this[contentMap[type] || 'mdEnContent'] = errorMsg;
       }
     },
 
     // Reading position save/restore
     _scrollSaveKey(viewType) {
       const lang = this.$store.lang.ko ? 'ko' : 'en';
-      return `pf-scroll-${name}-${viewType}-${lang}`;
+      const variant = this.explainedMode ? '-easy' : '';
+      return `pf-scroll-${name}-${viewType}-${lang}${variant}`;
     },
     _scrollSaveTimer: null,
     _serverProgressTimer: null,

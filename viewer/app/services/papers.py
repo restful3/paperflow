@@ -36,15 +36,21 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         "pdf": False,
         "md_ko": False,
         "md_en": False,
+        "md_ko_explained": False,
+        "md_en_explained": False,
     }
     for f in paper_dir.iterdir():
         if not f.is_file():
             continue
         if f.name.endswith(".pdf"):
             files["pdf"] = True
+        elif f.name.endswith("_ko_explained.md"):
+            files["md_ko_explained"] = True
+        elif f.name.endswith("_explained.md"):
+            files["md_en_explained"] = True
         elif f.name.endswith("_ko.md"):
             files["md_ko"] = True
-        elif f.name.endswith(".md") and not f.name.endswith("_ko.md"):
+        elif f.name.endswith(".md"):
             files["md_en"] = True
 
     # Folder modification time as fallback date
@@ -174,7 +180,29 @@ def get_md_en_path(name: str) -> Path | None:
     if not paper_dir:
         return None
     for f in paper_dir.iterdir():
-        if f.name.endswith(".md") and not f.name.endswith("_ko.md"):
+        if f.name.endswith(".md") and not f.name.endswith("_ko.md") and not f.name.endswith("_explained.md"):
+            return f
+    return None
+
+
+def get_md_ko_explained_path(name: str) -> Path | None:
+    """Get Korean explained markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    for f in paper_dir.iterdir():
+        if f.name.endswith("_ko_explained.md"):
+            return f
+    return None
+
+
+def get_md_en_explained_path(name: str) -> Path | None:
+    """Get English explained markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    for f in paper_dir.iterdir():
+        if f.name.endswith("_explained.md") and not f.name.endswith("_ko_explained.md"):
             return f
     return None
 
@@ -195,12 +223,12 @@ def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
     target = None
     if md_type == "ko":
         for f in paper_dir.iterdir():
-            if f.name.endswith("_ko.md"):
+            if f.name.endswith("_ko.md") and not f.name.endswith("_ko_explained.md"):
                 target = f
                 break
     else:
         for f in paper_dir.iterdir():
-            if f.name.endswith(".md") and not f.name.endswith("_ko.md"):
+            if f.name.endswith(".md") and not f.name.endswith("_ko.md") and not f.name.endswith("_explained.md"):
                 target = f
                 break
 

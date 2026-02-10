@@ -44,6 +44,8 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     has_pdf = info["formats"]["pdf"] if info else False
     has_md_ko = info["formats"]["md_ko"] if info else False
     has_md_en = info["formats"]["md_en"] if info else False
+    has_md_ko_explained = info["formats"].get("md_ko_explained", False) if info else False
+    has_md_en_explained = info["formats"].get("md_en_explained", False) if info else False
     location = info["location"] if info else "outputs"
 
     # Default view priority: md > pdf
@@ -70,6 +72,8 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "has_pdf": has_pdf,
         "has_md_ko": has_md_ko,
         "has_md_en": has_md_en,
+        "has_md_ko_explained": has_md_ko_explained,
+        "has_md_en_explained": has_md_en_explained,
         "location": location,
         "default_view": default_view,
         "server_progress": server_progress,

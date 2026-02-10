@@ -426,6 +426,24 @@ async def serve_md_en(name: str, _user: str = Depends(get_current_user_api)):
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
+@router.get("/papers/{name:path}/md-ko-explained")
+async def serve_md_ko_explained(name: str, _user: str = Depends(get_current_user_api)):
+    name = unquote(name)
+    path = paper_svc.get_md_ko_explained_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Korean explained markdown not found")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
+@router.get("/papers/{name:path}/md-en-explained")
+async def serve_md_en_explained(name: str, _user: str = Depends(get_current_user_api)):
+    name = unquote(name)
+    path = paper_svc.get_md_en_explained_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="English explained markdown not found")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
 class MarkdownUpdateRequest(BaseModel):
     content: str
 
