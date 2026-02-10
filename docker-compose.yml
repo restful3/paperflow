@@ -1,6 +1,9 @@
 services:
   paperflow-converter:
-    build: .
+    build:
+      context: .
+      args:
+        PDF_CONVERTER: ${PDF_CONVERTER:-marker}
     image: paperflow-converter:latest
     container_name: paperflow_converter
     command: ./run_batch_watch.sh
@@ -10,7 +13,7 @@ services:
       - ./outputs:/app/outputs
       - ./logs:/app/logs
       - ./config.json:/app/config.json
-      - ./model_cache:/root/.cache/datalab/models
+      - ./model_cache:/root/.cache
     env_file:
       - .env
     environment:

@@ -247,6 +247,7 @@
               <option value="year">Sort: Year</option>
               <option value="size">Sort: Size</option>
               <option value="progress">Sort: Progress</option>
+              <option value="rating">Sort: Rating</option>
             </select>
             <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
                     class="p-1.5 rounded-md transition"
@@ -429,18 +430,45 @@
               </div>
               <span class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
               <span x-show="paperDateLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paperDateLabel(paper)"></span>
-              <!-- External link to paper source -->
-              <a x-show="paper.paper_url" :href="paper.paper_url" target="_blank" rel="noopener"
-                 @click.stop
-                 class="ml-1 p-1 rounded transition"
-                 :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600'"
-                 title="Open source URL">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
-                </svg>
-              </a>
             </div>
             <div class="flex items-center space-x-1">
+              <!-- Star rating (hover-expand) -->
+              <div class="flex items-center relative group/star" @click.prevent.stop>
+                <!-- Collapsed: badge or empty star -->
+                <span x-show="getRating(paper.name) > 0 && hoverRatingPaper !== paper.name"
+                      class="text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer transition-colors"
+                      :class="$store.darkMode.on ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600'"
+                      @mouseenter="hoverRatingPaper = paper.name; hoverRatingStar = 0"
+                      @click.prevent.stop="hoverRatingPaper = paper.name; hoverRatingStar = 0">
+                  <span x-text="'★ ' + getRating(paper.name)"></span>
+                </span>
+                <button x-show="getRating(paper.name) === 0 && hoverRatingPaper !== paper.name"
+                        class="p-0.5 transition-colors"
+                        :class="$store.darkMode.on ? 'text-gray-600 hover:text-amber-400' : 'text-gray-300 hover:text-amber-400'"
+                        @mouseenter="hoverRatingPaper = paper.name; hoverRatingStar = 0"
+                        @click.prevent.stop="hoverRatingPaper = paper.name; hoverRatingStar = 0">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                  </svg>
+                </button>
+                <!-- Expanded: 5 stars -->
+                <div x-show="hoverRatingPaper === paper.name"
+                     @mouseleave="hoverRatingPaper = null; hoverRatingStar = 0"
+                     class="flex items-center gap-0">
+                  <template x-for="s in [1,2,3,4,5]" :key="s">
+                    <button @click.prevent.stop="setRating(paper.name, s); hoverRatingPaper = null"
+                            @mouseenter="hoverRatingStar = s"
+                            class="p-0.5 transition-colors"
+                            :class="(hoverRatingStar || getRating(paper.name)) >= s
+                              ? 'text-amber-400'
+                              : ($store.darkMode.on ? 'text-gray-600 hover:text-gray-500' : 'text-gray-300 hover:text-gray-400')">
+                      <svg class="w-3.5 h-3.5" :fill="(hoverRatingStar || getRating(paper.name)) >= s ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                    </button>
+                  </template>
+                </div>
+              </div>
               <!-- Reading progress % -->
               <span x-show="getProgress(paper.name) > 0"
                     class="text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums transition-colors"
@@ -627,6 +655,41 @@
                       ? ($store.darkMode.on ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
                       : ($store.darkMode.on ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700')"
                     x-text="getProgress(paper.name) + '%'"></span>
+              <!-- Star rating (hover-expand, list view) -->
+              <div class="flex items-center relative shrink-0" @click.prevent.stop>
+                <span x-show="getRating(paper.name) > 0 && hoverRatingPaper !== paper.name"
+                      class="text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer transition-colors"
+                      :class="$store.darkMode.on ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600'"
+                      @mouseenter="hoverRatingPaper = paper.name; hoverRatingStar = 0"
+                      @click.prevent.stop="hoverRatingPaper = paper.name; hoverRatingStar = 0">
+                  <span x-text="'★ ' + getRating(paper.name)"></span>
+                </span>
+                <button x-show="getRating(paper.name) === 0 && hoverRatingPaper !== paper.name"
+                        class="p-0.5 transition-colors"
+                        :class="$store.darkMode.on ? 'text-gray-600 hover:text-amber-400' : 'text-gray-300 hover:text-amber-400'"
+                        @mouseenter="hoverRatingPaper = paper.name; hoverRatingStar = 0"
+                        @click.prevent.stop="hoverRatingPaper = paper.name; hoverRatingStar = 0">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                  </svg>
+                </button>
+                <div x-show="hoverRatingPaper === paper.name"
+                     @mouseleave="hoverRatingPaper = null; hoverRatingStar = 0"
+                     class="flex items-center gap-0">
+                  <template x-for="s in [1,2,3,4,5]" :key="s">
+                    <button @click.prevent.stop="setRating(paper.name, s); hoverRatingPaper = null"
+                            @mouseenter="hoverRatingStar = s"
+                            class="p-0.5 transition-colors"
+                            :class="(hoverRatingStar || getRating(paper.name)) >= s
+                              ? 'text-amber-400'
+                              : ($store.darkMode.on ? 'text-gray-600 hover:text-gray-500' : 'text-gray-300 hover:text-gray-400')">
+                      <svg class="w-3.5 h-3.5" :fill="(hoverRatingStar || getRating(paper.name)) >= s ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                    </button>
+                  </template>
+                </div>
+              </div>
             </a>
             <div class="flex items-center space-x-1 ml-3 shrink-0">
               <!-- Details expand/collapse toggle -->
@@ -871,7 +934,7 @@
                            :style="'width: ' + (pf.total_stages > 0 ? Math.round(pf.stage_num / pf.total_stages * 100) : 0) + '%'"></div>
                     </div>
                     <p class="text-xs mt-1" :class="$store.darkMode.on ? 'text-indigo-400' : 'text-indigo-600'"
-                       x-text="pf.stage_label + ' (' + pf.stage_num + '/' + pf.total_stages + ')'"></p>
+                       x-text="pf.stage_label + (pf.detail ? ' - ' + pf.detail : '') + ' (' + pf.stage_num + '/' + pf.total_stages + ')'"></p>
                   </div>
                 </template>
                 <!-- Queued -->
@@ -1022,6 +1085,11 @@ function papersApp() {
     // Reading progress (server-synced)
     serverProgress: {},
 
+    // Star ratings (server-synced)
+    serverRatings: {},
+    hoverRatingPaper: null,
+    hoverRatingStar: 0,
+
     // Upload & Processing state
     panel: { logOpen: false },
     panelDragOver: false,
@@ -1162,8 +1230,34 @@ function papersApp() {
       return Math.max(local, server);
     },
 
+    getRating(paperName) {
+      return this.serverRatings[paperName] || 0;
+    },
+
+    async setRating(paperName, star) {
+      const current = this.getRating(paperName);
+      const rating = current === star ? 0 : star;  // Toggle off if same star
+      this.serverRatings[paperName] = rating;
+      if (rating === 0) delete this.serverRatings[paperName];
+      try {
+        await apiFetch(`/api/papers/${encodeURIComponent(paperName)}/rating`, {
+          method: 'POST',
+          body: JSON.stringify({ rating })
+        });
+      } catch (e) {
+        showToast('Failed to save rating', 'error');
+      }
+    },
+
+    async fetchRatings() {
+      try {
+        const resp = await apiFetch('/api/ratings');
+        if (resp?.ok) this.serverRatings = await resp.json();
+      } catch (e) { /* silent */ }
+    },
+
     async init() {
-      await Promise.all([this.fetchPapers(), this.fetchStats(), this.refreshStatus(), this.fetchProgress()]);
+      await Promise.all([this.fetchPapers(), this.fetchStats(), this.refreshStatus(), this.fetchProgress(), this.fetchRatings()]);
       // Background polling for processing status (badge updates across all tabs)
       this.statusInterval = setInterval(() => this.refreshStatus(), 5000);
       // Track column count for responsive card layout
@@ -1220,6 +1314,8 @@ function papersApp() {
         results = [...results].sort((a, b) => dir * (a.size_mb - b.size_mb));
       } else if (this.sortBy === 'progress') {
         results = [...results].sort((a, b) => dir * (this.getProgress(a.name) - this.getProgress(b.name)));
+      } else if (this.sortBy === 'rating') {
+        results = [...results].sort((a, b) => dir * (this.getRating(a.name) - this.getRating(b.name)));
       } else {
         results = [...results].sort((a, b) => dir * a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       }

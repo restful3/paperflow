@@ -1,0 +1,4 @@
+# MinerU converter dependencies
+# Includes all backends (pipeline/hybrid/vlm)
+# For CPU-only, use: mineru[pipeline]>=2.0.0
+mineru[all]>=2.0.0

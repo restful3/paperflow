@@ -1,12 +1,9 @@
-# PDF2MD Requirements
-# Python >= 3.9 required (CUDA version)
+# PaperFlow Requirements
+# Python >= 3.10 required
 
 # Core dependencies
 python-dotenv>=1.0.0
 pypdf2>=3.0.0
-
-# Marker-pdf library (local PDF processing)
-marker-pdf>=0.2.17
 torch>=2.0.0
 pillow>=10.0.0
 
@@ -22,21 +19,5 @@ passlib[bcrypt]>=1.7.4
 # OpenAI API for translation
 openai>=1.12.0
 
-# Note: The following are Python standard library modules (no installation needed):
-# - tkinter (GUI - usually comes with Python)
-# - json
-# - os
-# - subprocess
-# - tempfile
-# - time
-# - pathlib
-# - shutil
-# - base64
-# - sys
-# - io
-# - threading
-# - queue
-# - datetime
-
-# External dependencies (must be installed separately):
-# - Quarto CLI: https://quarto.org/ (for HTML rendering)
+# PDF Converter: installed separately via requirements-marker.txt or requirements-mineru.txt
+# Set PDF_CONVERTER=marker or PDF_CONVERTER=mineru in .env

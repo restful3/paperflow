@@ -8,16 +8,26 @@ import time
 from pathlib import Path
 import base64
 from datetime import datetime
+import shutil
 import sys
 
 # Marker-pdf imports
+MARKER_AVAILABLE = False
 try:
     from marker.converters.pdf import PdfConverter
     from marker.models import create_model_dict
     from marker.output import text_from_rendered
     MARKER_AVAILABLE = True
 except ImportError:
-    MARKER_AVAILABLE = False
+    pass
+
+# MinerU imports
+MINERU_AVAILABLE = False
+try:
+    from mineru.cli.common import do_parse, read_fn as mineru_read_fn
+    MINERU_AVAILABLE = True
+except ImportError:
+    pass
 
 # ANSI color codes
 class Colors:
@@ -76,7 +86,7 @@ def _count_active_stages(pipeline):
         count += 1
     return max(count, 1)
 
-def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None):
+def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None, detail=None):
     """Write processing status to shared JSON file for viewer polling."""
     status = {
         "current_file": filename,
@@ -85,7 +95,8 @@ def write_processing_status(filename, stage, stage_num, total_stages, stage_labe
         "total_stages": total_stages,
         "stage_label": stage_label,
         "updated_at": datetime.now().isoformat(),
-        "error": error
+        "error": error,
+        "detail": detail,
     }
     status_path = os.path.join("logs", "processing_status.json")
     try:
@@ -114,6 +125,13 @@ def load_config():
             "retry_delay_seconds": 2,
             "smart_rename": True,
             "max_folder_name_length": 80
+        },
+        "converter": {
+            "mineru": {
+                "backend": "pipeline",
+                "parse_method": "auto",
+                "lang": "en",
+            }
         },
         "translation": {
             "max_retries": 3,
@@ -477,6 +495,267 @@ def convert_pdf_to_md(pdf_path, output_dir):
             pass
 
         return None
+
+
+def _parse_mineru_progress(line):
+    """Parse a MinerU log line and return a human-readable stage label if recognized.
+
+    MinerU outputs tqdm progress bars like:
+      Layout Predict:  50%|#####     | 5/10 [00:02<00:02]
+      MFD Predict:  30%|###       | 3/10 [00:01<00:02]
+      OCR-det Predict: 100%|##########| 10/10 [00:05<00:00]
+      OCR-rec Predict:  80%|########  | 8/10 [00:04<00:01]
+      Processing pages: 100%|##########| 10/10 [00:01<00:00]
+    """
+    line_lower = line.lower()
+
+    # Extract percentage from tqdm output if present (e.g., "Layout Predict:  50%|")
+    pct_match = re.search(r'(\d+)%\|', line)
+    pct_str = f" ({pct_match.group(1)}%)" if pct_match else ""
+
+    stage_map = [
+        ("reading file bytes", "Reading PDF"),
+        ("layout predict", "Layout analysis"),
+        ("mfd predict", "Formula detection"),
+        ("mfr predict", "Formula recognition"),
+        ("table predict", "Table detection"),
+        ("table_rec", "Table recognition"),
+        ("table rec", "Table recognition"),
+        ("table ocr", "Table OCR"),
+        ("ocr-det predict", "OCR detection"),
+        ("ocr-rec predict", "OCR recognition"),
+        ("ocr predict", "OCR processing"),
+        ("span predict", "Span analysis"),
+        ("processing pages", "Post-processing"),
+        ("postprocess", "Post-processing"),
+        ("post process", "Post-processing"),
+        ("local output dir", "Writing output"),
+    ]
+    for keyword, label in stage_map:
+        if keyword in line_lower:
+            return f"{label}{pct_str}"
+    return None
+
+
+def convert_pdf_to_md_mineru(pdf_path, output_dir, config, status_info=None):
+    """Convert PDF to MD using MinerU CLI with real-time progress tracking.
+
+    Returns: md_path (str) or None on failure.
+    Output contract matches convert_pdf_to_md():
+      - {output_dir}/{stem}.md    (markdown file)
+      - {output_dir}/images/*.jpg (extracted images)
+      - {output_dir}/{stem}.json  (metadata)
+    """
+    try:
+        import torch
+        print_info(f"Loading PDF: {pdf_path}")
+        print_info(f"PDF file size: {os.path.getsize(pdf_path) / (1024*1024):.2f} MB")
+
+        # Check GPU memory (informational)
+        if torch.cuda.is_available():
+            try:
+                gpu_mem_free = torch.cuda.mem_get_info()[0] / (1024**3)
+                gpu_mem_total = torch.cuda.mem_get_info()[1] / (1024**3)
+                print_info(f"GPU memory: {gpu_mem_free:.2f} GB free / {gpu_mem_total:.2f} GB total")
+            except Exception:
+                pass
+
+        pdf_stem = os.path.basename(pdf_path).replace('.pdf', '')
+        mineru_cfg = config.get("converter", {}).get("mineru", {})
+
+        backend = mineru_cfg.get("backend", "pipeline")
+        lang = mineru_cfg.get("lang", "en")
+        method = mineru_cfg.get("parse_method", "auto")
+
+        print_info(f"MinerU converting (backend={backend}, lang={lang}, method={method})...")
+
+        # Ensure output directory exists
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        # Helper to update status with detail
+        def _update_detail(detail_text):
+            if status_info:
+                write_processing_status(
+                    status_info["pdf_name"], "converting",
+                    status_info["stage_num"], status_info["total_stages"],
+                    "PDF to Markdown", detail=detail_text
+                )
+
+        _update_detail("Starting MinerU...")
+
+        # Use CLI with real-time output parsing for progress tracking
+        conversion_success = False
+        cmd = [
+            "mineru", "-p", pdf_path, "-o", output_dir,
+            "-b", backend, "-l", lang, "-m", method,
+        ]
+
+        try:
+            print_info(f"Running: {' '.join(cmd)}")
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+
+            import time
+            last_detail = None
+            last_update_time = 0
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    print(f"  [MinerU] {line}")
+                    # Parse for known stage transitions
+                    detail = _parse_mineru_progress(line)
+                    if detail:
+                        now = time.time()
+                        # Throttle: update at most every 2s, or when stage name changes
+                        stage_name = detail.split(" (")[0]  # "OCR recognition" from "OCR recognition (50%)"
+                        last_stage_name = last_detail.split(" (")[0] if last_detail else None
+                        if stage_name != last_stage_name or (now - last_update_time) >= 2:
+                            last_detail = detail
+                            last_update_time = now
+                            _update_detail(detail)
+
+            proc.wait(timeout=600)
+            if proc.returncode == 0:
+                conversion_success = True
+            else:
+                print_error(f"MinerU CLI exited with code {proc.returncode}")
+        except FileNotFoundError:
+            print_warning("MinerU CLI not found, trying Python API...")
+            # Fallback: Python API (no real-time progress)
+            if MINERU_AVAILABLE:
+                try:
+                    _update_detail("Converting (Python API)...")
+                    pdf_bytes = mineru_read_fn(pdf_path)
+                    do_parse(
+                        output_dir=output_dir,
+                        pdf_file_names=[pdf_stem],
+                        pdf_bytes_list=[pdf_bytes],
+                        p_lang_list=[lang],
+                        backend=backend,
+                        parse_method=method,
+                    )
+                    conversion_success = True
+                except Exception as api_err:
+                    print_error(f"MinerU Python API failed: {api_err}")
+            else:
+                print_error("Neither MinerU CLI nor Python API available!")
+        except subprocess.TimeoutExpired:
+            print_error("MinerU timed out (600s)")
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        if not conversion_success:
+            print_error("MinerU conversion failed")
+            return None
+
+        _update_detail("Organizing output files...")
+
+        # Locate MinerU output: output_dir/{pdf_stem}/auto/{pdf_stem}.md
+        mineru_out = os.path.join(output_dir, pdf_stem, "auto")
+        mineru_md = os.path.join(mineru_out, f"{pdf_stem}.md")
+
+        if not os.path.exists(mineru_md):
+            # Try alternative output structure (varies by MinerU version)
+            alt_md = os.path.join(output_dir, pdf_stem, f"{pdf_stem}.md")
+            if os.path.exists(alt_md):
+                mineru_md = alt_md
+                mineru_out = os.path.join(output_dir, pdf_stem)
+            else:
+                print_error(f"MinerU output not found at {mineru_md}")
+                return None
+
+        print_info("Relocating MinerU output to PaperFlow structure...")
+
+        # 1) Move markdown file to output_dir
+        target_md = os.path.join(output_dir, f"{pdf_stem}.md")
+        shutil.move(mineru_md, target_md)
+
+        # 2) Move images/ folder to output_dir/images/
+        mineru_images = os.path.join(mineru_out, "images")
+        target_images = os.path.join(output_dir, "images")
+        if os.path.isdir(mineru_images):
+            if os.path.exists(target_images):
+                shutil.rmtree(target_images)
+            shutil.move(mineru_images, target_images)
+            image_count = len([f for f in os.listdir(target_images) if os.path.isfile(os.path.join(target_images, f))])
+            print_success(f"Saved {image_count} image(s)")
+        else:
+            print_warning("No images extracted from PDF")
+
+        # 3) Move content_list JSON as metadata
+        content_list = os.path.join(mineru_out, f"{pdf_stem}_content_list.json")
+        if os.path.exists(content_list):
+            target_json = os.path.join(output_dir, f"{pdf_stem}.json")
+            shutil.move(content_list, target_json)
+
+        # 4) Clean up MinerU temp directory
+        mineru_temp = os.path.join(output_dir, pdf_stem)
+        if os.path.isdir(mineru_temp):
+            shutil.rmtree(mineru_temp)
+
+        print_success("PDF conversion complete (MinerU)")
+
+        # VRAM cleanup
+        try:
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                gpu_mem_free_now = torch.cuda.mem_get_info()[0] / (1024**3)
+                print_info(f"GPU memory available: {gpu_mem_free_now:.2f} GB")
+        except Exception as e:
+            print_warning(f"GPU cleanup warning: {e}")
+
+        return target_md
+
+    except Exception as e:
+        print_error(f"MinerU conversion error: {e}")
+        import traceback
+        print_error(traceback.format_exc())
+
+        # Try to cleanup even on error
+        try:
+            gc.collect()
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print_info("GPU memory cleanup attempted after error")
+        except:
+            pass
+
+        return None
+
+
+def convert_pdf_to_md_dispatch(pdf_path, output_dir, config, status_info=None):
+    """Dispatch PDF conversion to the configured engine (marker or mineru).
+
+    Engine is selected via PDF_CONVERTER environment variable.
+    status_info: optional dict with keys (pdf_name, stage_num, total_stages) for progress updates.
+    Returns: md_path (str) or None on failure.
+    """
+    engine = os.environ.get("PDF_CONVERTER", "marker").lower()
+
+    if engine == "mineru":
+        if not MINERU_AVAILABLE:
+            print_error("PDF_CONVERTER=mineru but MinerU is not installed!")
+            print_info("Install it with: pip install 'mineru[all]'")
+            return None
+        return convert_pdf_to_md_mineru(pdf_path, output_dir, config, status_info=status_info)
+    else:
+        if not MARKER_AVAILABLE:
+            print_error("PDF_CONVERTER=marker but marker-pdf is not installed!")
+            print_info("Install it with: pip install marker-pdf")
+            return None
+        return convert_pdf_to_md(pdf_path, output_dir)
+
 
 ##############################################################################
 # Metadata Extraction
@@ -1218,8 +1497,6 @@ def restore_special_blocks(text, placeholders):
 _SKIP_SECTION_HEADERS = {
     'references': '참고문헌 (References)',
     'bibliography': '참고문헌 (Bibliography)',
-    'appendix': '부록 (Appendix)',
-    'appendices': '부록 (Appendices)',
     'supplementary material': '보충 자료 (Supplementary Material)',
     'acknowledgements': '감사의 글 (Acknowledgements)',
     'acknowledgments': '감사의 글 (Acknowledgments)',
@@ -1260,7 +1537,6 @@ def classify_sections(body):
 
     # Classify each section
     classified = []
-    skip_remaining = False
 
     for section in sections:
         if not section:
@@ -1270,14 +1546,11 @@ def classify_sections(body):
         heading_text = re.sub(r'^#{1,4}\s+', '', first_line).strip()
         heading_lower = heading_text.lower().strip()
 
-        # Check if this section should be skipped
-        should_skip = skip_remaining
+        # Check if this section should be skipped (each section judged independently)
+        should_skip = False
         for skip_key in _SKIP_SECTION_HEADERS:
             if skip_key in heading_lower:
                 should_skip = True
-                # Once we hit References, skip everything after
-                if skip_key in ('references', 'bibliography'):
-                    skip_remaining = True
                 break
 
         if should_skip:
@@ -1398,6 +1671,21 @@ def _verify_translation(source_text, translated_text):
     trans_paras = len([p for p in translated_text.split('\n\n') if p.strip()])
     if source_paras > 3 and trans_paras < source_paras * 0.5:
         return False, f"paragraphs missing ({trans_paras}/{source_paras})"
+
+    # Check that translation actually contains Korean characters
+    # Skip check for short sections (likely contributor names, code, or math)
+    if source_len > 800:
+        korean_chars = len(re.findall(r'[\uAC00-\uD7A3]', translated_text))
+        # Strip markdown/code/math to get prose-like text for comparison
+        prose_text = re.sub(r'```[\s\S]*?```', '', translated_text)
+        prose_text = re.sub(r'\$\$[\s\S]*?\$\$', '', prose_text)
+        prose_text = re.sub(r'`[^`]*`', '', prose_text)
+        prose_text = re.sub(r'#{1,6}\s+', '', prose_text)
+        prose_text = re.sub(r'\[.*?\]\(.*?\)', '', prose_text)
+        prose_text = re.sub(r'<[^>]+>', '', prose_text)
+        prose_chars = len(re.sub(r'\s+', '', prose_text))
+        if prose_chars > 200 and korean_chars < prose_chars * 0.05:
+            return False, f"no Korean detected ({korean_chars} Korean chars in {prose_chars} prose chars)"
 
     return True, "ok"
 
@@ -1795,7 +2083,7 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
                     is_ok, reason = _verify_translation(section_text, result)
                     if not is_ok:
                         print_warning(f"Verification failed ({reason}), retrying section {section_idx}...")
-                        retry_prompt = system_prompt + "\n\nIMPORTANT: Your previous translation was incomplete. Translate EVERY sentence without any omission."
+                        retry_prompt = system_prompt + "\n\nIMPORTANT: Your previous translation was incomplete or not translated to Korean. You MUST translate ALL text into Korean (한국어). Do NOT return the original English text. Translate EVERY sentence without any omission."
                         if prev_context:
                             retry_prompt += f"\n\n[Previous context for terminology consistency: ...{prev_context}]"
                         result2 = _call_translation_api(
@@ -1933,7 +2221,9 @@ def process_single_pdf(pdf_path, config, prompt):
         })
 
         # Display pipeline configuration
+        engine = os.environ.get("PDF_CONVERTER", "marker").lower()
         print_info("Pipeline configuration:")
+        print_info(f"  • Converter: {engine}")
         print_info(f"  • PDF → Markdown: {'Enabled' if pipeline['convert_to_markdown'] else 'Disabled'}")
         print_info(f"  • Metadata Extraction: {'Enabled' if pipeline.get('extract_metadata', False) else 'Disabled'}")
         print_info(f"  • Web Search Enrichment: {'Enabled' if pipeline.get('enrich_with_web_search', True) else 'Disabled'}")
@@ -1966,7 +2256,8 @@ def process_single_pdf(pdf_path, config, prompt):
             write_processing_status(pdf_name, "converting", current_stage, total_stages, "PDF to Markdown")
             print_info(f"Step 1: Converting PDF to Markdown...")
             try:
-                md_path = convert_pdf_to_md(pdf_path, output_dir)
+                status_info = {"pdf_name": pdf_name, "stage_num": current_stage, "total_stages": total_stages}
+                md_path = convert_pdf_to_md_dispatch(pdf_path, output_dir, config, status_info=status_info)
                 if md_path:
                     print_success(f"Markdown conversion complete: {md_path}")
                     results["markdown"] = "success"
@@ -2144,12 +2435,20 @@ def check_services(config):
     """Check if external services are reachable"""
     print_info("Checking dependencies...")
 
-    # Check Marker-pdf library
-    if not MARKER_AVAILABLE:
-        print_error("marker-pdf library not installed!")
-        print_info("Install it with: pip install -r requirements.txt")
-        return False
+    engine = os.environ.get("PDF_CONVERTER", "marker").lower()
+
+    if engine == "mineru":
+        if not MINERU_AVAILABLE:
+            print_error("MinerU library not installed!")
+            print_info("Install it with: pip install 'mineru[all]'")
+            return False
+        backend = config.get("converter", {}).get("mineru", {}).get("backend", "pipeline")
+        print_success(f"MinerU library is installed (backend: {backend})")
     else:
+        if not MARKER_AVAILABLE:
+            print_error("marker-pdf library not installed!")
+            print_info("Install it with: pip install marker-pdf")
+            return False
         print_success("marker-pdf library is installed")
 
     return True

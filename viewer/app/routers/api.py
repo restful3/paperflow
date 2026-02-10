@@ -368,6 +368,25 @@ async def save_paper_progress(
     return {"ok": True}
 
 
+# ── Paper Ratings ────────────────────────────────────────────────────────
+
+@router.get("/ratings")
+async def get_ratings(_user: str = Depends(get_current_user_api)):
+    return paper_svc.get_all_ratings()
+
+
+@router.post("/papers/{name:path}/rating")
+async def save_paper_rating(
+    name: str, payload: dict, _user: str = Depends(get_current_user_api)
+):
+    name = unquote(name)
+    rating = payload.get("rating")
+    if not isinstance(rating, (int, float)) or not (0 <= int(rating) <= 5):
+        raise HTTPException(status_code=400, detail="'rating' must be 0-5")
+    paper_svc.save_rating(name, int(rating))
+    return {"ok": True}
+
+
 @router.delete("/papers/{name:path}")
 async def delete_paper(name: str, _user: str = Depends(get_current_user_api)):
     name = unquote(name)
@@ -406,7 +425,7 @@ async def serve_md_en(name: str, _user: str = Depends(get_current_user_api)):
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
-@router.get("/papers/{name:path}/assets/{filename}")
+@router.get("/papers/{name:path}/assets/{filename:path}")
 async def serve_asset(name: str, filename: str, _user: str = Depends(get_current_user_api)):
     name = unquote(name)
     filename = unquote(filename)

@@ -214,8 +214,23 @@
         </button>
       </div>
 
-      <!-- View mode tabs (horizontal scroll) -->
+      <!-- Star rating + View mode tabs -->
       <div class="flex gap-1 overflow-x-auto pb-1 px-1 scrollbar-hide mb-2 max-w-full">
+        <!-- Star rating (mobile) -->
+        <div class="flex items-center gap-0 shrink-0 mr-1" @mouseleave="hoverStar = 0">
+          <template x-for="s in [1,2,3,4,5]" :key="s">
+            <button @click="setRating(s)"
+                    @mouseenter="hoverStar = s"
+                    class="p-0.5 transition-colors"
+                    :class="(hoverStar || rating) >= s
+                      ? 'text-amber-400'
+                      : ($store.darkMode.on ? 'text-gray-600' : 'text-gray-300')">
+              <svg class="w-4 h-4" :fill="(hoverStar || rating) >= s ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+              </svg>
+            </button>
+          </template>
+        </div>
         <template x-if="hasMdKo || hasMdEn">
           <button @click="switchView('md')"
                   :class="view === 'md'
@@ -367,6 +382,22 @@
       <h1 class="flex-1 text-sm font-semibold truncate min-w-0"
           :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
           x-text="$store.lang.ko && '{{ paper_title_ko|default("", true)|e }}' ? '{{ paper_title_ko|default("", true)|e }}' : '{{ paper_title|default(paper_name, true)|e }}'">{{ paper_title or paper_name }}</h1>
+
+      <!-- Star rating -->
+      <div class="flex items-center gap-0 shrink-0" @mouseleave="hoverStar = 0">
+        <template x-for="s in [1,2,3,4,5]" :key="s">
+          <button @click="setRating(s)"
+                  @mouseenter="hoverStar = s"
+                  class="p-0.5 transition-colors"
+                  :class="(hoverStar || rating) >= s
+                    ? 'text-amber-400'
+                    : ($store.darkMode.on ? 'text-gray-600 hover:text-gray-500' : 'text-gray-300 hover:text-gray-400')">
+            <svg class="w-3.5 h-3.5" :fill="(hoverStar || rating) >= s ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+            </svg>
+          </button>
+        </template>
+      </div>
 
       <!-- View toggle -->
       <div class="flex rounded-lg p-0.5 shrink-0"
@@ -987,6 +1018,34 @@ function viewerApp() {
     // Server-side reading progress (fallback for cross-browser)
     serverProgress: {{ server_progress | default(0) }},
 
+    // Star rating
+    rating: 0,
+    hoverStar: 0,
+
+    async loadRating() {
+      try {
+        const resp = await apiFetch('/api/ratings');
+        if (resp?.ok) {
+          const data = await resp.json();
+          const paperName = decodeURIComponent(name);
+          this.rating = data[paperName] || 0;
+        }
+      } catch (e) { /* silent */ }
+    },
+
+    async setRating(star) {
+      const newRating = this.rating === star ? 0 : star;
+      this.rating = newRating;
+      try {
+        await apiFetch(`/api/papers/${name}/rating`, {
+          method: 'POST',
+          body: JSON.stringify({ rating: newRating })
+        });
+      } catch (e) {
+        showToast('Failed to save rating', 'error');
+      }
+    },
+
     async init() {
       // Configure marked.js renderer: add id to headings for TOC
       const renderer = new marked.Renderer();
@@ -1030,8 +1089,22 @@ function viewerApp() {
         const title = token.title ? ` title="${token.title}"` : '';
         return `<a href="${href}"${title}>${text}</a>`;
       };
+      // Custom HTML renderer: escape raw HTML tags that aren't known safe elements
+      // This prevents e.g. "<a group>" in paper text from creating unclosed <a> tags
+      renderer.html = function(token) {
+        const raw = token.raw || token.text || '';
+        const safeTagPattern = /^<\/?(br|hr|sup|sub|span|div|p|table|thead|tbody|tr|th|td|img|em|strong|code|pre|blockquote|ul|ol|li|h[1-6]|figure|figcaption|caption|details|summary|mark|del|ins|abbr|small|b|i|u|s|a\s+href)[\s>/]/i;
+        if (safeTagPattern.test(raw) || /^<!--/.test(raw)) {
+          return raw;
+        }
+        // Escape unsafe raw HTML (e.g. "<a group>", "<dangerous chemical>")
+        return raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      };
       marked.setOptions({ renderer });
       this._resetSlugs = renderer._resetSlugs;
+
+      // Load star rating
+      this.loadRating();
 
       // Pre-load markdown if default view is markdown
       if (this.view === 'md') {

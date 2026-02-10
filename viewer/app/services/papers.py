@@ -237,6 +237,7 @@ def delete_paper(name: str) -> tuple[bool, str]:
     size = _dir_size_mb(paper_dir)
     shutil.rmtree(str(paper_dir))
     delete_progress(name)
+    delete_rating(name)
     return True, f"'{name}' deleted ({size:.1f} MB freed)."
 
 
@@ -462,6 +463,8 @@ def get_processing_status() -> dict:
                 entry["stage_num"] = processing.get("stage_num", 0)
                 entry["total_stages"] = processing.get("total_stages", 0)
                 entry["stage_label"] = processing.get("stage_label", "")
+                if processing.get("detail"):
+                    entry["detail"] = processing["detail"]
                 if processing.get("error"):
                     entry["error"] = processing["error"]
             else:
@@ -512,7 +515,7 @@ _PROGRESS_FILE = "reading_progress.json"
 
 
 def _progress_path() -> Path:
-    return settings.output_dir / _PROGRESS_FILE
+    return settings.outputs_dir / _PROGRESS_FILE
 
 
 def get_all_progress() -> dict[str, int]:
@@ -529,8 +532,6 @@ def get_all_progress() -> dict[str, int]:
 def save_progress(paper_name: str, progress: int) -> bool:
     progress = max(0, min(100, progress))
     data = get_all_progress()
-    if progress <= data.get(paper_name, 0):
-        return True
     data[paper_name] = progress
     try:
         with open(_progress_path(), "w", encoding="utf-8") as f:
@@ -546,6 +547,52 @@ def delete_progress(paper_name: str) -> None:
         del data[paper_name]
         try:
             with open(_progress_path(), "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+
+# ── Paper Ratings ─────────────────────────────────────────────────────────
+
+_RATINGS_FILE = "paper_ratings.json"
+
+
+def _ratings_path() -> Path:
+    return settings.outputs_dir / _RATINGS_FILE
+
+
+def get_all_ratings() -> dict[str, int]:
+    path = _ratings_path()
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+
+def save_rating(paper_name: str, rating: int) -> bool:
+    rating = max(0, min(5, rating))
+    data = get_all_ratings()
+    if rating == 0:
+        data.pop(paper_name, None)
+    else:
+        data[paper_name] = rating
+    try:
+        with open(_ratings_path(), "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def delete_rating(paper_name: str) -> None:
+    data = get_all_ratings()
+    if paper_name in data:
+        del data[paper_name]
+        try:
+            with open(_ratings_path(), "w", encoding="utf-8") as f:
                 _json.dump(data, f, ensure_ascii=False)
         except Exception:
             pass

@@ -7,6 +7,13 @@
     "check_duplicate": true,
     "translate_to_korean": true
   },
+  "converter": {
+    "mineru": {
+      "backend": "pipeline",
+      "parse_method": "auto",
+      "lang": "en"
+    }
+  },
   "metadata_extraction": {
     "max_input_chars": 8000,
     "temperature": 0.1,

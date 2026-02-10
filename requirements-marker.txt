@@ -1,0 +1,2 @@
+# marker-pdf converter dependencies
+marker-pdf>=0.2.17
