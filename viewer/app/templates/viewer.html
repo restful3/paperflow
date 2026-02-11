@@ -507,6 +507,10 @@
         Easy
       </button>
 
+      <span class="shrink-0 text-[11px]"
+            :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+            x-text="`원본 ${originalProgress}% · Easy ${easyProgress}%`"></span>
+
       <!-- Dark mode toggle -->
       <button @click="$store.darkMode.toggle()"
               class="p-1.5 rounded-lg transition shrink-0"
@@ -614,6 +618,15 @@
     </div>
   </div>
 
+  <!-- Mobile quick handle: show top bar when hidden -->
+  <button x-show="isMobile() && !topBarVisible"
+          @click="toggleTopBarManual()"
+          class="md:hidden fixed top-2 right-3 z-50 px-2 py-1 rounded-full text-xs font-semibold border shadow"
+          :class="$store.darkMode.on ? 'bg-gray-800/90 text-gray-200 border-gray-600' : 'bg-white/90 text-gray-700 border-gray-300'"
+          title="Show menu">
+    메뉴
+  </button>
+
   <!-- Content area with TOC -->
   <div class="flex-1 overflow-hidden flex min-h-0
               max-md:viewer-content-mobile"
@@ -667,8 +680,32 @@
            @touchmove="handleTouchMove($event)"
            @touchend="handleTouchEnd($event)"
            @touchcancel="handleTouchCancel($event)"
-           @click="handleContainerClick($event)">
-        <iframe :src="pdfUrl" class="w-full h-full border-0 pointer-events-auto"></iframe>
+           @click.self="handleContainerClick($event)">
+
+        <!-- Mobile fallback: open PDF in native viewer (more reliable scroll/fit on iOS) -->
+        <div x-show="isMobile()" class="h-full flex flex-col items-center justify-center p-6 text-center gap-3"
+             :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-700'">
+          <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">
+            모바일에서는 내장 iframe PDF가 확대/스크롤 이슈가 있어,
+            네이티브 PDF 뷰어로 여는 방식을 기본으로 사용합니다.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <a :href="mobilePdfUrl" target="_blank" rel="noopener"
+               class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition">
+              PDF 열기 (권장)
+            </a>
+            <a :href="pdfUrl" download
+               class="px-4 py-2.5 rounded-lg border text-sm font-medium transition"
+               :class="$store.darkMode.on ? 'border-gray-600 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'">
+              PDF 다운로드
+            </a>
+          </div>
+        </div>
+
+        <!-- Desktop/tablet: inline iframe -->
+        <iframe x-show="!isMobile()"
+                :src="pdfUrl"
+                class="w-full h-full border-0 pointer-events-auto"></iframe>
       </div>
     </template>
 
@@ -696,7 +733,9 @@
           <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 w-full lg:w-1/2 h-1/2 lg:h-full overflow-y-auto min-h-0"
                :class="[$store.darkMode.on && 'dark', $store.darkMode.on ? 'border-b lg:border-b-0 lg:border-r border-gray-700' : 'border-b lg:border-b-0 lg:border-r border-gray-300']"
                x-html="splitMdContent"></div>
-          <iframe :src="pdfUrl" class="w-full lg:w-1/2 h-1/2 lg:h-full border-0"></iframe>
+          <iframe :src="isMobile() ? mobilePdfUrl : pdfUrl"
+                  :style="isMobile() ? mobilePdfStyle : ''"
+                  class="w-full lg:w-1/2 h-1/2 lg:h-full border-0"></iframe>
         </div>
       </div>
     </template>
@@ -1093,6 +1132,18 @@ function viewerApp() {
     explainedMode: false,
     location: '{{ location }}',
     pdfUrl: '/api/papers/' + name + '/pdf',
+
+    get mobilePdfUrl() {
+      // Mobile PDF viewer hint: fit page width/height first
+      // (Some mobile engines ignore this; see mobilePdfStyle fallback)
+      return this.pdfUrl + '#view=FitH&zoom=page-fit&pagemode=none';
+    },
+
+    // NOTE: Avoid CSS transform scaling for mobile PDF iframe.
+    // It can break touch interactions (scroll/tap) on iOS.
+    get mobilePdfStyle() {
+      return '';
+    },
     mdKoUrl: '/api/papers/' + name + '/md-ko',
     mdEnUrl: '/api/papers/' + name + '/md-en',
     mdKoContent: '',
@@ -1170,11 +1221,17 @@ function viewerApp() {
     touchStartTime: null,
     isTouching: false,
     touchMoved: false,
-    TOUCH_MOVE_THRESHOLD: 10,    // px - Allow 10px movement for tap
-    TOUCH_TIME_LIMIT: 500,       // ms - Tap must complete within 500ms
+    TOUCH_MOVE_THRESHOLD: 10,    // px - Rollback: allow normal hand jitter
+    TOUCH_TIME_LIMIT: 380,        // ms - Rollback: accept natural tap speed
+    MIN_TAP_INTERVAL: 450,        // ms - Rollback: less aggressive debounce
+    lastTapToggleAt: 0,
+    lastScrollAt: 0,
+    touchStartScrollTop: 0,
 
     // Server-side reading progress (fallback for cross-browser)
     serverProgress: {{ server_progress | default(0) }},
+    originalProgress: 0,
+    easyProgress: 0,
 
     // Star rating
     rating: 0,
@@ -1269,6 +1326,9 @@ function viewerApp() {
       // Load star rating
       this.loadRating();
 
+      // Load progress stats (original/easy)
+      this.refreshProgressStats();
+
       // Pre-load markdown if default view is markdown
       if (this.view === 'md') {
         await this.loadMdForCurrentLang();
@@ -1321,6 +1381,8 @@ function viewerApp() {
 
       // Flush progress to server on page unload
       window.addEventListener('beforeunload', () => {
+        // Easy(설명) 모드에서는 진척도 동기화 제외
+        if (this.explainedMode) return;
         if (this._serverProgressTimer) {
           clearTimeout(this._serverProgressTimer);
           const container = document.querySelector('.markdown-container');
@@ -1399,21 +1461,35 @@ function viewerApp() {
     },
 
     async switchView(v) {
+      // Mobile shortcut: PDF tab opens native viewer directly
+      if (this.isMobile() && v === 'pdf') {
+        window.open(this.mobilePdfUrl, '_blank', 'noopener');
+        return;
+      }
+
       // Save current scroll position before switching
       this.saveScrollPosition(this.view);
 
       this.view = v;
 
-      // Show bar briefly when switching views on mobile
-      if (this.isMobile() && !this.topBarVisible) {
-        this.topBarVisible = true;
-        this.isManuallyToggled = true;
-        setTimeout(() => {
-          this.isManuallyToggled = false;
-          if (v !== 'md') {
+      // Mobile top bar policy by view:
+      // - md/split: allow normal auto behavior
+      // - pdf: auto-hide shortly after entering (prevents persistent bar covering content)
+      if (this.isMobile()) {
+        if (v === 'pdf') {
+          this.topBarVisible = true;
+          this.isManuallyToggled = true;
+          setTimeout(() => {
             this.topBarVisible = false;
-          }
-        }, 2000);
+            this.isManuallyToggled = false;
+          }, 900);
+        } else if (!this.topBarVisible) {
+          this.topBarVisible = true;
+          this.isManuallyToggled = true;
+          setTimeout(() => {
+            this.isManuallyToggled = false;
+          }, 1200);
+        }
       }
 
       // Load markdown content when switching to markdown view
@@ -1553,6 +1629,7 @@ function viewerApp() {
       }
       this.explainedMode = newMode;
       localStorage.setItem('pf-explained', newMode ? 'true' : 'false');
+      this.refreshProgressStats();
       await this.loadMdForCurrentLang();
       if (this.view === 'split') {
         this.splitMdContent = this.activeMdContent;
@@ -1655,6 +1732,17 @@ function viewerApp() {
       const variant = this.explainedMode ? '-easy' : '';
       return `pf-scroll-${name}-${viewType}-${lang}${variant}`;
     },
+    _progressKey() {
+      const paperName = decodeURIComponent(name);
+      return this.explainedMode ? `pf-progress-easy-${paperName}` : `pf-progress-${paperName}`;
+    },
+    refreshProgressStats() {
+      const paperName = decodeURIComponent(name);
+      const orig = parseInt(localStorage.getItem(`pf-progress-${paperName}`) || '0');
+      const easy = parseInt(localStorage.getItem(`pf-progress-easy-${paperName}`) || '0');
+      this.originalProgress = Number.isFinite(orig) ? Math.max(0, Math.min(100, orig)) : 0;
+      this.easyProgress = Number.isFinite(easy) ? Math.max(0, Math.min(100, easy)) : 0;
+    },
     _scrollSaveTimer: null,
     _serverProgressTimer: null,
 
@@ -1665,20 +1753,23 @@ function viewerApp() {
       if (scrollTop > 0) {
         localStorage.setItem(this._scrollSaveKey(viewType), scrollTop.toString());
       }
-      // Save reading progress % (language-independent)
+      // Save reading progress %
       const scrollable = container.scrollHeight - container.clientHeight;
       if (scrollable > 0) {
         const progress = Math.round((container.scrollTop / scrollable) * 100);
-        const paperName = decodeURIComponent(name);
-        localStorage.setItem(`pf-progress-${paperName}`, progress.toString());
-        // Sync to server (5s debounce)
-        clearTimeout(this._serverProgressTimer);
-        this._serverProgressTimer = setTimeout(() => {
-          apiFetch(`/api/papers/${name}/progress`, {
-            method: 'POST',
-            body: JSON.stringify({ progress })
-          });
-        }, 5000);
+        localStorage.setItem(this._progressKey(), progress.toString());
+        this.refreshProgressStats();
+
+        // Server sync is original-mode only (TOC progress 기준 유지)
+        if (!this.explainedMode) {
+          clearTimeout(this._serverProgressTimer);
+          this._serverProgressTimer = setTimeout(() => {
+            apiFetch(`/api/papers/${name}/progress`, {
+              method: 'POST',
+              body: JSON.stringify({ progress })
+            });
+          }, 5000);
+        }
       }
     },
 
@@ -1689,7 +1780,7 @@ function viewerApp() {
       // Determine target: localStorage pixel position or server progress %
       const saved = localStorage.getItem(this._scrollSaveKey(viewType));
       const hasSavedPx = saved && parseInt(saved) > 0;
-      const hasServerProgress = this.serverProgress > 0;
+      const hasServerProgress = !this.explainedMode && this.serverProgress > 0;
       if (!hasSavedPx && !hasServerProgress) return;
 
       // Retry scroll restoration until content is fully laid out
@@ -2154,6 +2245,7 @@ function viewerApp() {
 
       const container = event.target;
       const currentScrollY = container.scrollTop;
+      this.lastScrollAt = Date.now();
 
       // Clear existing timer
       if (this.scrollTimer) clearTimeout(this.scrollTimer);
@@ -2204,13 +2296,12 @@ function viewerApp() {
 
         this.lastScrollY = currentScrollY;
 
-        // Auto-show after inactivity
-        if (this.idleTimer) clearTimeout(this.idleTimer);
-        this.idleTimer = setTimeout(() => {
-          if (!this.topBarVisible && !this.isManuallyToggled) {
-            this.topBarVisible = true;
-          }
-        }, this.AUTO_HIDE_DELAY);  // Use configurable delay
+        // Auto-show after inactivity disabled on mobile markdown scroll
+        // (was causing ghost-like unexpected menu popups after scrolling stop)
+        if (this.idleTimer) {
+          clearTimeout(this.idleTimer);
+          this.idleTimer = null;
+        }
       }, 50);
     },
 
@@ -2253,6 +2344,8 @@ function viewerApp() {
       this.touchStartTime = Date.now();
       this.isTouching = true;
       this.touchMoved = false;
+      const container = document.querySelector('.markdown-container');
+      this.touchStartScrollTop = container ? container.scrollTop : 0;
     },
 
     handleTouchMove(event) {
@@ -2272,16 +2365,25 @@ function viewerApp() {
     handleTouchEnd(event) {
       if (!this.isMobile() || !this.isTouching) return;
 
-      const touchDuration = Date.now() - this.touchStartTime;
+      const now = Date.now();
+      const touchDuration = now - this.touchStartTime;
 
-      // Only toggle if: no movement + quick release + not on interactive element
+      // Only toggle if: no movement + quick release + not on interactive element + not right after scroll
       if (!this.touchMoved && touchDuration < this.TOUCH_TIME_LIMIT) {
         const target = event.target;
         const isInteractive = target.closest('a, button, input, textarea, select, [contenteditable], iframe');
 
-        if (!isInteractive) {
+        const debounceOk = (now - this.lastTapToggleAt) > this.MIN_TAP_INTERVAL;
+        const notAfterScroll = (now - this.lastScrollAt) > 350;
+
+        const container = document.querySelector('.markdown-container');
+        const currentScrollTop = container ? container.scrollTop : 0;
+        const scrolledDuringTouch = Math.abs(currentScrollTop - (this.touchStartScrollTop || 0)) > 4;
+
+        if (!isInteractive && debounceOk && notAfterScroll && !scrolledDuringTouch) {
           event.preventDefault();  // Prevent synthesized click
           this.toggleTopBarManual();
+          this.lastTapToggleAt = now;
         }
       }
 
