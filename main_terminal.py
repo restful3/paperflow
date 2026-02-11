@@ -771,6 +771,7 @@ METADATA_EXTRACTION_PROMPT = """You are an academic paper metadata extractor. Gi
   "abstract": "Complete abstract text",
   "abstract_ko": "Korean translation of the abstract",
   "categories": ["Category1", "Category2"],
+  "source_language": "en",
   "publication_year": 2025
 }
 
@@ -781,6 +782,7 @@ Rules:
 - Extract the complete abstract text. If no clear abstract section exists, provide a 1-2 sentence summary of the paper's topic.
 - Provide a natural Korean translation of the abstract in "abstract_ko".
 - For categories, infer 2-5 relevant academic categories (e.g., "Machine Learning", "Natural Language Processing", "Computer Vision", "Reinforcement Learning", "Robotics", "Data Mining", "Software Engineering", "Optimization", "Deep Learning").
+- For source_language, detect the PRIMARY language of the paper body. Use ISO 639-1 codes: "en" (English), "ko" (Korean), "zh" (Chinese), "ja" (Japanese), "de" (German), "fr" (French), etc. If the paper has mixed languages (e.g., English body with Korean abstract), use the main body language.
 - Extract the publication year as an integer (e.g., 2025). Look for it in the header, footnotes, copyright notice, or submission date. If not found, use null.
 - Return ONLY the JSON object. No markdown formatting, no code blocks, no explanation.
 - If you cannot determine a field, use null for strings or [] for arrays."""
@@ -877,6 +879,13 @@ def extract_paper_metadata(md_path, output_dir, config):
                 metadata["title_ko"] = None
             if not isinstance(metadata.get("abstract_ko"), str) or not metadata["abstract_ko"].strip():
                 metadata["abstract_ko"] = None
+
+            # Validate source_language (default: "en")
+            source_lang = metadata.get("source_language")
+            if not isinstance(source_lang, str) or len(source_lang) < 2:
+                metadata["source_language"] = "en"
+            else:
+                metadata["source_language"] = source_lang.lower().strip()[:5]
 
             # Add envelope fields
             metadata["original_filename"] = os.path.basename(md_path).replace('.md', '.pdf')
@@ -2323,7 +2332,12 @@ def process_single_pdf(pdf_path, config, prompt):
                             rename_result = rename_output_directory(output_dir, new_name, base_name)
                             if rename_result:
                                 output_dir, base_name = rename_result
-                                md_path = os.path.join(output_dir, base_name + ".md")
+                                # Find actual .md file (suffix may include extra spaces from original name)
+                                md_path = None
+                                for f in os.listdir(output_dir):
+                                    if f.endswith(".md") and not f.endswith("_ko.md") and not f.endswith("_explained.md") and not "_backup_" in f:
+                                        md_path = os.path.join(output_dir, f)
+                                        break
                                 print_success(f"Folder renamed to: {base_name}")
                             else:
                                 print_warning("Folder rename failed, keeping original name")
@@ -2336,8 +2350,23 @@ def process_single_pdf(pdf_path, config, prompt):
         else:
             results["metadata"] = "skipped"
 
-        # Step 1.7: Duplicate check (optional, requires metadata)
+        # Handle Korean source: rename .md → _ko.md, skip translation
         skip_translation = False
+        if results.get("metadata") == "success" and metadata:
+            source_lang = metadata.get("source_language", "en")
+            if source_lang == "ko" and md_path and os.path.exists(md_path):
+                ko_md_dest = md_path.replace('.md', '_ko.md')
+                if not os.path.exists(ko_md_dest):
+                    try:
+                        os.rename(md_path, ko_md_dest)
+                        print_success(f"Korean source detected → {os.path.basename(ko_md_dest)}")
+                        md_path = None
+                        skip_translation = True
+                        results["translation"] = "skipped_korean_source"
+                    except Exception as e:
+                        print_warning(f"Korean source rename failed: {e}")
+
+        # Step 1.7: Duplicate check (optional, requires metadata)
         if pipeline.get("check_duplicate", True) and metadata:
             current_stage += 1
             write_processing_status(pdf_name, "checking_duplicate", current_stage, total_stages, "Checking for Duplicates")
@@ -2360,7 +2389,8 @@ def process_single_pdf(pdf_path, config, prompt):
         # Step 2: Translation (optional, skip if duplicate found)
         ko_md_path = None
         if skip_translation:
-            results["translation"] = "skipped_duplicate"
+            if "translation" not in results:
+                results["translation"] = "skipped_duplicate"
         elif pipeline.get("translate_to_korean", False):
             if md_path and os.path.exists(md_path):
                 current_stage += 1
@@ -2413,7 +2443,7 @@ def process_single_pdf(pdf_path, config, prompt):
                 print_success(f"{step.capitalize()}: Success")
             elif status == "failed":
                 print_error(f"{step.capitalize()}: Failed")
-            elif status == "skipped":
+            elif isinstance(status, str) and status.startswith("skipped"):
                 print_warning(f"{step.capitalize()}: Skipped")
 
         # Return True if at least one step succeeded

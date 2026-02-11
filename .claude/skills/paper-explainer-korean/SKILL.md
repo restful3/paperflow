@@ -1,11 +1,12 @@
 ---
 name: paper-explainer-korean
-description: Rewrite academic papers in any language into easy-to-understand Korean explanations with analogies, plain-language math explanations, and glossary. Use when user asks to explain a paper simply in Korean, or uses phrases like "쉽게 풀어써줘", "해설판", "쉬운 설명", "알기 쉽게 다시 써줘", "explain this paper simply".
+description: Convert an academic paper (any language) into an easy Korean explainer with accurate technical preservation (formulas/citations/figures), consistent analogies, glossary, and section-by-section output to avoid token overflow. Use when user asks "쉽게 설명해줘", "해설판", "알기 쉽게 풀어줘", or requests a paper-specific Korean explainer from file/path/URL/title.
 ---
 
 # Paper Explainer (Any Language → Korean Easy Explanation)
 
 ## When to Use
+
 Use this skill when:
 - User requests an easy-to-understand Korean explanation of an academic paper
 - Input is a markdown-formatted academic paper in **any language** (English, Korean, German, Japanese, Chinese, etc.)
@@ -22,6 +23,33 @@ Use this skill when:
 - Rewrite the entire paper automatically without user approval
 - Process all sections sequentially without asking for confirmation
 - DO NOT summarize or omit — the output must contain ALL original content, explained more richly
+
+## Execution Modes
+
+### Auto Mode (default)
+- Process the entire paper automatically
+- For long sections, automatically split into subsection-level chunks
+
+### Section-safe Mode
+- Automatically enters this mode when:
+  - Very long documents (estimated 30+ pages)
+  - A single section is abnormally long with token overflow risk
+- Saves section-by-section sequentially so mid-failure recovery is possible
+- If you hit the token limit mid-section:
+  1. Save what you've written so far
+  2. Continue from where you left off in the next turn
+  3. Append seamlessly to the file
+
+**Recommended section budgeting for very long papers:**
+```
+- Abstract (short — process at once)
+- Introduction (medium — process at once)
+- Related Work (can be long — process per subsection)
+- Methods (can be very long — process per subsection)
+- Experiments (includes tables/results — process per subsection)
+- Conclusion (short — process at once)
+- Glossary (generate last)
+```
 
 ## Pre-processing
 
@@ -42,9 +70,17 @@ Papers converted from PDF via OCR or marker-pdf may contain noise:
 
 **Clean first, then rewrite.**
 
-## Core Rewriting Principles — 7 Rules
+## Core Rewriting Principles — 8 Rules
 
-### Rule 1: Tone Shift (어조 전환)
+### Rule 1: Accuracy First (정확성 우선)
+**The most important rule.** Enrichment must never distort the original.
+
+- Do NOT add claims, data, or conclusions not present in the original paper
+- Do NOT exaggerate or speculate — only explain what the authors actually wrote
+- "Why this matters" context and analogies must faithfully represent the original content
+- If uncertain about a technical detail, explain what the paper states rather than interpreting beyond it
+
+### Rule 2: Tone Shift (어조 전환)
 Transform academic passive voice into conversational, engaging Korean.
 
 **Do:**
@@ -58,15 +94,17 @@ Transform academic passive voice into conversational, engaging Korean.
 - Use overly casual or slangy Korean (maintain respectful 합니다체)
 - Lose academic precision — be accessible but accurate
 - Add personal opinions not in the original paper
+- Use excessive memes, slang, or translationese (번역투)
 
-### Rule 2: Analogies and Metaphors (비유/은유)
-Every abstract concept should have a concrete, real-world analogy.
+### Rule 3: Analogies and Metaphors (비유/은유)
+Use analogies for core concepts only — not every paragraph needs one.
 
 **How to create good analogies:**
 - Choose everyday objects/situations everyone knows (kitchen, office, library, school)
 - The analogy should capture the KEY PROPERTY of the concept
 - Extend the analogy to explain relationships between concepts
 - Maintain analogy consistency throughout the entire paper
+- Limit to **3-5 core analogies** per paper — do NOT force analogies on every paragraph
 
 **Analogy introduction markers:**
 - "**비유로 설명하면 이렇습니다:**"
@@ -81,7 +119,7 @@ Before starting any section rewriting, identify 3-5 core concepts in the paper a
 - Long-term memory = safe/vault (금고)
 Use these SAME analogies every time these concepts appear.
 
-### Rule 3: Progressive Disclosure (점진적 공개)
+### Rule 4: Progressive Disclosure (점진적 공개)
 Structure each section with a clear narrative arc.
 
 **Overall paper structure:**
@@ -100,7 +138,7 @@ Structure each section with a clear narrative arc.
 - `## 3장. MemoryOS의 구조 — 핵심 설계를 파헤치기`
 - `### 4.3 제거 실험 — 어떤 부분이 가장 중요한가?`
 
-### Rule 4: Math and Formula Handling (수식 해설)
+### Rule 5: Math and Formula Handling (수식 해설)
 Preserve ALL original formulas but wrap them with plain-language explanations.
 
 **Pattern:**
@@ -120,7 +158,7 @@ $$Heat = \alpha \cdot N_{visit} + \beta \cdot L_{interaction} + \gamma \cdot R_{
 3. **최신성($R_{recency}$)**: 마지막으로 접근된 게 얼마나 최근인가.
 ```
 
-### Rule 5: Terminology Management (용어 관리)
+### Rule 6: Terminology Management (용어 관리)
 **On first mention** of a technical term:
 - **Bold** the Korean term
 - Add English (or original language) in parentheses
@@ -140,7 +178,7 @@ $$Heat = \alpha \cdot N_{visit} + \beta \cdot L_{interaction} + \gamma \cdot R_{
 | ... | ... |
 ```
 
-### Rule 6: Structural Reformatting (구조 재편)
+### Rule 7: Structural Reformatting (구조 재편)
 Transform dense academic paragraphs into scannable, readable content.
 
 - **Short paragraphs**: 3-5 sentences max (vs. academic 8-12 sentence paragraphs)
@@ -152,8 +190,8 @@ Transform dense academic paragraphs into scannable, readable content.
 - **Tables**: For comparing methods, summarizing results, or listing terms
 - **White space**: Liberal use of blank lines between concept groups
 
-### Rule 7: Content Enrichment (내용 보강)
-The output must be RICHER than the input. Never omit or summarize.
+### Rule 8: Content Enrichment (내용 보강)
+The output must be RICHER than the input. Never omit or summarize. But do NOT pad with empty repetition.
 
 **Add:**
 - "Why this matters" introductions where the original jumps straight into details
@@ -166,6 +204,11 @@ The output must be RICHER than the input. Never omit or summarize.
 - Any section, subsection, or paragraph from the original
 - Any formula, table, or figure reference
 - Any citation or reference
+
+**Guard against verbosity:**
+- Enrichment means adding understanding, not adding words for their own sake
+- If a concept is already clear, don't over-explain it
+- Avoid repeating the same point in different words within the same section
 
 ## Step-by-Step Rewriting Process
 
@@ -204,7 +247,7 @@ For each section in the original paper:
    - If input is non-Korean: translate AND explain simultaneously (not translate-then-explain)
    - If input is Korean: rewrite into conversational tone
 4. Insert analogies for abstract concepts (using the system from Step 2)
-5. Explain formulas in plain language (Rule 4 pattern)
+5. Explain formulas in plain language (Rule 5 pattern)
 6. Break long paragraphs into shorter ones with bullet points
 7. Add concrete examples or scenarios where helpful
 8. Bold key terms and takeaways
@@ -279,43 +322,34 @@ Step 6: Append glossary table
 Final: "전체 논문 해설이 완료되었습니다. deep_learning_survey_ko_explained.md에 저장했습니다."
 ```
 
-## Handling Token Limits
+## Special Considerations
 
-**Section-by-section processing is the default** to prevent token overflow.
+- **Images**: Preserve all image references (`![](images/...)`) from the original. Do NOT remove or modify image paths.
+- **Citations**: Keep citation format unchanged: `[1]`, `(Smith et al., 2023)`, etc.
+- **Code blocks**: Preserve as-is. Add a brief explanation before/after if the code illustrates a concept.
+- **Tables**: Preserve data tables. May add interpretation rows or commentary after the table.
+- **Figures**: Translate figure captions to Korean if in another language. Add explanation of what the figure shows.
 
-- If a single section is very long (3000+ words of source text), split into subsections
-- The explained version tends to be 1.5-2.5x the input length, so budget accordingly
-- For very long papers (30+ pages), group smaller sections if they're closely related
+## Domain-Specific Analogy Guidelines
 
-**If you hit the token limit mid-section:**
-1. Save what you've written so far
-2. Continue from where you left off in the next turn
-3. Append seamlessly to the file
+The analogies should be domain-adaptive. The LLM should freely choose the best analogies for each paper, but here are general guidelines:
 
-**Recommended approach for very long papers:**
-```
-논문 구조:
-- Abstract (짧음 - 한번에 처리)
-- Introduction (중간 - 한번에 처리)
-- Related Work (길 수 있음 - 하위 섹션별 처리)
-- Methods (매우 길 수 있음 - 하위 섹션별 처리)
-- Experiments (표/결과 포함 - 하위 섹션별 처리)
-- Conclusion (짧음 - 한번에 처리)
-- Glossary (마지막에 생성)
-```
+- **CS/AI papers**: Computer, office, library, internet, smartphone analogies
+  - Memory hierarchy → filing cabinet with desk/drawer/safe
+  - Neural networks → interconnected team members
+  - Training → studying for an exam
+- **Medical/Biology papers**: Body, health, cooking analogies
+  - Cell signaling → postal delivery system
+  - Immune response → security guard system
+  - Preserve established Korean medical terminology
+- **Physics/Math papers**: Physical world, building, nature analogies
+  - Forces → pushing/pulling everyday objects
+  - Waves → water ripples
+- **Social Science papers**: Organization, community, family analogies
+  - Statistical models → survey/voting analogies
+  - Economic models → household budget management
 
-## Quality Checks
-
-After completing the full rewrite, verify:
-- [ ] **Completeness**: Every section in the original appears in the output
-- [ ] **Formula preservation**: All mathematical expressions from the original are preserved
-- [ ] **Analogy consistency**: Same concept uses the same metaphor throughout
-- [ ] **Glossary completeness**: All technical terms defined inline appear in the glossary
-- [ ] **Natural Korean flow**: No awkward phrasing or translationese
-- [ ] **Output length**: Should be >= 1.5x the input length (if shorter, content may have been lost)
-- [ ] **Image references**: All `![](images/...)` paths preserved from original
-- [ ] **Citations**: All `[1]`, `(Author et al., 2023)` formats unchanged
-- [ ] **YAML header**: Present exactly once at the top of the file
+**Universal principle**: Map to the Korean reader's everyday experience. Choose analogies from daily life that require no specialized knowledge.
 
 ## Examples
 
@@ -404,34 +438,21 @@ $$\mathcal{F}_{\mathrm{score}} = \cos(\mathbf{e}_s, \mathbf{e}_p) + \mathcal{F}_
 - **T**: 그 대화가 이루어진 시각(타임스탬프)
 ```
 
-## Domain-Specific Analogy Guidelines
+## Quality Checks
 
-The analogies should be domain-adaptive. The LLM should freely choose the best analogies for each paper, but here are general guidelines:
-
-- **CS/AI papers**: Computer, office, library, internet, smartphone analogies
-  - Memory hierarchy → filing cabinet with desk/drawer/safe
-  - Neural networks → interconnected team members
-  - Training → studying for an exam
-- **Medical/Biology papers**: Body, health, cooking analogies
-  - Cell signaling → postal delivery system
-  - Immune response → security guard system
-  - Preserve established Korean medical terminology
-- **Physics/Math papers**: Physical world, building, nature analogies
-  - Forces → pushing/pulling everyday objects
-  - Waves → water ripples
-- **Social Science papers**: Organization, community, family analogies
-  - Statistical models → survey/voting analogies
-  - Economic models → household budget management
-
-**Universal principle**: Map to the Korean reader's everyday experience. Choose analogies from daily life that require no specialized knowledge.
-
-## Special Considerations
-
-- **Images**: Preserve all image references (`![](images/...)`) from the original. Do NOT remove or modify image paths.
-- **Citations**: Keep citation format unchanged: `[1]`, `(Smith et al., 2023)`, etc.
-- **Code blocks**: Preserve as-is. Add a brief explanation before/after if the code illustrates a concept.
-- **Tables**: Preserve data tables. May add interpretation rows or commentary after the table.
-- **Figures**: Translate figure captions to Korean if in another language. Add explanation of what the figure shows.
+After completing the full rewrite, verify:
+- [ ] **Completeness**: Every section in the original appears in the output
+- [ ] **Formula preservation**: All mathematical expressions from the original are preserved
+- [ ] **Accuracy**: No claims, data, or conclusions added that are not in the original
+- [ ] **Analogy consistency**: Same concept uses the same metaphor throughout
+- [ ] **Glossary completeness**: All technical terms defined inline appear in the glossary
+- [ ] **Natural Korean flow**: No awkward phrasing or translationese
+- [ ] **No excessive verbosity**: Explanations are rich but not repetitive
+- [ ] **Output length**: Should be >= 1.5x the input length (if shorter, content may have been lost)
+- [ ] **Image references**: All `![](images/...)` paths preserved from original
+- [ ] **Citations**: All `[1]`, `(Author et al., 2023)` formats unchanged
+- [ ] **YAML header**: Present exactly once at the top of the file
+- [ ] **File name**: Ends with `_ko_explained.md`
 
 ## Formatting Preservation Checklist
 - [ ] YAML header from input file or `header.yaml` prepended (exactly once)
@@ -443,7 +464,43 @@ The analogies should be domain-adaptive. The LLM should freely choose the best a
 - [ ] Citations in original format
 - [ ] Equations/formulas unchanged (with added explanations)
 - [ ] Image references intact
-- [ ] Translated content saved to `{filename}_ko_explained.md`
 - [ ] Each section appended to the same output file (no duplicate YAML headers)
 - [ ] References/Acknowledgements: headers translated, content in original language
 - [ ] Glossary table present at end of document
+
+## User Request Interpretation
+
+The following requests immediately trigger this skill:
+- "이 논문 쉽게 설명해줘"
+- "해설판 만들어줘"
+- "논문 알기 쉽게 풀어줘"
+- "{논문 제목/파일/링크} 한국어로 쉽게 정리해줘"
+
+### Single Target Mode
+When the input is specified as a URL/title/file:
+1. Locate the source file path
+2. Process according to this skill's rules
+3. Return the output file path clearly
+
+### Batch Mode (important)
+When the user does **NOT specify a target** and says "논문 해설판 만들어줘":
+1. Recursively scan `/home/restful3/workspace/paperflow/outputs` subdirectories
+2. Find `*_ko.md` files, excluding those that already have a `*_ko_explained.md` in the same path
+3. Confirm the remaining files as generation targets
+4. If 2 or more files: **must delegate to sub-agents** for processing
+5. Per-file rules:
+   - No output exists → generate
+   - Output exists but source is newer → regenerate
+   - Otherwise → skip
+6. Return summary statistics:
+   - scanned / generated / regenerated / skipped / failed
+   - Failed items include file path + failure reason
+
+## Completion Report
+
+On task completion, report concisely:
+- Input file
+- Output file
+- Processing mode (auto / section-safe)
+- Number of sections
+- Notable issues (missing risk / source quality problems / heavy OCR noise / etc.)

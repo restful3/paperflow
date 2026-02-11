@@ -82,3 +82,5 @@ model_cache/
 # Translation outputs
 translations/
 sample_pdf/
+
+CLAUDE.md

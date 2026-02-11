@@ -410,22 +410,14 @@
           <div class="border-t px-4 py-2 flex items-center justify-between transition-colors"
                :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-100'">
             <div class="flex items-center gap-2 sm:gap-1.5">
-              <!-- Mobile: Text badges -->
-              <div class="flex sm:hidden flex-wrap gap-1">
-                <span x-show="paper.formats.md_ko"
-                      class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
-                      :class="$store.darkMode.on && 'bg-purple-900/30 text-purple-400'">KO</span>
-                <span x-show="paper.formats.md_en"
-                      class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600"
-                      :class="$store.darkMode.on && 'bg-gray-700/50 text-gray-400'">EN</span>
-                <span x-show="paper.formats.pdf"
-                      class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700"
-                      :class="$store.darkMode.on && 'bg-blue-900/30 text-blue-400'">PDF</span>
-              </div>
-              <!-- Desktop: Dots (sm:+) -->
-              <div class="hidden sm:flex items-center gap-1.5">
-                <span x-show="paper.formats.md_ko" class="w-2 h-2 rounded-full bg-purple-500" title="MD-KO"></span>
-                <span x-show="paper.formats.md_en" class="w-2 h-2 rounded-full bg-gray-400" title="MD-EN"></span>
+              <!-- File type dots (mobile + desktop) -->
+              <div class="flex items-center gap-1.5">
+                <span x-show="paper.formats.md_ko" class="w-2 h-2 rounded-full bg-purple-500"
+                      :class="paper.formats.md_ko_explained && 'ring-[1.5px] ring-amber-400'"
+                      :title="paper.formats.md_ko_explained ? 'MD-KO + Easy' : 'MD-KO'"></span>
+                <span x-show="paper.formats.md_en" class="w-2 h-2 rounded-full bg-gray-400"
+                      :class="paper.formats.md_en_explained && 'ring-[1.5px] ring-amber-400'"
+                      :title="paper.formats.md_en_explained ? 'MD-EN + Easy' : 'MD-EN'"></span>
                 <span x-show="paper.formats.pdf" class="w-2 h-2 rounded-full bg-blue-500" title="PDF"></span>
               </div>
               <span class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
@@ -599,64 +591,56 @@
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'">
           <!-- Main row -->
           <div class="flex items-center px-4 py-2.5">
-            <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="flex-1 min-w-0 flex items-center gap-4">
+            <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="flex-1 min-w-0 flex items-center gap-3 sm:gap-4">
               <div class="flex-1 min-w-0">
                 <h3 class="font-medium text-sm truncate transition-colors"
                     :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
                     x-text="($store.lang.ko && paper.title_ko) ? paper.title_ko : (paper.title || paper.name)"></h3>
                 <p x-show="paper.authors && paper.authors.length > 0"
-                   class="text-[10px] truncate transition-colors"
+                   class="hidden sm:block text-[10px] truncate transition-colors mt-0.5"
                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
                    x-text="paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : '')"></p>
               </div>
-              <div class="flex gap-1.5 items-center shrink-0">
+
+              <div class="flex items-center gap-1.5 shrink-0">
                 <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
-                  <span class="px-1.5 py-0.5 rounded text-xs sm:text-[10px] font-medium transition-colors"
+                  <span class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors"
                         :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
                         x-text="'#' + cat"></span>
                 </template>
-                <!-- Format indicators -->
-                <div class="flex items-center gap-1 ml-1">
-                  <!-- Mobile: Text badges -->
-                  <div class="flex sm:hidden gap-1">
-                    <span x-show="paper.formats.md_ko"
-                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700"
-                          :class="$store.darkMode.on && 'bg-purple-900/30 text-purple-400'">KO</span>
-                    <span x-show="paper.formats.md_en"
-                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600"
-                          :class="$store.darkMode.on && 'bg-gray-700/50 text-gray-400'">EN</span>
-                    <span x-show="paper.formats.pdf"
-                          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700"
-                          :class="$store.darkMode.on && 'bg-blue-900/30 text-blue-400'">PDF</span>
-                  </div>
-                  <!-- Desktop: Dots (sm:+) -->
-                  <div class="hidden sm:flex gap-1">
-                    <span x-show="paper.formats.md_ko" class="w-1.5 h-1.5 rounded-full bg-purple-500" title="MD-KO"></span>
-                    <span x-show="paper.formats.md_en" class="w-1.5 h-1.5 rounded-full bg-gray-400" title="MD-EN"></span>
-                    <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
-                  </div>
+
+                <!-- File type dots (mobile + desktop) -->
+                <div class="flex gap-1 ml-1">
+                  <span x-show="paper.formats.md_ko" class="w-1.5 h-1.5 rounded-full bg-purple-500"
+                        :class="paper.formats.md_ko_explained && 'ring-[1.5px] ring-amber-400'"
+                        :title="paper.formats.md_ko_explained ? 'MD-KO + Easy' : 'MD-KO'"></span>
+                  <span x-show="paper.formats.md_en" class="w-1.5 h-1.5 rounded-full bg-gray-400"
+                        :class="paper.formats.md_en_explained && 'ring-[1.5px] ring-amber-400'"
+                        :title="paper.formats.md_en_explained ? 'MD-EN + Easy' : 'MD-EN'"></span>
+                  <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
                 </div>
+
+                <span x-show="paper.publication_year" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors"
+                      :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
+                      x-text="paper.publication_year"></span>
+                <span x-show="paper.venue" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors"
+                      :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
+                      x-text="paper.venue"></span>
+                <span x-show="paperDateLabel(paper)" class="hidden sm:inline text-[10px] w-24 text-right transition-colors"
+                      :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                      x-text="paperDateLabel(paper)"></span>
+                <span class="hidden sm:inline text-[10px] transition-colors sm:w-12 sm:text-right"
+                      :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+                      x-text="paper.size_mb + ' MB'"></span>
               </div>
-              <span x-show="paper.publication_year" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
-                    :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
-                    x-text="paper.publication_year"></span>
-              <span x-show="paper.venue" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
-                    :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
-                    x-text="paper.venue"></span>
-              <span x-show="paperDateLabel(paper)" class="hidden sm:inline text-[10px] w-24 text-right shrink-0 transition-colors"
-                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
-                    x-text="paperDateLabel(paper)"></span>
-              <span class="text-[10px] w-12 text-right shrink-0 transition-colors"
-                    :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
-                    x-text="paper.size_mb + ' MB'"></span>
               <span x-show="getProgress(paper.name) > 0"
-                    class="text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 transition-colors"
+                    class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 transition-colors"
                     :class="getProgress(paper.name) >= 95
                       ? ($store.darkMode.on ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
                       : ($store.darkMode.on ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700')"
                     x-text="getProgress(paper.name) + '%'"></span>
               <!-- Star rating (hover-expand, list view) -->
-              <div class="flex items-center relative shrink-0" @click.prevent.stop>
+              <div class="hidden sm:flex items-center relative shrink-0" @click.prevent.stop>
                 <span x-show="getRating(paper.name) > 0 && hoverRatingPaper !== paper.name"
                       class="text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer transition-colors"
                       :class="$store.darkMode.on ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600'"
@@ -707,7 +691,7 @@
               </button>
               <!-- Enrich button (web search) -->
               <button x-show="!paper.venue && !paper.doi" @click.prevent="enrichPaper(paper)"
-                      class="p-2.5 sm:p-1 rounded transition"
+                      class="hidden sm:inline-flex p-2.5 sm:p-1 rounded transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-teal-400' : 'text-gray-400 hover:text-teal-600'"
                       :disabled="paper._enriching"
                       title="Enrich metadata via web search">
@@ -720,7 +704,7 @@
                 </svg>
               </button>
               <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
-                      class="p-2.5 sm:p-1 rounded transition"
+                      class="hidden sm:inline-flex p-2.5 sm:p-1 rounded transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400' : 'text-gray-400 hover:text-emerald-600'"
                       title="Archive">
                 <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -728,7 +712,7 @@
                 </svg>
               </button>
               <button x-show="tab === 'archived'" @click.prevent="confirmAction('restore', paper)"
-                      class="p-2.5 sm:p-1 rounded transition"
+                      class="hidden sm:inline-flex p-2.5 sm:p-1 rounded transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-indigo-400' : 'text-gray-400 hover:text-indigo-600'"
                       title="Restore">
                 <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -736,7 +720,7 @@
                 </svg>
               </button>
               <button @click.prevent="confirmAction('delete', paper)"
-                      class="p-2.5 sm:p-1 rounded transition"
+                      class="hidden sm:inline-flex p-2.5 sm:p-1 rounded transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-600'"
                       title="Delete">
                 <svg class="w-5 h-5 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

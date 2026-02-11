@@ -619,7 +619,7 @@
   </div>
 
   <!-- Mobile quick handle: show top bar when hidden -->
-  <button x-show="isMobile() && !topBarVisible"
+  <button x-show="isMobile() && !topBarVisible && view === 'pdf'"
           @click="toggleTopBarManual()"
           class="md:hidden fixed top-2 right-3 z-50 px-2 py-1 rounded-full text-xs font-semibold border shadow"
           :class="$store.darkMode.on ? 'bg-gray-800/90 text-gray-200 border-gray-600' : 'bg-white/90 text-gray-700 border-gray-300'"
