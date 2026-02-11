@@ -247,7 +247,7 @@ def build_rag_context(
     query: str,
     chunks: List[ChatChunk],
     history: List[ChatMessage],
-    max_chunks: int = 5,
+    max_chunks: int = 3,
     max_history: int = 2,
     web_results: list[dict] | None = None
 ) -> str:
@@ -334,10 +334,16 @@ async def generate_response_stream(
     system_prompt = """You are a helpful research assistant helping a user understand an academic paper.
 
 Your task:
-- Answer questions based on the provided paper excerpts and conversation history
-- Be concise, accurate, and cite specific sections when possible
-- Use clear, accessible language while maintaining technical accuracy
-- If the provided excerpts don't contain enough information to answer fully, acknowledge this and suggest what additional context might help"""
+- Answer using only the provided paper excerpts and conversation history
+- Be easy to understand and concise
+- Prefer simple Korean explanations over academic wording
+- If information is insufficient, say so briefly and ask one focused follow-up question
+
+Default response style (important):
+- Start with 1-2 sentence 핵심 요약
+- Then add at most 2-3 short bullet points
+- Keep total length short by default (about 3-6 sentences)
+- Expand only when the user explicitly asks for detail"""
 
     if has_web_context:
         system_prompt += """
@@ -352,9 +358,9 @@ Web search context:
 
 Guidelines:
 - Focus on the paper's content, not general knowledge
-- Quote or paraphrase from the excerpts when relevant
-- Maintain conversation context from previous exchanges
-- Be helpful and educational"""
+- Keep wording plain and short
+- Avoid long introductions, repetition, and over-explaining
+- Use bullet points only when they improve clarity"""
 
     try:
         client = AsyncOpenAI(base_url=base_url, api_key=api_key)
@@ -369,7 +375,7 @@ Guidelines:
             model=model,
             messages=messages,
             temperature=0.3,  # Low temperature for factual responses
-            max_tokens=2048,
+            max_tokens=900,
             stream=True
         )
 
