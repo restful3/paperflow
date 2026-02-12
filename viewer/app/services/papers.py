@@ -129,10 +129,13 @@ def list_papers(tab: str = "unread") -> list[dict]:
     if not base.exists():
         return []
 
+    last_read = get_all_last_read()
     papers = []
     for item in sorted(base.iterdir(), key=lambda p: p.name):
         if item.is_dir() and not item.name.startswith("."):
-            papers.append(_paper_info(item, location))
+            info = _paper_info(item, location)
+            info["last_read_at"] = last_read.get(item.name)
+            papers.append(info)
     return papers
 
 
@@ -141,7 +144,9 @@ def get_paper_info(name: str) -> dict | None:
     for base, loc in [(settings.outputs_dir, "outputs"), (settings.archives_dir, "archives")]:
         paper_dir = base / name
         if paper_dir.is_dir():
-            return _paper_info(paper_dir, loc)
+            info = _paper_info(paper_dir, loc)
+            info["last_read_at"] = get_all_last_read().get(name)
+            return info
     return None
 
 
@@ -320,6 +325,7 @@ def delete_paper(name: str) -> tuple[bool, str]:
     shutil.rmtree(str(paper_dir))
     delete_progress(name)
     delete_rating(name)
+    delete_last_read(name)
     return True, f"'{name}' deleted ({size:.1f} MB freed)."
 
 
@@ -629,6 +635,48 @@ def delete_progress(paper_name: str) -> None:
         del data[paper_name]
         try:
             with open(_progress_path(), "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+
+# ── Last Read Timestamp ───────────────────────────────────────────────────
+
+_LAST_READ_FILE = "paper_last_read.json"
+
+
+def _last_read_path() -> Path:
+    return settings.outputs_dir / _LAST_READ_FILE
+
+
+def get_all_last_read() -> dict[str, str]:
+    path = _last_read_path()
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+
+def touch_last_read(paper_name: str) -> bool:
+    data = get_all_last_read()
+    data[paper_name] = _dt.datetime.now().isoformat()
+    try:
+        with open(_last_read_path(), "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def delete_last_read(paper_name: str) -> None:
+    data = get_all_last_read()
+    if paper_name in data:
+        del data[paper_name]
+        try:
+            with open(_last_read_path(), "w", encoding="utf-8") as f:
                 _json.dump(data, f, ensure_ascii=False)
         except Exception:
             pass

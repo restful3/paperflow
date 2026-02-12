@@ -39,6 +39,8 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         return RedirectResponse("/login", status_code=302)
 
     name = unquote(paper_name)
+    # Mark as recently read when viewer opens
+    paper_svc.touch_last_read(name)
     info = paper_svc.get_paper_info(name)
 
     has_pdf = info["formats"]["pdf"] if info else False

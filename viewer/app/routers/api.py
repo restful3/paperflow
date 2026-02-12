@@ -366,6 +366,7 @@ async def save_paper_progress(
     if not isinstance(progress, (int, float)):
         raise HTTPException(status_code=400, detail="'progress' required")
     paper_svc.save_progress(name, int(progress))
+    paper_svc.touch_last_read(name)
     return {"ok": True}
 
 

@@ -241,6 +241,7 @@
                     @change="localStorage.setItem('pf-sort', sortBy)"
                     class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                     :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
+              <option value="last_read">Sort: Last Read</option>
               <option value="date">Sort: Date</option>
               <option value="name">Sort: Name</option>
               <option value="title">Sort: Title</option>
@@ -295,6 +296,7 @@
                 @change="localStorage.setItem('pf-sort', sortBy)"
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
+          <option value="last_read">Sort: Last Read</option>
           <option value="date">Sort: Date</option>
           <option value="name">Sort: Name</option>
           <option value="title">Sort: Title</option>
@@ -422,6 +424,7 @@
               </div>
               <span class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
               <span x-show="paperDateLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paperDateLabel(paper)"></span>
+              <span x-show="paperLastReadLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-cyan-400/80' : 'text-cyan-700'" x-text="'읽음 ' + paperLastReadLabel(paper)"></span>
             </div>
             <div class="flex items-center space-x-1">
               <!-- Star rating (hover-expand) -->
@@ -629,6 +632,9 @@
                 <span x-show="paperDateLabel(paper)" class="hidden sm:inline text-[10px] w-24 text-right transition-colors"
                       :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
                       x-text="paperDateLabel(paper)"></span>
+                <span x-show="paperLastReadLabel(paper)" class="hidden sm:inline text-[10px] w-36 text-right transition-colors"
+                      :class="$store.darkMode.on ? 'text-cyan-400/80' : 'text-cyan-700'"
+                      x-text="'읽음 ' + paperLastReadLabel(paper)"></span>
                 <span class="hidden sm:inline text-[10px] transition-colors sm:w-12 sm:text-right"
                       :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
                       x-text="paper.size_mb + ' MB'"></span>
@@ -1058,7 +1064,7 @@ function papersApp() {
     loading: true,
     stats: { unread: 0, archived: 0 },
     viewMode: localStorage.getItem('pf-view') || 'card',
-    sortBy: localStorage.getItem('pf-sort') || 'date',
+    sortBy: localStorage.getItem('pf-sort') || 'last_read',
     sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
     dupModal: { show: false, filename: '', size_mb: '', papers: [], resolve: null },
@@ -1204,8 +1210,24 @@ function papersApp() {
       } catch { return ''; }
     },
 
+    formatDateTime(isoStr) {
+      if (!isoStr) return '';
+      try {
+        const d = new Date(isoStr);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mi = String(d.getMinutes()).padStart(2, '0');
+        return `${d.getFullYear()}-${mm}-${dd} ${hh}:${mi}`;
+      } catch { return ''; }
+    },
+
     paperDateLabel(paper) {
       return this.formatDate(paper.extracted_at || paper.added_at);
+    },
+
+    paperLastReadLabel(paper) {
+      return this.formatDateTime(paper.last_read_at);
     },
 
     getProgress(paperName) {
@@ -1280,7 +1302,16 @@ function papersApp() {
       }
 
       const dir = this.sortOrder === 'asc' ? 1 : -1;
-      if (this.sortBy === 'date') {
+      if (this.sortBy === 'last_read') {
+        results = [...results].sort((a, b) => {
+          const da = a.last_read_at || '';
+          const db = b.last_read_at || '';
+          // unread(last_read 없음)은 항상 아래로
+          if (!da && db) return 1;
+          if (da && !db) return -1;
+          return dir * da.localeCompare(db);
+        });
+      } else if (this.sortBy === 'date') {
         results = [...results].sort((a, b) => {
           const da = a.extracted_at || a.added_at || '';
           const db = b.extracted_at || b.added_at || '';

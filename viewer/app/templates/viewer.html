@@ -177,7 +177,7 @@
 {% endblock %}
 
 {% block body %}
-<div x-data="viewerApp()" class="h-full flex flex-col overflow-hidden transition-colors duration-200">
+<div x-data="viewerApp()" class="h-full flex flex-col overflow-hidden transition-colors duration-200" :style="appViewportStyle()">
 
   <!-- Top bar -->
   <div class="h-auto md:h-auto shrink-0 px-3 md:px-4 py-2 md:py-3 shadow-sm border-b transition-colors duration-200
@@ -822,8 +822,8 @@
        x-show="(hasMdKo || hasMdEn) && !editMode"
        class="fixed z-40 transition-all duration-300"
        :class="[
-         isMobile()
-           ? (topBarVisible ? 'bottom-6 right-6' : 'bottom-20 right-6 opacity-0 pointer-events-none')
+         isCompactChat()
+           ? (topBarVisible ? 'bottom-5 right-5' : 'bottom-20 right-5 opacity-0 pointer-events-none')
            : 'bottom-6 right-6',
          chatPanelOpen && 'hidden'
        ]"
@@ -861,7 +861,8 @@
        aria-modal="true"
        aria-labelledby="chat-panel-title"
        class="fixed z-50 transition-all duration-300"
-       :class="isMobile() ? 'inset-0' : 'bottom-0 right-0 w-96 h-[600px] max-h-[80vh] rounded-tl-2xl shadow-2xl m-6 mr-24'"
+       :class="isPhone() ? 'left-3 right-3 bottom-3 h-[62dvh] max-h-[75dvh] rounded-2xl shadow-2xl' : (isTabletTouch() ? (isLandscape() ? 'top-20 right-4 bottom-4 w-[320px] rounded-2xl shadow-2xl' : 'left-4 right-4 bottom-4 h-[58dvh] max-h-[70dvh] rounded-2xl shadow-2xl') : 'bottom-0 right-0 w-96 h-[600px] max-h-[80vh] rounded-tl-2xl shadow-2xl m-6 mr-24')"
+       :style="panelStyle()"
        x-transition:enter="transition ease-out duration-300"
        x-transition:enter-start="opacity-0 translate-x-full"
        x-transition:enter-end="opacity-100 translate-x-0"
@@ -1010,7 +1011,7 @@
 
       <!-- Input area -->
       <div class="px-4 py-3 border-t shrink-0"
-           :class="$store.darkMode.on ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'">
+           :class="($store.darkMode.on ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white') + (isCompactChat() ? ' pb-[max(0.75rem,env(safe-area-inset-bottom))]' : '')">
         <form @submit.prevent="sendMessage()" class="flex gap-2">
           <input x-model="userInput"
                  type="text"
@@ -1131,6 +1132,8 @@ function viewerApp() {
     hasMdEnExplained: {{ 'true' if has_md_en_explained else 'false' }},
     explainedMode: false,
     location: '{{ location }}',
+    appViewportHeight: null,
+    _appVvHandler: null,
     pdfUrl: '/api/papers/' + name + '/pdf',
 
     get mobilePdfUrl() {
@@ -1318,6 +1321,14 @@ function viewerApp() {
       marked.setOptions({ renderer });
       this._resetSlugs = renderer._resetSlugs;
 
+      // Sync app container height with visual viewport (iPad keyboard gap fix)
+      this.updateAppViewportHeight();
+      this._appVvHandler = () => this.updateAppViewportHeight();
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', this._appVvHandler);
+        window.visualViewport.addEventListener('scroll', this._appVvHandler);
+      }
+
       // Restore explained mode preference
       if ((this.hasMdKoExplained || this.hasMdEnExplained) && localStorage.getItem('pf-explained') === 'true') {
         this.explainedMode = true;
@@ -1407,6 +1418,7 @@ function viewerApp() {
 
       // Handle window resize
       window.addEventListener('resize', () => {
+        this.updateAppViewportHeight();
         if (!this.isMobile()) {
           this.topBarVisible = true; // Always show on desktop
           this.detachScrollListener();
@@ -2207,6 +2219,19 @@ function viewerApp() {
       return window.innerWidth < 768; // Tailwind md: breakpoint
     },
 
+    updateAppViewportHeight() {
+      const vv = window.visualViewport;
+      this.appViewportHeight = Math.round(vv ? vv.height : window.innerHeight);
+    },
+
+    appViewportStyle() {
+      // iPad/iOS keyboard can leave stale layout gaps with pure 100vh-based containers.
+      // Use visualViewport height on touch devices to keep the app container in sync.
+      if (!window.matchMedia('(pointer: coarse)').matches) return '';
+      const h = this.appViewportHeight || window.innerHeight;
+      return `height:${h}px;`;
+    },
+
     // Helper: Close mobile hamburger menu
     closeMobileMenu() {
       const menuEl = document.querySelector('[x-data*="mobileMenuOpen"]');
@@ -2469,8 +2494,17 @@ function chatButton() {
       });
     },
 
-    isMobile() {
-      return window.innerWidth < 768;
+    isPhone() {
+      // iPad mini landscape(~744px)는 phone으로 보지 않음
+      return window.innerWidth < 700;
+    },
+
+    isCompactChat() {
+      return window.innerWidth <= 1024 && window.matchMedia('(pointer: coarse)').matches;
+    },
+
+    isTabletTouch() {
+      return window.innerWidth >= 768 && window.matchMedia('(pointer: coarse)').matches;
     },
 
     openChat() {
@@ -2495,6 +2529,8 @@ function chatPanel() {
     userInput: '',
     isStreaming: false,
     showSources: {},
+    keyboardInset: 0,
+    _vvHandler: null,
 
     async init() {
       window.addEventListener('open-chat-panel', () => {
@@ -2503,20 +2539,79 @@ function chatPanel() {
       await this.loadHistory();
     },
 
-    isMobile() {
-      return window.innerWidth < 768;
+    isPhone() {
+      // iPad mini landscape(~744px)는 phone으로 보지 않음
+      return window.innerWidth < 700;
+    },
+
+    isCompactChat() {
+      return window.innerWidth <= 1024 && window.matchMedia('(pointer: coarse)').matches;
+    },
+
+    isTabletTouch() {
+      return window.innerWidth >= 768 && window.matchMedia('(pointer: coarse)').matches;
+    },
+
+    isLandscape() {
+      return window.matchMedia('(orientation: landscape)').matches;
+    },
+
+    lockBackgroundScroll() {
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    },
+
+    unlockBackgroundScroll() {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    },
+
+    updateViewportInset() {
+      if (!this.isCompactChat()) {
+        this.keyboardInset = 0;
+        return;
+      }
+      const vv = window.visualViewport;
+      if (!vv) {
+        this.keyboardInset = 0;
+        return;
+      }
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      this.keyboardInset = inset;
+    },
+
+    panelStyle() {
+      // iPad/Safari keyboard fix:
+      // - keyboard closed: keep small floating margin (16px)
+      // - keyboard open: remove extra margin and sit directly above keyboard
+      if (!this.isCompactChat() || this.isPhone()) return '';
+      const bottomPx = this.keyboardInset > 0 ? this.keyboardInset : 16;
+      return `bottom: ${bottomPx}px;`;
     },
 
     openPanel() {
       this.chatPanelOpen = true;
       window.dispatchEvent(new CustomEvent('chat-panel-opened'));
 
-      // Ensure top bar visible on mobile
-      if (this.isMobile()) {
+      // Ensure top bar visible on compact touch layouts (phone/tablet)
+      if (this.isCompactChat()) {
         const viewerAppEl = document.querySelector('[x-data*="viewerApp"]');
         if (viewerAppEl && Alpine.$data(viewerAppEl)) {
           Alpine.$data(viewerAppEl).ensureTopBarVisible();
         }
+      }
+
+      // iPad Safari can leave viewport artifacts when toggling body scroll lock.
+      // Lock only on phone fullscreen mode.
+      if (this.isPhone()) {
+        this.lockBackgroundScroll();
+      }
+
+      this.updateViewportInset();
+      if (window.visualViewport) {
+        this._vvHandler = () => this.updateViewportInset();
+        window.visualViewport.addEventListener('resize', this._vvHandler);
+        window.visualViewport.addEventListener('scroll', this._vvHandler);
       }
 
       this.$nextTick(() => {
@@ -2528,6 +2623,15 @@ function chatPanel() {
 
     closeChat() {
       this.chatPanelOpen = false;
+      this.unlockBackgroundScroll();
+      if (window.visualViewport && this._vvHandler) {
+        window.visualViewport.removeEventListener('resize', this._vvHandler);
+        window.visualViewport.removeEventListener('scroll', this._vvHandler);
+        this._vvHandler = null;
+      }
+      this.keyboardInset = 0;
+      // Force viewport/layout recalculation after chat close (iPad Safari quirk)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
       window.dispatchEvent(new CustomEvent('chat-panel-closed'));
     },
 
