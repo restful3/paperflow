@@ -3,9 +3,137 @@ import json as _json
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
+from urllib.parse import quote, urlparse
+from urllib.request import Request, urlopen
 
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
+
+
+def _slugify_name(text: str, max_len: int = 80) -> str:
+    s = (text or "untitled").strip().lower()
+    s = re.sub(r"https?://", "", s)
+    s = re.sub(r"[^a-z0-9가-힣_-]+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return (s[:max_len] or "untitled")
+
+
+def _fetch_url_html(url: str, timeout: int = 20) -> str:
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
+    with urlopen(req, timeout=timeout) as resp:
+        data = resp.read()
+    return data.decode("utf-8", errors="ignore")
+
+
+def _extract_text_from_html(html: str, max_chars: int = 24000) -> str:
+    html = re.sub(r"<script[\s\S]*?</script>", " ", html, flags=re.I)
+    html = re.sub(r"<style[\s\S]*?</style>", " ", html, flags=re.I)
+    html = re.sub(r"<noscript[\s\S]*?</noscript>", " ", html, flags=re.I)
+    m = re.search(r"<(article|main)[^>]*>([\s\S]*?)</\1>", html, flags=re.I)
+    body = m.group(2) if m else html
+    text = re.sub(r"<[^>]+>", " ", body)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:max_chars]
+
+
+def _translate_text_ko(text: str, max_chars: int = 12000) -> str:
+    text = (text or "").strip()
+    if not text:
+        return ""
+    text = text[:max_chars]
+    out_parts: list[str] = []
+    chunk_size = 2200
+    for i in range(0, len(text), chunk_size):
+        chunk = text[i:i + chunk_size]
+        try:
+            tr_url = (
+                "https://translate.googleapis.com/translate_a/single"
+                f"?client=gtx&sl=auto&tl=ko&dt=t&q={quote(chunk)}"
+            )
+            req = Request(tr_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=10) as resp:
+                raw = resp.read().decode("utf-8", errors="ignore")
+            data = _json.loads(raw)
+            ko = "".join(seg[0] for seg in data[0] if seg and seg[0]).strip()
+            out_parts.append(ko)
+        except Exception:
+            out_parts.append(chunk)
+    return "\n\n".join(p for p in out_parts if p)
+
+
+def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, str | None]:
+    """Import a web URL by creating a PDF in newones/ queue.
+
+    Pipeline alignment:
+      URL -> PDF(newones) -> existing PaperFlow pipeline(main_terminal.py)
+      -> metadata extraction -> markdown -> ko translation.
+
+    Returns: (ok, message, queued_pdf_name)
+    """
+    if not url or not url.startswith(("http://", "https://")):
+        return False, "Invalid URL. Use http(s) URL.", None
+
+    host = (urlparse(url).netloc or "").lower()
+    if not host:
+        return False, "Invalid URL host.", None
+
+    # Soft precheck only: do not fail import if HTML extraction is weak.
+    # Some sites block simple fetch but still print fine in headless browser.
+    try:
+        html = _fetch_url_html(url)
+        text = _extract_text_from_html(html)
+        if len(text) < 120:
+            pass
+    except Exception:
+        pass
+
+    settings.newones_dir.mkdir(parents=True, exist_ok=True)
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = _slugify_name(title or host)
+    pdf_name = f"web-{slug}-{ts}.pdf"
+    pdf_path = settings.newones_dir / pdf_name
+
+    # Generate PDF via headless browser (chrome/chromium)
+    browser_bin = (
+        shutil.which("google-chrome")
+        or shutil.which("chromium")
+        or shutil.which("chromium-browser")
+    )
+    if not browser_bin:
+        return False, "No headless browser found (google-chrome/chromium).", None
+
+    cmd = [
+        browser_bin,
+        "--headless=new",
+        "--disable-gpu",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        f"--print-to-pdf={pdf_path}",
+        url,
+    ]
+
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        return False, "Headless browser executable missing.", None
+    except subprocess.TimeoutExpired:
+        return False, "PDF 생성 타임아웃(60s).", None
+    except subprocess.CalledProcessError as e:
+        err = (e.stderr or e.stdout or "").strip()
+        return False, f"PDF 생성 실패: {err[:200]}", None
+
+    if not pdf_path.exists() or pdf_path.stat().st_size < 1024:
+        return False, "PDF 생성 결과가 비정상입니다.", None
+
+    # Save source URL sidecar for traceability (existing pipeline can ignore safely)
+    sidecar = settings.newones_dir / f"{pdf_name}.url.txt"
+    try:
+        sidecar.write_text(url, encoding="utf-8")
+    except Exception:
+        pass
+
+    return True, f"URL queued as PDF: {pdf_name}", pdf_name
 
 from ..config import settings
 
@@ -147,6 +275,35 @@ def get_paper_info(name: str) -> dict | None:
             info = _paper_info(paper_dir, loc)
             info["last_read_at"] = get_all_last_read().get(name)
             return info
+    return None
+
+
+def find_processed_paper(original_filename: str | None = None, source_url: str | None = None) -> dict | None:
+    """Resolve a processed paper folder using original filename or source URL.
+
+    Returns dict: {name, location, viewer_path} or None
+    """
+    if not original_filename and not source_url:
+        return None
+
+    candidates: list[tuple[Path, str]] = []
+    for base, loc in [(settings.outputs_dir, "outputs"), (settings.archives_dir, "archives")]:
+        if not base.exists():
+            continue
+        for item in base.iterdir():
+            if item.is_dir() and not item.name.startswith("."):
+                candidates.append((item, loc))
+
+    # Prefer newest first
+    candidates.sort(key=lambda x: x[0].stat().st_mtime if x[0].exists() else 0, reverse=True)
+
+    for paper_dir, loc in candidates:
+        meta = _load_paper_metadata(paper_dir) or {}
+        if original_filename and meta.get("original_filename") == original_filename:
+            return {"name": paper_dir.name, "location": loc, "viewer_path": f"/viewer/{quote(paper_dir.name, safe='')}"}
+        if source_url and meta.get("paper_url") == source_url:
+            return {"name": paper_dir.name, "location": loc, "viewer_path": f"/viewer/{quote(paper_dir.name, safe='')}"}
+
     return None
 
 

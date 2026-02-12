@@ -93,6 +93,12 @@
   .markdown-container.dark .katex { color: #d1d5db; }
   .markdown-container img { max-width: 100%; height: auto; }
 
+  /* iOS Safari input auto-zoom prevention for chat input */
+  .chat-input-nozoom {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+  }
+
   /* TOC sidebar styles */
   .toc-sidebar {
     width: 240px;
@@ -1017,7 +1023,7 @@
                  type="text"
                  placeholder="Ask about this paper..."
                  :disabled="isStreaming"
-                 class="flex-1 px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                 class="chat-input-nozoom flex-1 px-4 py-2.5 rounded-lg md:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                  :class="$store.darkMode.on
                    ? 'bg-gray-900 border border-gray-700 text-gray-100 placeholder-gray-500'
                    : 'bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400'"
@@ -1328,6 +1334,14 @@ function viewerApp() {
         window.visualViewport.addEventListener('resize', this._appVvHandler);
         window.visualViewport.addEventListener('scroll', this._appVvHandler);
       }
+
+      // Allow URL override: ?lang=ko|en
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const forcedLang = (sp.get('lang') || '').toLowerCase();
+        if (forcedLang === 'ko' && this.$store?.lang) this.$store.lang.ko = true;
+        if (forcedLang === 'en' && this.$store?.lang) this.$store.lang.ko = false;
+      } catch (_) {}
 
       // Restore explained mode preference
       if ((this.hasMdKoExplained || this.hasMdEnExplained) && localStorage.getItem('pf-explained') === 'true') {
@@ -2221,7 +2235,13 @@ function viewerApp() {
 
     updateAppViewportHeight() {
       const vv = window.visualViewport;
-      this.appViewportHeight = Math.round(vv ? vv.height : window.innerHeight);
+      const newHeight = Math.round(vv ? vv.height : window.innerHeight);
+      const grew = this.appViewportHeight && newHeight > this.appViewportHeight;
+      this.appViewportHeight = newHeight;
+      // iPad Safari: keyboard dismiss can leave document scrolled → blank space
+      if (grew && window.scrollY > 0) {
+        window.scrollTo(0, 0);
+      }
     },
 
     appViewportStyle() {
@@ -2622,6 +2642,10 @@ function chatPanel() {
     },
 
     closeChat() {
+      // Blur input first to trigger keyboard dismiss before panel disappears
+      const activeEl = document.activeElement;
+      if (activeEl && this.$el.contains(activeEl)) activeEl.blur();
+
       this.chatPanelOpen = false;
       this.unlockBackgroundScroll();
       if (window.visualViewport && this._vvHandler) {
@@ -2630,8 +2654,9 @@ function chatPanel() {
         this._vvHandler = null;
       }
       this.keyboardInset = 0;
-      // Force viewport/layout recalculation after chat close (iPad Safari quirk)
-      setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
+      // iPad Safari: keyboard dismiss leaves document scrolled → blank space
+      window.scrollTo(0, 0);
+      setTimeout(() => { window.scrollTo(0, 0); window.dispatchEvent(new Event('resize')); }, 350);
       window.dispatchEvent(new CustomEvent('chat-panel-closed'));
     },
 

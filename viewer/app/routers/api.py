@@ -76,6 +76,19 @@ async def paper_info(name: str, _user: str = Depends(get_current_user_api)):
     return info
 
 
+@router.get("/papers/resolve")
+async def resolve_paper(
+    original_filename: str | None = None,
+    source_url: str | None = None,
+    _user: str = Depends(get_current_user_api),
+):
+    resolved = paper_svc.find_processed_paper(
+        original_filename=(original_filename.strip() if original_filename else None),
+        source_url=(source_url.strip() if source_url else None),
+    )
+    return {"ok": True, "found": bool(resolved), "item": resolved}
+
+
 @router.post("/papers/{name:path}/archive")
 async def archive_paper(name: str, _user: str = Depends(get_current_user_api)):
     name = unquote(name)
@@ -480,7 +493,20 @@ async def serve_asset(name: str, filename: str, _user: str = Depends(get_current
     return FileResponse(path, media_type=media_types.get(ext, "application/octet-stream"))
 
 
-# ── Upload ──────────────────────────────────────────────────────────────────
+# ── Upload / URL Import ─────────────────────────────────────────────────────
+
+class UrlImportRequest(BaseModel):
+    url: str
+    title: str | None = None
+
+
+@router.post("/import-url")
+async def import_url(payload: UrlImportRequest, _user: str = Depends(get_current_user_api)):
+    ok, msg, paper_name = paper_svc.import_url_as_paper(payload.url.strip(), payload.title)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"ok": True, "message": msg, "paper_name": paper_name}
+
 
 @router.post("/upload")
 async def upload_pdf(file: UploadFile = File(...), _user: str = Depends(get_current_user_api)):

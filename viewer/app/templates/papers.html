@@ -607,7 +607,7 @@
 
               <div class="flex items-center gap-1.5 shrink-0">
                 <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
-                  <span class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors"
+                  <span class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors max-w-[10rem] truncate"
                         :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
                         x-text="'#' + cat"></span>
                 </template>
@@ -623,28 +623,25 @@
                   <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
                 </div>
 
-                <span x-show="paper.publication_year" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors"
-                      :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
-                      x-text="paper.publication_year"></span>
-                <span x-show="paper.venue" class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors"
-                      :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
-                      x-text="paper.venue"></span>
-                <span x-show="paperDateLabel(paper)" class="hidden sm:inline text-[10px] w-24 text-right transition-colors"
-                      :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
-                      x-text="paperDateLabel(paper)"></span>
-                <span x-show="paperLastReadLabel(paper)" class="hidden sm:inline text-[10px] w-36 text-right transition-colors"
-                      :class="$store.darkMode.on ? 'text-cyan-400/80' : 'text-cyan-700'"
-                      x-text="'읽음 ' + paperLastReadLabel(paper)"></span>
-                <span class="hidden sm:inline text-[10px] transition-colors sm:w-12 sm:text-right"
+                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-[2.75rem] text-center"
+                      :class="[$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600', !paper.publication_year && 'invisible']"
+                      x-text="paper.publication_year || ''"></span>
+                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-16 text-center truncate"
+                      :class="[$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700', !paper.venue && 'invisible']"
+                      x-text="paper.venue || ''"></span>
+                <span class="hidden sm:inline text-[10px] w-24 text-right transition-colors tabular-nums"
+                      :class="[$store.darkMode.on ? 'text-gray-500' : 'text-gray-400', !paperDateLabel(paper) && 'invisible']"
+                      x-text="paperDateLabel(paper) || ''"></span>
+                <span class="hidden sm:inline text-[10px] w-12 text-right transition-colors"
                       :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
                       x-text="paper.size_mb + ' MB'"></span>
               </div>
-              <span x-show="getProgress(paper.name) > 0"
-                    class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 transition-colors"
-                    :class="getProgress(paper.name) >= 95
+              <span class="hidden sm:inline text-[10px] w-12 text-center px-1.5 py-0.5 rounded font-medium tabular-nums shrink-0 transition-colors"
+                    :class="[getProgress(paper.name) >= 95
                       ? ($store.darkMode.on ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
-                      : ($store.darkMode.on ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700')"
-                    x-text="getProgress(paper.name) + '%'"></span>
+                      : ($store.darkMode.on ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700'),
+                      getProgress(paper.name) <= 0 && 'invisible']"
+                    x-text="getProgress(paper.name) > 0 ? (getProgress(paper.name) + '%') : ''"></span>
               <!-- Star rating (hover-expand, list view) -->
               <div class="hidden sm:flex items-center relative shrink-0" @click.prevent.stop>
                 <span x-show="getRating(paper.name) > 0 && hoverRatingPaper !== paper.name"
@@ -830,6 +827,31 @@
                   <input type="file" accept=".pdf" multiple class="hidden" @change="handleFileSelect($event)">
                 </label>
               </div>
+            </div>
+          </div>
+
+          <!-- URL import (web page -> paper item) -->
+          <div class="rounded-xl border p-4 space-y-3 transition-colors"
+               :class="$store.darkMode.on ? 'border-gray-700 bg-gray-800/60' : 'border-gray-200 bg-white'">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-sm font-semibold" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-800'">Import from URL</h4>
+              <span class="text-xs" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">웹 URL → EN/KO Markdown</span>
+            </div>
+            <div class="grid grid-cols-1 gap-2">
+              <input type="url" x-model="urlImport.url" placeholder="https://example.com/article"
+                     class="rounded-lg border px-3 py-2 text-sm outline-none"
+                     :class="$store.darkMode.on ? 'bg-gray-900 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'" />
+            </div>
+            <div class="flex items-center justify-between">
+              <p class="text-xs" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">로그인/유료벽 페이지는 본문 추출이 제한될 수 있어요.</p>
+              <button @click="submitUrlImport()" :disabled="urlImport.loading || !urlImport.url"
+                      class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                <svg x-show="urlImport.loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <span x-text="urlImport.loading ? 'Importing...' : 'Import URL'"></span>
+              </button>
             </div>
           </div>
 
@@ -1083,6 +1105,7 @@ function papersApp() {
     // Upload & Processing state
     panel: { logOpen: false },
     panelDragOver: false,
+    urlImport: { url: '', loading: false },
     uploadQueue: [],
     processingFiles: [],
     processingInfo: {},
@@ -1564,6 +1587,35 @@ function papersApp() {
     removeFromQueue(idx) {
       if (this.uploadQueue[idx] && this.uploadQueue[idx].status === 'pending') {
         this.uploadQueue.splice(idx, 1);
+      }
+    },
+
+    async submitUrlImport() {
+      const url = (this.urlImport.url || '').trim();
+      if (!url) {
+        showToast('URL을 입력해줘.', 'warning');
+        return;
+      }
+      this.urlImport.loading = true;
+      try {
+        const resp = await apiFetch('/api/import-url', {
+          method: 'POST',
+          body: JSON.stringify({ url }),
+        });
+        if (resp && resp.ok) {
+          const data = await resp.json();
+          showToast(data.message || 'URL import complete');
+          this.urlImport.url = '';
+          await Promise.all([this.fetchPapers(), this.fetchStats()]);
+          this.tab = 'unread';
+        } else if (resp) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'URL import failed', 'error');
+        }
+      } catch (e) {
+        showToast('URL import failed', 'error');
+      } finally {
+        this.urlImport.loading = false;
       }
     },
 
