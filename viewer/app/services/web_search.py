@@ -6,6 +6,7 @@ Provides:
 """
 
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -84,17 +85,42 @@ def _extract_year(text: str) -> int | None:
     return Counter(years).most_common(1)[0][0]
 
 
-async def brave_search(query: str, count: int = 5) -> list[dict]:
-    """Search the web using Brave Search API.
+async def _firecrawl_search(query: str, count: int = 5) -> list[dict]:
+    """Firecrawl Search API wrapper.
 
-    Args:
-        query: Search query string.
-        count: Number of results to return (max 20).
-
-    Returns:
-        List of result dicts with keys: title, url, description.
-        Empty list if API key not configured or request fails.
+    Returns normalized list with keys: title, url, description.
     """
+    api_key = os.getenv("FIRECRAWL_API_KEY", "").strip()
+    if not api_key:
+        return []
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                "https://api.firecrawl.dev/v1/search",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"query": query, "limit": count},
+            )
+            resp.raise_for_status()
+            data = resp.json() if resp.content else {}
+
+        rows = data.get("data") or data.get("results") or []
+        results: list[dict] = []
+        for r in rows:
+            results.append({
+                "title": (r.get("title") or r.get("metadata", {}).get("title") or "").strip(),
+                "url": (r.get("url") or r.get("link") or "").strip(),
+                "description": (r.get("description") or r.get("snippet") or "").strip(),
+            })
+        return [r for r in results if r["url"]]
+    except Exception:
+        return []
+
+
+async def _brave_search(query: str, count: int = 5) -> list[dict]:
     api_key = settings.BRAVE_SEARCH_API_KEY
     if not api_key:
         return []
@@ -123,6 +149,17 @@ async def brave_search(query: str, count: int = 5) -> list[dict]:
         return results
     except Exception:
         return []
+
+
+async def brave_search(query: str, count: int = 5) -> list[dict]:
+    """Search wrapper used by PaperFlow.
+
+    Priority: Firecrawl -> Brave fallback.
+    """
+    results = await _firecrawl_search(query, count=count)
+    if results:
+        return results
+    return await _brave_search(query, count=count)
 
 
 async def enrich_paper_metadata(paper_name: str) -> dict:

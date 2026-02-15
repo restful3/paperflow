@@ -170,14 +170,14 @@ def search_chunks(
 # Patterns suggesting external information is needed (EN + KO)
 _EXTERNAL_PATTERNS = [
     re.compile(r'\b(compar|versus|vs\.?|differ)', re.I),
-    re.compile(r'\b(state.of.the.art|sota|recent|latest|current)', re.I),
+    re.compile(r'\b(state.of.the.art|sota|recent|latest|current|version)', re.I),
     re.compile(r'\b(related\s+work|prior\s+work|other\s+(papers?|methods?|approaches?))', re.I),
     re.compile(r'\b(benchmark|dataset|leaderboard)', re.I),
     re.compile(r'\b(implement(ation)?|code|github|repository)', re.I),
     re.compile(r'\b(who\s+(invented|proposed|created)|when\s+was)', re.I),
     re.compile(r'\b(cite|citation|impact)', re.I),
     re.compile(r'(비교|차이점|다른\s*(방법|논문|모델|접근))', re.I),
-    re.compile(r'(최신|최근|동향|트렌드)', re.I),
+    re.compile(r'(최신|최근|동향|트렌드|버전)', re.I),
     re.compile(r'(관련\s*연구|선행\s*연구|다른\s*연구)', re.I),
     re.compile(r'(코드|구현|깃허브|소스코드)', re.I),
     re.compile(r'(벤치마크|데이터셋|리더보드)', re.I),
@@ -334,33 +334,42 @@ async def generate_response_stream(
     system_prompt = """You are a helpful research assistant helping a user understand an academic paper.
 
 Your task:
-- Answer using only the provided paper excerpts and conversation history
 - Be easy to understand and concise
 - Prefer simple Korean explanations over academic wording
+- If the question is about this paper, prioritize paper excerpts
+- If the question is general/current-fact (e.g., versions, products, market examples), use web results when available
 - If information is insufficient, say so briefly and ask one focused follow-up question
 
 Default response style (important):
-- Start with 1-2 sentence 핵심 요약
-- Then add at most 2-3 short bullet points
-- Keep total length short by default (about 3-6 sentences)
+- Answer naturally in plain Korean without fixed headers/templates
+- Keep it concise by default (about 2-5 sentences)
+- Use bullets only when they improve clarity
 - Expand only when the user explicitly asks for detail"""
 
     if has_web_context:
         system_prompt += """
 
 Web search context:
-- Supplementary web search results are provided under "# Web Search Results (Supplementary)"
-- Always prioritize paper content over web results
-- When citing web sources, include the URL as a markdown link
-- Clearly distinguish between information from the paper and information from the web"""
+- Web search results are provided under "# Web Search Results (Supplementary)"
+- For paper-specific questions: prioritize paper content
+- For general/current-fact questions: prioritize web results and answer directly
+- When citing web sources, include the URL as a markdown link"""
 
     system_prompt += """
 
 Guidelines:
-- Focus on the paper's content, not general knowledge
+- Do not force the answer into paper-only mode when user asks a general/current-fact question
 - Keep wording plain and short
 - Avoid long introductions, repetition, and over-explaining
-- Use bullet points only when they improve clarity"""
+- Use bullet points only when they improve clarity
+- Never invent product names, versions, or specs. Only use facts explicitly present in context/web results
+- For each concrete claim (product/model/version), include a source link from provided web results
+- Render sources as clickable markdown hyperlinks: [출처](https://...)
+- If sources are weak/ambiguous, say "확인된 출처가 불충분" and ask for narrower scope
+- Do NOT claim tool/environment limitations such as "I can't browse" or "I cannot do real-time web search"
+- If information is missing, ask only ONE short follow-up question
+- Avoid stiff/meta phrases like "제공된 발췌", "웹 발췌 기준", "정보가 들어있지 않습니다"
+- Prefer conversational Korean (친구에게 설명하듯) over formal report tone"""
 
     try:
         client = AsyncOpenAI(base_url=base_url, api_key=api_key)

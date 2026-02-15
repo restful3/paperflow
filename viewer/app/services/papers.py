@@ -62,6 +62,18 @@ def _translate_text_ko(text: str, max_chars: int = 12000) -> str:
     return "\n\n".join(p for p in out_parts if p)
 
 
+def _extract_pdf_text_simple(pdf_path: Path, max_pages: int = 2) -> str:
+    try:
+        from PyPDF2 import PdfReader
+        reader = PdfReader(str(pdf_path))
+        parts: list[str] = []
+        for p in reader.pages[:max_pages]:
+            parts.append((p.extract_text() or "").strip())
+        return "\n".join(x for x in parts if x)
+    except Exception:
+        return ""
+
+
 def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, str | None]:
     """Import a web URL by creating a PDF in newones/ queue.
 
@@ -109,6 +121,7 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
         "--disable-gpu",
         "--no-sandbox",
         "--disable-dev-shm-usage",
+        "--virtual-time-budget=10000",
         f"--print-to-pdf={pdf_path}",
         url,
     ]
@@ -125,6 +138,18 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
 
     if not pdf_path.exists() or pdf_path.stat().st_size < 1024:
         return False, "PDF 생성 결과가 비정상입니다.", None
+
+    # Basic quality gate: prevent importing pages where print CSS captured only footer/cookie banner.
+    pdf_text = _extract_pdf_text_simple(pdf_path, max_pages=2)
+    norm = re.sub(r"\s+", " ", (pdf_text or "")).strip().lower()
+    weak_keywords = ["privacy policy", "notify me", "owner login", "terms", "copyright", "built for agents"]
+    weak_hit = sum(1 for k in weak_keywords if k in norm)
+    if len(norm) < 220 or weak_hit >= 3:
+        try:
+            pdf_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return False, "원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요.", None
 
     # Save source URL sidecar for traceability (existing pipeline can ignore safely)
     sidecar = settings.newones_dir / f"{pdf_name}.url.txt"
@@ -211,6 +236,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["venue"] = meta.get("venue")
         info["doi"] = meta.get("doi")
         info["paper_url"] = meta.get("paper_url")
+        info["source_url"] = meta.get("source_url_original") or meta.get("paper_url")
     else:
         info["title"] = None
         info["title_ko"] = None
@@ -224,6 +250,30 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["venue"] = None
         info["doi"] = None
         info["paper_url"] = None
+        info["source_url"] = None
+
+    # Sidecar fallback: if source_url still missing, check .url.txt in newones/
+    if not info.get("source_url") and info.get("original_filename"):
+        sidecar = settings.newones_dir / f"{info['original_filename']}.url.txt"
+        try:
+            if sidecar.is_file():
+                info["source_url"] = sidecar.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+
+    # Derive source_domain for display when venue is missing
+    src = info.get("source_url")
+    if src:
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(src).hostname or ""
+            if host.startswith("www."):
+                host = host[4:]
+            info["source_domain"] = host
+        except Exception:
+            info["source_domain"] = None
+    else:
+        info["source_domain"] = None
 
     # Check for chat history
     chat_history_file = paper_dir / "chat_history.json"
@@ -281,6 +331,9 @@ def get_paper_info(name: str) -> dict | None:
 def find_processed_paper(original_filename: str | None = None, source_url: str | None = None) -> dict | None:
     """Resolve a processed paper folder using original filename or source URL.
 
+    Also checks .url.txt sidecar files (created by import_url_as_paper) when
+    source_url is not yet in paper_meta.json.
+
     Returns dict: {name, location, viewer_path} or None
     """
     if not original_filename and not source_url:
@@ -300,11 +353,55 @@ def find_processed_paper(original_filename: str | None = None, source_url: str |
     for paper_dir, loc in candidates:
         meta = _load_paper_metadata(paper_dir) or {}
         if original_filename and meta.get("original_filename") == original_filename:
-            return {"name": paper_dir.name, "location": loc, "viewer_path": f"/viewer/{quote(paper_dir.name, safe='')}"}
-        if source_url and meta.get("paper_url") == source_url:
-            return {"name": paper_dir.name, "location": loc, "viewer_path": f"/viewer/{quote(paper_dir.name, safe='')}"}
+            return _resolve_result(paper_dir, loc)
+        if source_url and (
+            meta.get("paper_url") == source_url
+            or meta.get("source_url_original") == source_url
+        ):
+            return _resolve_result(paper_dir, loc)
+
+        # Fallback: check .url.txt sidecar next to the original PDF
+        if source_url and meta.get("original_filename"):
+            sidecar = settings.newones_dir / f"{meta['original_filename']}.url.txt"
+            try:
+                if sidecar.is_file() and sidecar.read_text(encoding="utf-8").strip() == source_url:
+                    # Backfill source_url_original into paper_meta.json for future lookups
+                    meta_path = paper_dir / "paper_meta.json"
+                    try:
+                        import json as _json
+                        meta["source_url_original"] = source_url
+                        meta_path.write_text(_json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+                    except Exception:
+                        pass
+                    return _resolve_result(paper_dir, loc)
+            except Exception:
+                pass
 
     return None
+
+
+def _resolve_result(paper_dir: Path, location: str) -> dict:
+    """Build resolve result with format availability info."""
+    formats: dict[str, bool] = {}
+    for f in paper_dir.iterdir():
+        if not f.is_file():
+            continue
+        if f.name.endswith(".pdf"):
+            formats["pdf"] = True
+        elif f.name.endswith("_ko_explained.md"):
+            formats["md_ko_explained"] = True
+        elif f.name.endswith("_explained.md"):
+            formats["md_en_explained"] = True
+        elif f.name.endswith("_ko.md"):
+            formats["md_ko"] = True
+        elif f.name.endswith(".md"):
+            formats["md_en"] = True
+    return {
+        "name": paper_dir.name,
+        "location": location,
+        "viewer_path": f"/viewer/{quote(paper_dir.name, safe='')}",
+        "formats": formats,
+    }
 
 
 def _resolve_paper_dir(name: str) -> Path | None:

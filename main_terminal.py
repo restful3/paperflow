@@ -888,8 +888,23 @@ def extract_paper_metadata(md_path, output_dir, config):
                 metadata["source_language"] = source_lang.lower().strip()[:5]
 
             # Add envelope fields
-            metadata["original_filename"] = os.path.basename(md_path).replace('.md', '.pdf')
+            original_filename = os.path.basename(md_path).replace('.md', '.pdf')
+            metadata["original_filename"] = original_filename
             metadata["extracted_at"] = datetime.now().isoformat()
+
+            # Preserve exact imported source URL when available (URL import sidecar)
+            # so dashboard Paperflow Open mapping can resolve deterministically.
+            try:
+                sidecar = os.path.join("newones", f"{original_filename}.url.txt")
+                if os.path.isfile(sidecar):
+                    with open(sidecar, "r", encoding="utf-8") as sf:
+                        src_url = sf.read().strip()
+                    if src_url.startswith(("http://", "https://")):
+                        metadata["source_url_original"] = src_url
+                        # prefer exact imported URL for dashboard resolve mapping
+                        metadata["paper_url"] = src_url
+            except Exception:
+                pass
 
             # Save paper_meta.json
             meta_path = os.path.join(output_dir, "paper_meta.json")
@@ -988,23 +1003,12 @@ def _extract_year_from_text(text):
 
 
 def enrich_metadata_with_web_search(metadata, output_dir, config):
-    """Enrich paper metadata using Brave Search API.
+    """Enrich paper metadata using web search.
 
-    Searches for the paper by title + first author, then extracts:
-    - publication_year (if not already set)
-    - venue (journal/conference name)
-    - doi
-    - paper_url (link to paper)
-
-    Updates paper_meta.json in-place and returns updated metadata.
+    Priority: Firecrawl Search API -> Brave Search API fallback.
     """
     import urllib.request
     import urllib.parse
-
-    api_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
-    if not api_key:
-        print_info("Web search enrichment skipped: BRAVE_SEARCH_API_KEY not set")
-        return metadata
 
     title = metadata.get("title")
     if not title:
@@ -1013,39 +1017,86 @@ def enrich_metadata_with_web_search(metadata, output_dir, config):
 
     # Build search query: "title" first_author
     authors = metadata.get("authors", [])
-    first_author = authors[0].split()[-1] if authors else ""  # last name
+    first_author = authors[0].split()[-1] if authors else ""
     query = f'"{title}"'
     if first_author:
         query += f" {first_author}"
 
-    print_info(f"Searching web for paper metadata...")
+    print_info("Searching web for paper metadata...")
+
+    def _normalize_results(rows):
+        out = []
+        for r in rows or []:
+            out.append({
+                "title": (r.get("title") or r.get("metadata", {}).get("title") or "").strip(),
+                "description": (r.get("description") or r.get("snippet") or "").strip(),
+                "url": (r.get("url") or r.get("link") or "").strip(),
+            })
+        return [x for x in out if x.get("url")]
+
+    web_results = []
+
+    # 1) Firecrawl first
+    firecrawl_key = os.getenv("FIRECRAWL_API_KEY", "").strip()
+    if firecrawl_key:
+        try:
+            req = urllib.request.Request(
+                "https://api.firecrawl.dev/v1/search",
+                data=json.dumps({"query": query, "limit": 5}).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {firecrawl_key}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read()
+                payload = json.loads(raw.decode("utf-8")) if raw else {}
+            rows = payload.get("data") or payload.get("results") or []
+            web_results = _normalize_results(rows)
+            if web_results:
+                print_success("Web search provider: Firecrawl")
+        except Exception as e:
+            print_warning(f"Firecrawl search failed, fallback to Brave: {e}")
+
+    # 2) Brave fallback
+    if not web_results:
+        brave_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
+        if not brave_key:
+            print_info("Web search enrichment skipped: FIRECRAWL_API_KEY/BRAVE_SEARCH_API_KEY not set")
+            return metadata
+        try:
+            params = urllib.parse.urlencode({
+                "q": query,
+                "count": 5,
+                "text_decorations": "false",
+            })
+            url = f"https://api.search.brave.com/res/v1/web/search?{params}"
+            req = urllib.request.Request(url, headers={
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "X-Subscription-Token": brave_key,
+            })
+
+            import gzip
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = resp.read()
+                if resp.headers.get("Content-Encoding") == "gzip":
+                    data = gzip.decompress(data)
+                results = json.loads(data.decode("utf-8"))
+            web_results = _normalize_results(results.get("web", {}).get("results", []))
+            if web_results:
+                print_success("Web search provider: Brave")
+        except Exception as e:
+            print_warning(f"Brave search failed: {e}")
+            web_results = []
+
+    if not web_results:
+        print_info("Web search returned no results")
+        return metadata
 
     try:
-        # Call Brave Search API
-        params = urllib.parse.urlencode({
-            "q": query,
-            "count": 5,
-            "text_decorations": "false",
-        })
-        url = f"https://api.search.brave.com/res/v1/web/search?{params}"
-        req = urllib.request.Request(url, headers={
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip",
-            "X-Subscription-Token": api_key,
-        })
-
-        import gzip
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = resp.read()
-            if resp.headers.get("Content-Encoding") == "gzip":
-                data = gzip.decompress(data)
-            results = json.loads(data.decode("utf-8"))
-
-        web_results = results.get("web", {}).get("results", [])
-        if not web_results:
-            print_info("Web search returned no results")
-            return metadata
-
         # Aggregate text from all results for pattern extraction
         all_text = ""
         first_url = None
@@ -1053,24 +1104,21 @@ def enrich_metadata_with_web_search(metadata, output_dir, config):
             all_text += f" {r.get('title', '')} {r.get('description', '')} {r.get('url', '')}"
             if not first_url:
                 rurl = r.get("url", "")
-                # Prefer academic URLs
                 if any(d in rurl for d in ["arxiv.org", "doi.org", "openreview.net",
                                             "semanticscholar.org", "ieee.org", "acm.org",
                                             "springer.com", "nature.com", "sciencedirect.com"]):
                     first_url = rurl
-            if not first_url:
-                first_url = web_results[0].get("url")
+        if not first_url and web_results:
+            first_url = web_results[0].get("url")
 
         enriched = {}
 
-        # Extract venue
         if not metadata.get("venue"):
             venue = _extract_venue_from_text(all_text, url=first_url)
             if venue:
                 enriched["venue"] = venue
                 print_success(f"  Venue: {venue}")
 
-        # Extract DOI
         if not metadata.get("doi"):
             doi_match = _DOI_RE.search(all_text)
             if doi_match:
@@ -1078,14 +1126,12 @@ def enrich_metadata_with_web_search(metadata, output_dir, config):
                 enriched["doi"] = doi
                 print_success(f"  DOI: {doi}")
 
-        # Extract publication year (only if AI didn't find it)
         if not metadata.get("publication_year"):
             year = _extract_year_from_text(all_text)
             if year:
                 enriched["publication_year"] = year
                 print_success(f"  Year: {year}")
 
-        # Paper URL
         if not metadata.get("paper_url") and first_url:
             enriched["paper_url"] = first_url
             print_success(f"  URL: {first_url}")
@@ -1093,8 +1139,6 @@ def enrich_metadata_with_web_search(metadata, output_dir, config):
         if enriched:
             enriched["web_enriched_at"] = datetime.now().isoformat()
             metadata.update(enriched)
-
-            # Save updated metadata
             meta_path = os.path.join(output_dir, "paper_meta.json")
             with open(meta_path, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
@@ -2257,6 +2301,7 @@ def process_single_pdf(pdf_path, config, prompt):
             "metadata": None,
             "translation": None,
         }
+        duplicate_found = False
 
         # Step 1: PDF to MD (conditional)
         md_path = None
@@ -2374,6 +2419,7 @@ def process_single_pdf(pdf_path, config, prompt):
             try:
                 duplicates = check_duplicate_batch(metadata, output_dir)
                 if duplicates:
+                    duplicate_found = True
                     for d in duplicates:
                         print_warning(f"Duplicate detected! Same title found in: {d['location']}/{d['folder']}")
                     print_warning("Skipping translation to save resources.")
@@ -2434,6 +2480,16 @@ def process_single_pdf(pdf_path, config, prompt):
             print_success(f"Moved: {pdf_name} → {output_dir}/")
         except Exception as e:
             print_warning(f"Failed to move PDF: {e}")
+
+        # If this run was identified as duplicate, remove intermediate output folder
+        # to prevent accumulating untranslated duplicate entries in PaperFlow list.
+        if duplicate_found:
+            try:
+                import shutil as _shutil
+                _shutil.rmtree(output_dir, ignore_errors=True)
+                print_info(f"Duplicate intermediate output removed: {output_dir}")
+            except Exception as e:
+                print_warning(f"Failed to cleanup duplicate output dir: {e}")
 
         # Print processing summary
         print()

@@ -210,14 +210,24 @@
             :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
             x-text="$store.lang.ko && '{{ paper_title_ko|default("", true)|e }}' ? '{{ paper_title_ko|default("", true)|e }}' : '{{ paper_title|default(paper_name, true)|e }}'">{{ paper_title or paper_name }}</h1>
 
-        <button @click="mobileMenuOpen = !mobileMenuOpen; ensureTopBarVisible()"
-                class="p-2 rounded-lg transition shrink-0"
-                :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'"
-                title="Menu">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
+        <div class="flex items-center gap-1 shrink-0">
+          <!-- Language toggle quick access (mobile) -->
+          <button @click="$store.lang.toggle(); ensureTopBarVisible()"
+                  class="px-2 py-1 rounded-md text-[11px] font-semibold border transition"
+                  :class="$store.darkMode.on ? 'text-gray-300 border-gray-600 hover:border-gray-400' : 'text-gray-600 border-gray-300 hover:border-gray-500'"
+                  :title="$store.lang.ko ? 'Switch to English' : 'Switch to Korean'"
+                  x-text="$store.lang.ko ? 'KO' : 'EN'">
+          </button>
+
+          <button @click="mobileMenuOpen = !mobileMenuOpen; ensureTopBarVisible()"
+                  class="p-2 rounded-lg transition"
+                  :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'"
+                  title="Menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Star rating + View mode tabs -->
@@ -291,15 +301,7 @@
           <span>TOC</span>
         </button>
 
-        <!-- Language Toggle -->
-        <button @click="$store.lang.toggle(); mobileMenuOpen = false"
-                class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
-                :class="$store.darkMode.on ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50'">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
-          </svg>
-          <span x-text="$store.lang.ko ? 'EN' : 'KO'">EN</span>
-        </button>
+        <!-- Language toggle moved to top row for one-tap mobile access -->
 
         <!-- Easy (explained) Toggle -->
         <button x-show="!editMode"
@@ -636,7 +638,10 @@
   <!-- Content area with TOC -->
   <div class="flex-1 overflow-hidden flex min-h-0
               max-md:viewer-content-mobile"
-       :class="topBarVisible && 'bar-visible'">
+       :class="topBarVisible && 'bar-visible'"
+       @touchstart.self.prevent
+       @touchmove.self.prevent>
+
 
     <!-- TOC Sidebar (desktop: inline, mobile: overlay) -->
     <!-- Mobile backdrop -->
@@ -1363,10 +1368,19 @@ function viewerApp() {
       this.$watch('$store.lang.ko', async (isKo) => {
         if (this.view !== 'md' && this.view !== 'split') return;
 
-        // Save scroll ratio (%) before content swap — absolute pixels don't match across languages
-        const container = document.querySelector('.markdown-container');
-        const scrollable = container ? (container.scrollHeight - container.clientHeight) : 0;
-        const ratio = (container && scrollable > 0) ? (container.scrollTop / scrollable) : 0;
+        // Save progress immediately before language swap (KO<->EN shared progress)
+        const beforeContainer = document.querySelector('.markdown-container');
+        const beforeScrollable = beforeContainer ? (beforeContainer.scrollHeight - beforeContainer.clientHeight) : 0;
+        const ratio = (beforeContainer && beforeScrollable > 0) ? (beforeContainer.scrollTop / beforeScrollable) : 0;
+        const beforeProgress = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+        localStorage.setItem(this._progressKey(), beforeProgress.toString());
+        this.refreshProgressStats();
+        if (!this.explainedMode) {
+          apiFetch(`/api/papers/${name}/progress`, {
+            method: 'POST',
+            body: JSON.stringify({ progress: beforeProgress })
+          }).catch(() => {});
+        }
 
         await this.loadMdForCurrentLang();
 
@@ -1378,11 +1392,22 @@ function viewerApp() {
         this.$nextTick(() => {
           this.extractTocItems();
           this.setupTocObserver();
-          // Restore scroll position by ratio
+          // Restore scroll position by ratio and sync progress immediately
           const c = document.querySelector('.markdown-container');
           if (c && ratio > 0) {
             const newScrollable = c.scrollHeight - c.clientHeight;
             c.scrollTop = ratio * newScrollable;
+          }
+          const afterScrollable = c ? (c.scrollHeight - c.clientHeight) : 0;
+          const afterRatio = (c && afterScrollable > 0) ? (c.scrollTop / afterScrollable) : 0;
+          const afterProgress = Math.round(Math.max(0, Math.min(1, afterRatio)) * 100);
+          localStorage.setItem(this._progressKey(), afterProgress.toString());
+          this.refreshProgressStats();
+          if (!this.explainedMode) {
+            apiFetch(`/api/papers/${name}/progress`, {
+              method: 'POST',
+              body: JSON.stringify({ progress: afterProgress })
+            }).catch(() => {});
           }
           this.setupScrollSave('md');
         });

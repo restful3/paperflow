@@ -241,14 +241,14 @@
                     @change="localStorage.setItem('pf-sort', sortBy)"
                     class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                     :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
-              <option value="last_read">Sort: Last Read</option>
-              <option value="date">Sort: Date</option>
-              <option value="name">Sort: Name</option>
-              <option value="title">Sort: Title</option>
-              <option value="year">Sort: Year</option>
-              <option value="size">Sort: Size</option>
-              <option value="progress">Sort: Progress</option>
-              <option value="rating">Sort: Rating</option>
+              <option value="last_read">Last Read</option>
+              <option value="date">Added</option>
+              <option value="name">Name</option>
+              <option value="title">Title</option>
+              <option value="year">Year</option>
+              <option value="size">Size</option>
+              <option value="progress">Progress</option>
+              <option value="rating">Rating</option>
             </select>
             <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
                     class="p-1.5 rounded-md transition"
@@ -296,12 +296,12 @@
                 @change="localStorage.setItem('pf-sort', sortBy)"
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
-          <option value="last_read">Sort: Last Read</option>
-          <option value="date">Sort: Date</option>
-          <option value="name">Sort: Name</option>
-          <option value="title">Sort: Title</option>
-          <option value="year">Sort: Year</option>
-          <option value="size">Sort: Size</option>
+          <option value="last_read">Last Read</option>
+          <option value="date">Added</option>
+          <option value="name">Name</option>
+          <option value="title">Title</option>
+          <option value="year">Year</option>
+          <option value="size">Size</option>
         </select>
         <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
                 class="p-2.5 rounded-md transition"
@@ -379,14 +379,14 @@
                 <span class="text-xs truncate"
                       x-text="paper.authors ? paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : '') : ''"></span>
               </div>
-              <span x-show="paper.publication_year"
+              <span x-show="paper.publication_year || paper.extracted_at"
                     class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
                     :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
-                    x-text="paper.publication_year"></span>
-              <span x-show="paper.venue"
+                    x-text="paper.publication_year || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
+              <span x-show="paper.venue || paper.source_domain"
                     class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
                     :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
-                    x-text="paper.venue"></span>
+                    x-text="paper.venue || paper.source_domain"></span>
             </div>
             <!-- Abstract snippet with blockquote style (3 lines) -->
             <div x-show="paper.abstract || paper.abstract_ko" class="mb-2.5 pl-2.5 border-l-2 transition-colors"
@@ -424,7 +424,7 @@
               </div>
               <span class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
               <span x-show="paperDateLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paperDateLabel(paper)"></span>
-              <span x-show="paperLastReadLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-cyan-400/80' : 'text-cyan-700'" x-text="'읽음 ' + paperLastReadLabel(paper)"></span>
+              <!-- read-time label removed by request -->
             </div>
             <div class="flex items-center space-x-1">
               <!-- Star rating (hover-expand) -->
@@ -561,14 +561,14 @@
               </div>
               <!-- External links -->
               <div class="flex items-center gap-3 flex-wrap"
-                   x-show="paper.doi || paper.paper_url">
-                <a x-show="paper.paper_url" :href="paper.paper_url" target="_blank" rel="noopener"
+                   x-show="paper.doi || paper.paper_url || paper.source_url">
+                <a x-show="paper.paper_url || paper.source_url" :href="paper.paper_url || paper.source_url" target="_blank" rel="noopener"
                    class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
                    :class="$store.darkMode.on ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
                   </svg>
-                  <span x-text="paper.paper_url && paper.paper_url.includes('arxiv') ? 'arXiv' : 'Source'"></span>
+                  <span x-text="(() => { const u = paper.paper_url || paper.source_url || ''; return u.includes('arxiv') ? 'arXiv' : (paper.source_domain || 'Source'); })()"></span>
                 </a>
                 <a x-show="paper.doi" :href="'https://doi.org/' + paper.doi" target="_blank" rel="noopener"
                    class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
@@ -623,12 +623,12 @@
                   <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
                 </div>
 
-                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-[2.75rem] text-center"
-                      :class="[$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600', !paper.publication_year && 'invisible']"
-                      x-text="paper.publication_year || ''"></span>
-                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-16 text-center truncate"
-                      :class="[$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700', !paper.venue && 'invisible']"
-                      x-text="paper.venue || ''"></span>
+                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-[5.5rem] text-center"
+                      :class="[$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600', !(paper.publication_year || paper.extracted_at) && 'invisible']"
+                      x-text="paper.publication_year || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
+                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-24 text-center truncate"
+                      :class="[$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700', !(paper.venue || paper.source_domain) && 'invisible']"
+                      x-text="paper.venue || paper.source_domain || ''"></span>
                 <span class="hidden sm:inline text-[10px] w-24 text-right transition-colors tabular-nums"
                       :class="[$store.darkMode.on ? 'text-gray-500' : 'text-gray-400', !paperDateLabel(paper) && 'invisible']"
                       x-text="paperDateLabel(paper) || ''"></span>
@@ -769,14 +769,14 @@
               </div>
               <!-- External links -->
               <div class="flex items-center gap-3 flex-wrap"
-                   x-show="paper.doi || paper.paper_url">
-                <a x-show="paper.paper_url" :href="paper.paper_url" target="_blank" rel="noopener"
+                   x-show="paper.doi || paper.paper_url || paper.source_url">
+                <a x-show="paper.paper_url || paper.source_url" :href="paper.paper_url || paper.source_url" target="_blank" rel="noopener"
                    class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
                    :class="$store.darkMode.on ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
                   </svg>
-                  <span x-text="paper.paper_url && paper.paper_url.includes('arxiv') ? 'arXiv' : 'Source'"></span>
+                  <span x-text="(() => { const u = paper.paper_url || paper.source_url || ''; return u.includes('arxiv') ? 'arXiv' : (paper.source_domain || 'Source'); })()"></span>
                 </a>
                 <a x-show="paper.doi" :href="'https://doi.org/' + paper.doi" target="_blank" rel="noopener"
                    class="inline-flex items-center gap-1 text-xs font-medium transition-colors"
@@ -1140,7 +1140,7 @@ function papersApp() {
         ? this.papers.filter(p => this.searchTags.every(tag => {
             if (tag.type === 'category') return p.categories && p.categories.includes(tag.text);
             if (tag.type === 'author') return p.authors && p.authors.includes(tag.text);
-            if (tag.type === 'venue') return p.venue === tag.text;
+            if (tag.type === 'venue') return (p.venue || p.source_domain) === tag.text;
             if (tag.type === 'year') return String(p.publication_year) === tag.text;
             return true;
           }))
@@ -1150,7 +1150,7 @@ function papersApp() {
       for (const p of tagFiltered) {
         if (p.categories) p.categories.forEach(c => { counts.cat[c] = (counts.cat[c] || 0) + 1; });
         if (p.authors) p.authors.forEach(a => { counts.author[a] = (counts.author[a] || 0) + 1; });
-        if (p.venue) counts.venue[p.venue] = (counts.venue[p.venue] || 0) + 1;
+        const v = p.venue || p.source_domain; if (v) counts.venue[v] = (counts.venue[v] || 0) + 1;
         if (p.publication_year) { const y = String(p.publication_year); counts.year[y] = (counts.year[y] || 0) + 1; }
       }
 
@@ -1303,7 +1303,7 @@ function papersApp() {
         results = results.filter(p => this.searchTags.every(tag => {
           if (tag.type === 'category') return p.categories && p.categories.includes(tag.text);
           if (tag.type === 'author') return p.authors && p.authors.includes(tag.text);
-          if (tag.type === 'venue') return p.venue === tag.text;
+          if (tag.type === 'venue') return (p.venue || p.source_domain) === tag.text;
           if (tag.type === 'year') return String(p.publication_year) === tag.text;
           return true;
         }));
@@ -1321,6 +1321,7 @@ function papersApp() {
           || (p.abstract_ko && p.abstract_ko.toLowerCase().includes(q))
           || (p.categories && p.categories.some(c => c.toLowerCase().includes(q)))
           || (p.venue && p.venue.toLowerCase().includes(q))
+          || (p.source_domain && p.source_domain.toLowerCase().includes(q))
         );
       }
 

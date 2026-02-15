@@ -187,7 +187,20 @@ async def chat_with_paper(
             web_results = []
             web_search_used = False
 
-            if rag_svc.should_web_search(request.message, top_score, len(relevant_chunks)):
+            msg_lower = request.message.lower()
+            force_web_search = any(k in msg_lower for k in [
+                "latest", "version", "최신", "버전", "웹검색", "웹 검색", "search", "찾아", "확인해"
+            ])
+            casual_chat = (len(msg_lower.strip()) <= 12) and any(k in msg_lower for k in ["안녕", "고마워", "thanks", "ㅎ", "ㅋㅋ"])
+            should_try_web = (not casual_chat) and (
+                force_web_search
+                or rag_svc.should_web_search(request.message, top_score, len(relevant_chunks))
+                or len(relevant_chunks) <= 2
+            )
+
+            print(f"[chat] should_try_web={should_try_web} force_web_search={force_web_search} top_score={top_score} relevant_chunks={len(relevant_chunks)}")
+
+            if should_try_web:
                 # Load paper title for search query context
                 paper_title = None
                 try:
@@ -201,12 +214,23 @@ async def chat_with_paper(
                 except Exception:
                     pass
 
-                search_query = rag_svc.build_web_search_query(request.message, paper_title)
+                # For general/current-fact questions, avoid injecting paper title into search query.
+                msg_lower2 = request.message.lower()
+                paper_scoped = any(k in msg_lower2 for k in ["이 논문", "본 논문", "paper", "해당 논문", "저자"])
+                search_query = (
+                    rag_svc.build_web_search_query(request.message, paper_title)
+                    if paper_scoped else request.message.strip()
+                )
 
                 try:
                     from ..services.web_search import brave_search
+                    print(f"[chat] web_search query={search_query}")
                     web_results = await brave_search(search_query, count=5)
+                    if not web_results and search_query != request.message:
+                        print("[chat] web_search retry with raw message")
+                        web_results = await brave_search(request.message, count=5)
                     web_search_used = bool(web_results)
+                    print(f"[chat] web_search_used={web_search_used} results={len(web_results)}")
                 except Exception:
                     web_results = []
 
