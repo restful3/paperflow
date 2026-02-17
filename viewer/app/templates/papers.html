@@ -943,7 +943,7 @@
                     <div class="w-full rounded-full h-2 overflow-hidden"
                          :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
                       <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500"
-                           :style="'width: ' + (pf.total_stages > 0 ? Math.round(pf.stage_num / pf.total_stages * 100) : 0) + '%'"></div>
+                           :style="'width: ' + (pf.total_stages > 0 ? Math.round(((pf.stage_num - 1) + (pf.sub_progress || 0)) / pf.total_stages * 100) : 0) + '%'"></div>
                     </div>
                     <p class="text-xs mt-1" :class="$store.darkMode.on ? 'text-indigo-400' : 'text-indigo-600'"
                        x-text="pf.stage_label + (pf.detail ? ' - ' + pf.detail : '') + ' (' + pf.stage_num + '/' + pf.total_stages + ')'"></p>

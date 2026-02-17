@@ -61,6 +61,13 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     paper_title = info.get("title") if info else None
     paper_title_ko = info.get("title_ko") if info else None
 
+    # Paper metadata for viewer info strip
+    paper_authors = info.get("authors", []) if info else []
+    paper_year = info.get("publication_year") if info else None
+    paper_venue = info.get("venue") if info else None
+    paper_doi = info.get("doi") if info else None
+    paper_url = info.get("paper_url") if info else None
+
     # Server-side reading progress (fallback when localStorage is empty)
     all_progress = paper_svc.get_all_progress()
     server_progress = all_progress.get(name, 0)
@@ -71,6 +78,11 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "paper_name_encoded": quote(name, safe=""),
         "paper_title": paper_title,
         "paper_title_ko": paper_title_ko,
+        "paper_authors": paper_authors,
+        "paper_year": paper_year,
+        "paper_venue": paper_venue,
+        "paper_doi": paper_doi,
+        "paper_url": paper_url,
         "has_pdf": has_pdf,
         "has_md_ko": has_md_ko,
         "has_md_en": has_md_en,

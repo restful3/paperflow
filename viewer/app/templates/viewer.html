@@ -387,18 +387,16 @@
           <span>Edit</span>
         </button>
 
-        <!-- PDF Download -->
-        <template x-if="hasPdf">
-          <a :href="pdfUrl" download
-             @click="mobileMenuOpen = false"
-             class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
-             :class="$store.darkMode.on ? 'bg-gray-600 text-blue-400 hover:bg-gray-500' : 'bg-white text-blue-600 hover:bg-blue-50'">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-            <span>PDF</span>
-          </a>
-        </template>
+        <!-- Download (dynamic: PDF / MD / Easy) -->
+        <a :href="downloadUrl" :download="downloadFilename"
+           @click="mobileMenuOpen = false"
+           class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
+           :class="$store.darkMode.on ? 'bg-gray-600 text-blue-400 hover:bg-gray-500' : 'bg-white text-blue-600 hover:bg-blue-50'">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <span x-text="downloadLabel"></span>
+        </a>
       </div>
     </div>
 
@@ -612,17 +610,15 @@
         </svg>
       </button>
 
-      <!-- PDF Download -->
-      <template x-if="hasPdf">
-        <a :href="pdfUrl" download
-           class="p-1.5 rounded-lg transition shrink-0"
-           :class="$store.darkMode.on ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'"
-           title="Download PDF">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-        </a>
-      </template>
+      <!-- Download (dynamic: PDF / MD / Easy) -->
+      <a :href="downloadUrl" :download="downloadFilename"
+         class="p-1.5 rounded-lg transition shrink-0"
+         :class="$store.darkMode.on ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'"
+         :title="'Download ' + downloadLabel">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+      </a>
     </div>
   </div>
 
@@ -1190,6 +1186,46 @@ function viewerApp() {
       } else {
         return this.hasMdEn ? this.mdEnContent : this.mdKoContent;
       }
+    },
+
+    get downloadUrl() {
+      if (this.view === 'pdf') return this.pdfUrl;
+      if (this.explainedMode) {
+        if (this.$store.lang.ko && this.hasMdKoExplained) return '/api/papers/' + name + '/md-ko-explained';
+        if (!this.$store.lang.ko && this.hasMdEnExplained) return '/api/papers/' + name + '/md-en-explained';
+      }
+      if (this.$store.lang.ko && this.hasMdKo) return this.mdKoUrl;
+      if (!this.$store.lang.ko && this.hasMdEn) return this.mdEnUrl;
+      if (this.hasMdKo) return this.mdKoUrl;
+      if (this.hasMdEn) return this.mdEnUrl;
+      return this.pdfUrl;
+    },
+
+    get downloadFilename() {
+      const p = decodeURIComponent(name);
+      if (this.view === 'pdf') return p + '.pdf';
+      if (this.explainedMode) {
+        if (this.$store.lang.ko && this.hasMdKoExplained) return p + '_ko_explained.md';
+        if (!this.$store.lang.ko && this.hasMdEnExplained) return p + '_explained.md';
+      }
+      if (this.$store.lang.ko && this.hasMdKo) return p + '_ko.md';
+      if (!this.$store.lang.ko && this.hasMdEn) return p + '.md';
+      if (this.hasMdKo) return p + '_ko.md';
+      if (this.hasMdEn) return p + '.md';
+      return p + '.pdf';
+    },
+
+    get downloadLabel() {
+      if (this.view === 'pdf') return 'PDF';
+      if (this.explainedMode) {
+        if (this.$store.lang.ko && this.hasMdKoExplained) return 'Easy (KO)';
+        if (!this.$store.lang.ko && this.hasMdEnExplained) return 'Easy (EN)';
+      }
+      if (this.$store.lang.ko && this.hasMdKo) return 'MD (KO)';
+      if (!this.$store.lang.ko && this.hasMdEn) return 'MD (EN)';
+      if (this.hasMdKo) return 'MD (KO)';
+      if (this.hasMdEn) return 'MD (EN)';
+      return 'PDF';
     },
 
     tocVisible: localStorage.getItem('pf-toc') !== 'hidden',

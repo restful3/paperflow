@@ -151,16 +151,41 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
             pass
         return False, "원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요.", None
 
-    # Save source URL sidecar for traceability (existing pipeline can ignore safely)
-    sidecar = settings.newones_dir / f"{pdf_name}.url.txt"
+    # Save source URL sidecar for traceability (.meta preferred path)
     try:
-        sidecar.write_text(url, encoding="utf-8")
+        _write_source_sidecar(pdf_name, url)
     except Exception:
         pass
 
     return True, f"URL queued as PDF: {pdf_name}", pdf_name
 
 from ..config import settings
+
+
+def _source_sidecar_candidates(filename: str) -> list[Path]:
+    """Return sidecar lookup order: new .meta path first, then legacy path."""
+    return [
+        settings.newones_meta_dir / f"{filename}.url.txt",
+        settings.newones_dir / f"{filename}.url.txt",
+    ]
+
+
+def _read_source_sidecar(filename: str) -> str | None:
+    for p in _source_sidecar_candidates(filename):
+        try:
+            if p.is_file():
+                v = p.read_text(encoding="utf-8").strip()
+                if v:
+                    return v
+        except Exception:
+            continue
+    return None
+
+
+def _write_source_sidecar(filename: str, url: str) -> None:
+    settings.newones_meta_dir.mkdir(parents=True, exist_ok=True)
+    p = settings.newones_meta_dir / f"{filename}.url.txt"
+    p.write_text(url, encoding="utf-8")
 
 
 def _dir_size_mb(path: Path) -> float:
@@ -252,12 +277,10 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["paper_url"] = None
         info["source_url"] = None
 
-    # Sidecar fallback: if source_url still missing, check .url.txt in newones/
+    # Sidecar fallback: if source_url still missing, check source sidecar in .meta then legacy path
     if not info.get("source_url") and info.get("original_filename"):
-        sidecar = settings.newones_dir / f"{info['original_filename']}.url.txt"
         try:
-            if sidecar.is_file():
-                info["source_url"] = sidecar.read_text(encoding="utf-8").strip()
+            info["source_url"] = _read_source_sidecar(info["original_filename"])
         except Exception:
             pass
 
@@ -360,11 +383,11 @@ def find_processed_paper(original_filename: str | None = None, source_url: str |
         ):
             return _resolve_result(paper_dir, loc)
 
-        # Fallback: check .url.txt sidecar next to the original PDF
+        # Fallback: check source sidecar (.meta first, legacy path fallback)
         if source_url and meta.get("original_filename"):
-            sidecar = settings.newones_dir / f"{meta['original_filename']}.url.txt"
             try:
-                if sidecar.is_file() and sidecar.read_text(encoding="utf-8").strip() == source_url:
+                sidecar_url = _read_source_sidecar(meta["original_filename"])
+                if sidecar_url == source_url:
                     # Backfill source_url_original into paper_meta.json for future lookups
                     meta_path = paper_dir / "paper_meta.json"
                     try:
@@ -805,6 +828,7 @@ def get_processing_status() -> dict:
                 entry["stage_num"] = processing.get("stage_num", 0)
                 entry["total_stages"] = processing.get("total_stages", 0)
                 entry["stage_label"] = processing.get("stage_label", "")
+                entry["sub_progress"] = processing.get("sub_progress") or 0
                 if processing.get("detail"):
                     entry["detail"] = processing["detail"]
                 if processing.get("error"):

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
         return Path(self.BASE_DIR) / "newones"
 
     @property
+    def newones_meta_dir(self) -> Path:
+        return self.newones_dir / ".meta"
+
+    @property
     def logs_dir(self) -> Path:
         return Path(self.BASE_DIR) / "logs"
 

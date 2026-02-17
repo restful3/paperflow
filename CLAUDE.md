@@ -44,7 +44,7 @@ cd viewer && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | 5 | Duplicate | `check_duplicate_batch()` | AI title comparison against existing papers |
 | 6 | Translation | `translate_md_to_korean_openai()` | 7-step pipeline, parallel (max 3 workers), quality verification |
 
-**Translation pipeline**: Split YAML → Clean OCR → Protect math/code → Classify sections (skip References/Appendix) → Translate with context (200 chars overlap) → Restore blocks → Verify quality
+**Translation pipeline**: Split YAML → Clean OCR (+ math OCR fix) → Protect code blocks (math NOT protected — LLM sees and fixes OCR artifacts) → Classify sections (skip References/Appendix) → Translate with context (200 chars overlap) → Restore blocks → Verify quality
 
 **GPU Memory**: After PDF→MD, must `del model; gc.collect(); torch.cuda.empty_cache()`. Each PDF runs in fresh process via `run_batch_watch.sh`.
 
@@ -227,6 +227,7 @@ JWT_SECRET_KEY                    # JWT signing
 8. **Folder naming**: Sanitized title max 80 chars, OS-forbidden chars removed, duplicates get `-2`, `-3` suffix
 9. **Edit backup**: `save_markdown()` creates `_backup_YYYYMMDD_HHMMSS.md` before overwrite, deletes `chat_chunks.json` for RAG cache invalidation
 10. **Explained mode scroll**: Uses separate localStorage key (`pf-scroll-{name}-{view}-{lang}-easy`) to avoid position conflicts
+11. **OCR math cleanup**: `clean_ocr_math()` fixes marker-pdf spacing artifacts (`\mathrm { A P I }` → `\mathrm{API}`). Applied to English `.md` after conversion AND before translation. Translation/explainer LLMs also instructed to fix OCR math via prompts (math is NOT protected from LLM — intentionally exposed so LLM can fix artifacts)
 
 ## Docker Services
 

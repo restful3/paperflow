@@ -86,7 +86,7 @@ def _count_active_stages(pipeline):
         count += 1
     return max(count, 1)
 
-def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None, detail=None):
+def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None, detail=None, sub_progress=None):
     """Write processing status to shared JSON file for viewer polling."""
     status = {
         "current_file": filename,
@@ -97,6 +97,7 @@ def write_processing_status(filename, stage, stage_num, total_stages, stage_labe
         "updated_at": datetime.now().isoformat(),
         "error": error,
         "detail": detail,
+        "sub_progress": sub_progress,
     }
     status_path = os.path.join("logs", "processing_status.json")
     try:
@@ -174,7 +175,7 @@ def load_config():
 
 def load_prompt():
     """Load prompt.md or return default translation prompt"""
-    default_prompt = """You are a professional academic translator. Translate the given English Markdown text into Korean.
+    default_prompt = """You are a professional academic translator specializing in English-to-Korean translation. Translate the given Markdown text into natural, fluent Korean.
 
 **Critical - Completeness:**
 - Translate EVERY sentence completely. Do NOT skip, omit, summarize, or condense any content.
@@ -185,25 +186,49 @@ def load_prompt():
 - If the text begins mid-sentence (a continuation), translate it starting from exactly where it begins — do NOT prepend any title or heading.
 - Never replace content with "..." or "(이하 생략)" or similar.
 - Translate figure/table captions and footnotes fully.
+- Skip web boilerplate (cookie notices, privacy banners, navigation menus, sidebar links) — leave them untranslated as-is.
 
 **Core Rules:**
 - Use formal Korean academic writing style (합니다체).
 - **Strictly preserve all Markdown structure**: headers (#, ##, ###), bold/italics, lists, tables, links, image references.
-- **Preserve all mathematical equations** ($...$, $$...$$, LaTeX) exactly as-is. Do NOT modify or convert any math notation.
+- **Preserve all mathematical equations** ($...$, $$...$$, LaTeX) — keep the math notation intact but **fix OCR artifacts**:
+  - Remove excessive spaces in LaTeX commands: `\\mathrm { A P I }` → `\\mathrm{API}`, `\\mathbf { e }` → `\\mathbf{e}`
+  - Fix spaced subscripts/superscripts: `a _ { c }` → `a_{c}`, `x ^ { 2 }` → `x^{2}`
+  - Fix spaced environments: `\\begin{array} { c }` → `\\begin{array}{c}`
+  - Replace `\\mathrm{min}`, `\\mathrm{max}`, `\\mathrm{log}` etc. with standard LaTeX operators `\\min`, `\\max`, `\\log`
+  - Fix bare angle brackets used as delimiters in math: `< \\mathrm{API} >` → `\\langle \\mathrm{API} \\rangle`
+  - Do NOT change the mathematical meaning — only fix spacing and OCR noise.
 - **Preserve all code blocks** (```...```) exactly as-is.
 - **Preserve all citations** ([1], (Smith et al., 2023), <sup>1</sup>) unchanged.
 - Translate table cell text only; preserve all table delimiters (|, ---).
 - Fix incorrect table syntax during translation if needed.
 
-**Terminology:**
-- On first occurrence of a technical term, use format: 한국어 번역 (English term)
-  - Example: 머신러닝 (machine learning), 신경망 (neural network)
-- After first occurrence, use the Korean term consistently.
-- Keep widely-used English terms as-is: API, GPU, CPU, CUDA, REST, HTTP, JSON, etc.
+**Terminology - Parenthetical Glossing Rules:**
+- On FIRST occurrence only of a specialized/unfamiliar term, use: 한국어 (English)
+  - Example: 미세조정 (fine-tuning), 환각 (hallucination)
+- After the first occurrence, use the Korean term ONLY — do NOT repeat the English in parentheses.
+- NEVER gloss common terms that Korean tech readers already know. Use them directly without parentheses:
+  아키텍처, 프레임워크, 파이프라인, 워크플로, 모듈, 인터페이스, 알고리즘, 데이터셋, 벤치마크, 서버, 클라이언트, 배포, 인스턴스, 플랫폼, 프로토콜, API, GPU, CPU, CUDA, REST, HTTP, JSON, LLM, Transformer
+- Use consistent Korean translations throughout — pick ONE translation and stick with it:
+  - fine-tuning → 미세조정 (not 파인튜닝)
+  - baseline → 기준선 (not 베이스라인)
+  - workflow → 워크플로 (not 워크플로우)
+  - perplexity → 퍼플렉시티
+  - hallucination → 환각
+  - inference → 추론
+  - embedding → 임베딩
+  - training → 학습
+  - reasoning trace → 추론 과정
 
-**Style:**
-- Prefer natural, contextual Korean over literal translation.
-- Output ONLY the translated Korean text. No explanations, comments, or original English.
+**Style - Natural Korean:**
+- Translate English idioms into natural Korean equivalents, NOT literally:
+  - "light years ahead" → "한참 앞서" (NOT "수광년 앞서")
+  - "every fiber of my being" → "온 마음을 다해" (NOT "존재의 모든 섬유로")
+  - "best of both worlds" → "양쪽 장점을 모두 취하여"
+  - "poached by X" → "X에 스카우트되어"
+- In academic papers, always use "우리" for "we" (NOT "저희" — 저희 is overly humble for academic writing).
+- Output ONLY Korean and English. You MUST NOT output any other language (Hindi, Chinese, Japanese, etc.). If unsure of a term, keep the English original rather than guessing in another language.
+- Output ONLY the translated Korean text. No explanations, comments, or meta-text.
 - If input is already Korean, pass through unchanged.
 
 Translate the following Markdown text into Korean:"""
@@ -895,14 +920,21 @@ def extract_paper_metadata(md_path, output_dir, config):
             # Preserve exact imported source URL when available (URL import sidecar)
             # so dashboard Paperflow Open mapping can resolve deterministically.
             try:
-                sidecar = os.path.join("newones", f"{original_filename}.url.txt")
-                if os.path.isfile(sidecar):
-                    with open(sidecar, "r", encoding="utf-8") as sf:
-                        src_url = sf.read().strip()
-                    if src_url.startswith(("http://", "https://")):
-                        metadata["source_url_original"] = src_url
-                        # prefer exact imported URL for dashboard resolve mapping
-                        metadata["paper_url"] = src_url
+                sidecar_candidates = [
+                    os.path.join("newones", ".meta", f"{original_filename}.url.txt"),
+                    os.path.join("newones", f"{original_filename}.url.txt"),  # legacy fallback
+                ]
+                src_url = None
+                for sidecar in sidecar_candidates:
+                    if os.path.isfile(sidecar):
+                        with open(sidecar, "r", encoding="utf-8") as sf:
+                            src_url = sf.read().strip()
+                        if src_url:
+                            break
+                if src_url and src_url.startswith(("http://", "https://")):
+                    metadata["source_url_original"] = src_url
+                    # prefer exact imported URL for dashboard resolve mapping
+                    metadata["paper_url"] = src_url
             except Exception:
                 pass
 
@@ -1298,7 +1330,7 @@ def rename_output_directory(old_output_dir, new_folder_name, original_base_name)
 
 ##############################################################################
 # Translation Pipeline
-# MD → [YAML분리] → [OCR정리] → [섹션분류] → [수식보호] → [번역] → [복원/결합]
+# MD → [YAML분리] → [OCR정리] → [코드보호] → [섹션분류] → [번역(수식OCR정리포함)] → [복원/결합]
 ##############################################################################
 
 def split_yaml_and_body(content):
@@ -1348,6 +1380,77 @@ def clean_ocr_artifacts(text):
     # Use [^\n]* instead of .*? with DOTALL to prevent catastrophic backtracking
     text = re.sub(
         r'```\n((?:[^\n]*<sup>[^\n]*</sup>[^\n]*\n)+)```',
+        r'\1',
+        text
+    )
+
+    return text
+
+
+def clean_ocr_math(text):
+    """Clean common OCR math formula artifacts from marker-pdf output.
+
+    Fixes excessive spacing in LaTeX commands that marker-pdf introduces:
+    - \\mathrm { A P I } → \\mathrm{API}
+    - \\begin{array} { c } → \\begin{array}{c}
+    - a _ { c } → a_{c}
+    - \\mathrm { m i n } → \\min
+    """
+    import re
+
+    # 1. Fix spaced-out single characters in text-mode commands:
+    #    \mathrm { A P I } → \mathrm{API}
+    #    \mathbf { e } → \mathbf{e}
+    #    \mathtt { A P I } → \mathtt{API}
+    #    \text { s o m e } → \text{some}
+    def _collapse_spaced_chars(m):
+        cmd = m.group(1)  # e.g., "mathrm", "mathbf"
+        inner = m.group(2)  # e.g., "A P I" or "e"
+        collapsed = inner.replace(' ', '')
+        return f'\\{cmd}{{{collapsed}}}'
+
+    text = re.sub(
+        r'\\(mathrm|mathbf|mathtt|mathcal|mathbb|mathfrak|text|textbf|textit|tt|bf|it)\s*\{\s*'
+        r'((?:[A-Za-z0-9]\s+)*[A-Za-z0-9])\s*\}',
+        _collapse_spaced_chars,
+        text
+    )
+
+    # 2. Fix known math operators misrendered as \mathrm{...}:
+    #    \mathrm{min} → \min, \mathrm{max} → \max, etc.
+    _MATH_OPS = {
+        'min': '\\min', 'max': '\\max', 'log': '\\log', 'exp': '\\exp',
+        'sin': '\\sin', 'cos': '\\cos', 'tan': '\\tan',
+        'lim': '\\lim', 'sup': '\\sup', 'inf': '\\inf',
+        'arg': '\\arg', 'det': '\\det', 'dim': '\\dim',
+        'gcd': '\\gcd', 'deg': '\\deg', 'ker': '\\ker',
+    }
+    for word, replacement in _MATH_OPS.items():
+        text = re.sub(
+            rf'\\mathrm\{{{word}\}}',
+            lambda _, r=replacement: r,
+            text
+        )
+
+    # 3. Fix spaced subscript/superscript braces:
+    #    a _ { c } → a_{c}
+    #    x ^ { 2 } → x^{2}
+    text = re.sub(
+        r'([A-Za-z0-9\}\\])\s*([_^])\s*\{\s*([^}]*?)\s*\}',
+        lambda m: f'{m.group(1)}{m.group(2)}{{{m.group(3).strip()}}}',
+        text
+    )
+
+    # 4. Fix \begin{env} { args } → \begin{env}{args}
+    text = re.sub(
+        r'(\\begin\{[^}]+\})\s*\{\s*([^}]*?)\s*\}',
+        lambda m: f'{m.group(1)}{{{m.group(2).strip()}}}',
+        text
+    )
+
+    # 5. Fix \end{env} } → \end{env}  (trailing stray braces)
+    text = re.sub(
+        r'(\\end\{[^}]+\})\s*\}',
         r'\1',
         text
     )
@@ -1500,7 +1603,10 @@ def normalize_heading_levels(text):
 
 
 def protect_special_blocks(text):
-    """Replace code blocks and math with placeholders before translation.
+    """Replace code blocks with placeholders before translation.
+
+    Math expressions ($...$, $$...$$) are NOT protected — they are sent to the
+    LLM so it can fix OCR artifacts while preserving the formulas.
 
     Returns:
         (protected_text, placeholders_dict)
@@ -1522,19 +1628,9 @@ def protect_special_blocks(text):
         text
     )
 
-    # Display math ($$...$$)
-    text = re.sub(
-        r'\$\$[\s\S]*?\$\$',
-        lambda m: _replace(m, 'MATH_BLOCK'),
-        text
-    )
-
-    # Inline math ($...$) - avoid matching dollar signs in text
-    text = re.sub(
-        r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)',
-        lambda m: _replace(m, 'INLINE_MATH'),
-        text
-    )
+    # Math is intentionally NOT protected:
+    # LLM sees math expressions and can fix OCR artifacts like
+    # \mathrm { A P I } → \mathrm{API}, a _ { c } → a_{c}
 
     return text, placeholders
 
@@ -1739,6 +1835,23 @@ def _verify_translation(source_text, translated_text):
         prose_chars = len(re.sub(r'\s+', '', prose_text))
         if prose_chars > 200 and korean_chars < prose_chars * 0.05:
             return False, f"no Korean detected ({korean_chars} Korean chars in {prose_chars} prose chars)"
+
+    # Check for foreign language contamination (non-Korean, non-English, non-math)
+    # Detect Hindi (Devanagari), Chinese, Japanese (Hiragana/Katakana), Arabic, Thai, etc.
+    foreign_chars = re.findall(
+        r'[\u0900-\u097F'   # Devanagari (Hindi)
+        r'\u0600-\u06FF'    # Arabic
+        r'\u0E00-\u0E7F'    # Thai
+        r'\u3040-\u309F'    # Hiragana (Japanese)
+        r'\u30A0-\u30FF'    # Katakana (Japanese)
+        r'\u4E00-\u9FFF'    # CJK (Chinese) - only flag if no Korean context
+        r']', translated_text
+    )
+    if len(foreign_chars) >= 3:
+        # CJK chars are OK if they appear in Korean context (e.g., 漢字 in academic Korean)
+        non_cjk_foreign = [c for c in foreign_chars if not ('\u4E00' <= c <= '\u9FFF')]
+        if len(non_cjk_foreign) >= 3:
+            return False, f"foreign language detected ({len(non_cjk_foreign)} non-Korean/English chars)"
 
     return True, "ok"
 
@@ -2017,7 +2130,7 @@ async def _translate_chunks_parallel(client, model, system_prompt, chunks,
 def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, progress_callback=None):
     """Translate English markdown to Korean using OpenAI-compatible API.
 
-    Pipeline: YAML分離 → OCR정리 → 수식보호 → 섹션분류 → 번역 → 복원/결합
+    Pipeline: YAML分離 → OCR정리 → 코드보호 → 섹션분류 → 번역(수식OCR정리포함) → 복원/결합
 
     Returns:
         Path to Korean markdown file (*_ko.md) or None on failure
@@ -2059,15 +2172,16 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
 
         # Step 2: Clean OCR artifacts
         body = clean_ocr_artifacts(body)
-        print_success("OCR artifacts cleaned")
+        body = clean_ocr_math(body)
+        print_success("OCR artifacts cleaned (including math)")
 
         # Save body before protection for spurious heading detection later
         body_before_protection = body
 
-        # Step 3: Protect code blocks and math
+        # Step 3: Protect code blocks (math is left for LLM to fix OCR artifacts)
         body, placeholders = protect_special_blocks(body)
         if placeholders:
-            print_info(f"Protected {len(placeholders)} special block(s) (code/math)")
+            print_info(f"Protected {len(placeholders)} code block(s)")
 
         # Step 4: Classify sections
         sections = classify_sections(body)
@@ -2351,6 +2465,21 @@ def process_single_pdf(pdf_path, config, prompt):
             except Exception as e:
                 print_warning(f"Heading normalization skipped: {e}")
 
+        # Step 1.2: Clean OCR math artifacts in English markdown
+        if md_path and os.path.exists(md_path):
+            try:
+                with open(md_path, 'r', encoding='utf-8') as f:
+                    md_content = f.read()
+                cleaned = clean_ocr_math(md_content)
+                if cleaned != md_content:
+                    with open(md_path, 'w', encoding='utf-8') as f:
+                        f.write(cleaned)
+                    print_success("OCR math artifacts cleaned in English markdown")
+                else:
+                    print_info("No OCR math artifacts found")
+            except Exception as e:
+                print_warning(f"OCR math cleanup skipped: {e}")
+
         # Step 1.5: Extract metadata and optionally rename folder
         if pipeline.get("extract_metadata", False) and md_path and os.path.exists(md_path):
             current_stage += 1
@@ -2448,7 +2577,8 @@ def process_single_pdf(pdf_path, config, prompt):
                 def _translation_progress(sec_idx, sec_total, pct):
                     write_processing_status(
                         pdf_name, "translating", _trans_stage, _trans_total,
-                        f"Translating to Korean ({sec_idx}/{sec_total}, {pct:.0f}%)"
+                        f"Translating to Korean ({sec_idx}/{sec_total}, {pct:.0f}%)",
+                        sub_progress=pct / 100.0
                     )
 
                 try:

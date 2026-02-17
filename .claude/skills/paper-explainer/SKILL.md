@@ -30,6 +30,18 @@ Use this skill when:
 - Process the entire paper automatically
 - For long sections, automatically split into subsection-level chunks
 
+### Interactive Reliability Mode (TUI 운영 안정화)
+When running in Claude Code TUI with permission prompts:
+- For file-write confirmation prompts, prefer **"Yes, allow all edits during this session"**.
+- For read/search confirmation prompts in the same target folder, prefer **"Yes, allow reading from <target folder> during this session"**.
+- Avoid repeated micro-confirmation loops.
+
+Quality-first rule:
+- Do **not** force early Write only because `Actioning…` / `Actualizing…` / `Blanching…` appears.
+- In TUI runs, treat long thinking as normal; allow at least **30 minutes** of uninterrupted reasoning/writing time before judging a stall.
+- Allow sufficient reasoning time for full rewrite quality.
+- Use forced Write fallback only when there is clear hard stall (no substantive progress) **after** the 30-minute minimum window, then continue quality pass after write.
+
 ### Section-safe Mode
 - Automatically enters this mode when:
   - Very long documents (estimated 30+ pages)
@@ -484,17 +496,19 @@ When the input is specified as a URL/title/file:
 
 ### Batch Mode (important)
 When the user does **NOT specify a target** and says "논문 해설판 만들어줘":
-1. Recursively scan `/home/restful3/workspace/paperflow/outputs` subdirectories
-2. Find `*_ko.md` files, excluding those that already have a `*_ko_explained.md` in the same path
-3. Confirm the remaining files as generation targets
-4. If 2 or more files: **must delegate to sub-agents** for processing
-5. Per-file rules:
-   - No output exists → generate
-   - Output exists but source is newer → regenerate
-   - Otherwise → skip
-6. Return summary statistics:
-   - scanned / generated / regenerated / skipped / failed
-   - Failed items include file path + failure reason
+1. Recursively scan **both** `/home/restful3/workspace/paperflow/outputs` **and** `/home/restful3/workspace/paperflow/archives` subdirectories.
+2. Build candidates that are missing `*_ko_explained.md`.
+3. **Select only one target per run**: the most recently updated source file among missing candidates.
+4. Source preference per target:
+   - Prefer `*_ko.md` when available in the same paper directory.
+   - Fallback to English `*.md` (excluding `*_ko_explained.md`, `*_backup_*.md`).
+5. Process the selected file in the main interactive agent (TUI/write prompts expected).
+6. Return concise summary for this single target:
+   - selected path / generated-or-skipped / output path / failure reason(if any)
+
+Rationale:
+- Keep runs predictable and stable.
+- Align with daily incremental operation (one latest missing paper at a time).
 
 ## Completion Report
 
