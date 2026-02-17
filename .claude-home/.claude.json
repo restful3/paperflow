@@ -1,0 +1,54 @@
+{
+  "cachedGrowthBookFeatures": {
+    "tengu_mcp_tool_search": true,
+    "tengu_scratch": false,
+    "tengu_disable_bypass_permissions_mode": false,
+    "tengu_1p_event_batch_config": {
+      "scheduledDelayMillis": 5000,
+      "maxExportBatchSize": 200,
+      "maxQueueSize": 8192
+    },
+    "tengu_event_sampling_config": {},
+    "tengu_log_segment_events": false,
+    "tengu_log_datadog_events": true,
+    "tengu_marble_anvil": true,
+    "tengu_tool_pear": false,
+    "tengu_scarf_coffee": false,
+    "tengu_keybinding_customization_release": true,
+    "tengu_penguins_enabled": true,
+    "tengu_thinkback": false,
+    "tengu_chomp_inflection": true
+  },
+  "firstStartTime": "2026-02-16T08:40:54.200Z",
+  "userID": "ff2b79cf944863b444ba6757f01fe07e2206b9f82f540db627fde8dcc607cc70",
+  "opusProMigrationComplete": true,
+  "cachedChromeExtensionInstalled": false,
+  "changelogLastFetched": 1771231307478,
+  "oauthAccount": {
+    "accountUuid": "4b6622b6-2f71-4d79-b445-a820ea61ceb9",
+    "emailAddress": "restful3@gmail.com",
+    "organizationUuid": "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3",
+    "hasExtraUsageEnabled": true,
+    "billingType": "stripe_subscription",
+    "accountCreatedAt": "2024-05-03T06:07:33.817217Z",
+    "subscriptionCreatedAt": "2024-07-02T11:15:00.901134Z",
+    "displayName": "Taeyoung"
+  },
+  "clientDataCache": {
+    "data": {},
+    "timestamp": 1771231307809
+  },
+  "passesEligibilityCache": {
+    "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3": {
+      "eligible": true,
+      "referral_code_details": {
+        "code": "xj4eDRXGzw",
+        "campaign": "claude_code_guest_pass",
+        "referral_link": "https://claude.ai/referral/xj4eDRXGzw"
+      },
+      "referrer_reward": null,
+      "remaining_passes": 3,
+      "timestamp": 1771231308832
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{"debug":"Starting connection with timeout of 30000ms","timestamp":"2026-02-16T08:55:46.738Z","sessionId":"c4066733-ee8b-4380-bd7d-8b6083c2fe46","cwd":"/workspace"}
+{"debug":"Successfully connected to undefined server in 729ms","timestamp":"2026-02-16T08:55:47.467Z","sessionId":"c4066733-ee8b-4380-bd7d-8b6083c2fe46","cwd":"/workspace"}
+{"debug":"Connection established with capabilities: {\"hasTools\":true,\"hasPrompts\":false,\"hasResources\":false,\"serverVersion\":{\"name\":\"Playwright\",\"version\":\"0.0.68\"}}","timestamp":"2026-02-16T08:55:47.467Z","sessionId":"c4066733-ee8b-4380-bd7d-8b6083c2fe46","cwd":"/workspace"}
+{"debug":"UNKNOWN connection closed after 6s (cleanly)","timestamp":"2026-02-16T08:55:53.673Z","sessionId":"c4066733-ee8b-4380-bd7d-8b6083c2fe46","cwd":"/workspace"}
+{"debug":"Cleared connection cache for reconnection","timestamp":"2026-02-16T08:55:53.673Z","sessionId":"c4066733-ee8b-4380-bd7d-8b6083c2fe46","cwd":"/workspace"}

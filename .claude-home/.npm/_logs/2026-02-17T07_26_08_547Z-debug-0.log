@@ -1,0 +1,16 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@10.8.2
+2 info using node@v20.20.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/workspace/project/.claude-home/.npmrc
+5 silly config load:file:/usr/local/etc/npmrc
+6 verbose title npm config get prefix
+7 verbose argv "--global" "config" "get" "prefix"
+8 verbose logfile logs-max:10 dir:/workspace/project/.claude-home/.npm/_logs/2026-02-17T07_26_08_547Z-
+9 verbose logfile /workspace/project/.claude-home/.npm/_logs/2026-02-17T07_26_08_547Z-debug-0.log
+10 verbose cwd /workspace/project/.claude-home
+11 verbose os Linux 6.8.0-41-generic
+12 verbose node v20.20.0
+13 verbose npm  v10.8.2
+14 verbose exit 0
+15 info ok

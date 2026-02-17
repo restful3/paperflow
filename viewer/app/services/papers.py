@@ -258,6 +258,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["original_filename"] = meta.get("original_filename")
         info["extracted_at"] = meta.get("extracted_at")
         info["publication_year"] = meta.get("publication_year")
+        info["doc_type"] = meta.get("doc_type")
         info["venue"] = meta.get("venue")
         info["doi"] = meta.get("doi")
         info["paper_url"] = meta.get("paper_url")
@@ -272,6 +273,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["original_filename"] = None
         info["extracted_at"] = None
         info["publication_year"] = None
+        info["doc_type"] = None
         info["venue"] = None
         info["doi"] = None
         info["paper_url"] = None

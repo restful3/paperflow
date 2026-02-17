@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "n8n-mcp": "^2.35.2"
+  }
+}

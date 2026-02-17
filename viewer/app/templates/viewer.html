@@ -210,6 +210,13 @@
             :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
             x-text="$store.lang.ko && '{{ paper_title_ko|default("", true)|e }}' ? '{{ paper_title_ko|default("", true)|e }}' : '{{ paper_title|default(paper_name, true)|e }}'">{{ paper_title or paper_name }}</h1>
 
+        {% if paper_doc_type and paper_doc_type != 'other' %}
+        <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide shrink-0 transition-colors border"
+              :class="$store.darkMode.on
+                ? '{{ {"paper": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30", "report": "bg-purple-500/15 text-purple-400 border-purple-500/30", "blog": "bg-green-500/15 text-green-400 border-green-500/30", "news": "bg-rose-500/15 text-rose-400 border-rose-500/30", "essay": "bg-orange-500/15 text-orange-400 border-orange-500/30"}.get(paper_doc_type, "") }}'
+                : '{{ {"paper": "bg-indigo-50 text-indigo-600 border-indigo-200", "report": "bg-purple-50 text-purple-600 border-purple-200", "blog": "bg-green-50 text-green-600 border-green-200", "news": "bg-rose-50 text-rose-600 border-rose-200", "essay": "bg-orange-50 text-orange-600 border-orange-200"}.get(paper_doc_type, "") }}'">{{ paper_doc_type }}</span>
+        {% endif %}
+
         <div class="flex items-center gap-1 shrink-0">
           <!-- Language toggle quick access (mobile) -->
           <button @click="$store.lang.toggle(); ensureTopBarVisible()"
@@ -415,6 +422,14 @@
       <h1 class="flex-1 text-sm font-semibold truncate min-w-0"
           :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
           x-text="$store.lang.ko && '{{ paper_title_ko|default("", true)|e }}' ? '{{ paper_title_ko|default("", true)|e }}' : '{{ paper_title|default(paper_name, true)|e }}'">{{ paper_title or paper_name }}</h1>
+
+      {% if paper_doc_type and paper_doc_type != 'other' %}
+      <!-- Doc type badge -->
+      <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide shrink-0 transition-colors border"
+            :class="$store.darkMode.on
+              ? '{{ {"paper": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30", "report": "bg-purple-500/15 text-purple-400 border-purple-500/30", "blog": "bg-green-500/15 text-green-400 border-green-500/30", "news": "bg-rose-500/15 text-rose-400 border-rose-500/30", "essay": "bg-orange-500/15 text-orange-400 border-orange-500/30"}.get(paper_doc_type, "") }}'
+              : '{{ {"paper": "bg-indigo-50 text-indigo-600 border-indigo-200", "report": "bg-purple-50 text-purple-600 border-purple-200", "blog": "bg-green-50 text-green-600 border-green-200", "news": "bg-rose-50 text-rose-600 border-rose-200", "essay": "bg-orange-50 text-orange-600 border-orange-200"}.get(paper_doc_type, "") }}'">{{ paper_doc_type }}</span>
+      {% endif %}
 
       <!-- Star rating -->
       <div class="flex items-center gap-0 shrink-0" @mouseleave="hoverStar = 0">

@@ -1,0 +1,3 @@
+{"debug":"Starting connection with timeout of 30000ms","timestamp":"2026-02-17T02:25:15.517Z","sessionId":"7a559759-2bcb-45b5-91db-b05baa766c2b","cwd":"/workspace/project"}
+{"debug":"Connection failed after 299ms: spawn quantconnect-mcp ENOENT","timestamp":"2026-02-17T02:25:15.811Z","sessionId":"7a559759-2bcb-45b5-91db-b05baa766c2b","cwd":"/workspace/project"}
+{"error":"Connection failed: spawn quantconnect-mcp ENOENT","timestamp":"2026-02-17T02:25:15.811Z","sessionId":"7a559759-2bcb-45b5-91db-b05baa766c2b","cwd":"/workspace/project"}

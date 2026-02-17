@@ -1,0 +1,2145 @@
+{
+  "numStartups": 309,
+  "installMethod": "native",
+  "autoUpdates": false,
+  "tipsHistory": {
+    "new-user-warmup": 1,
+    "ide-hotkey": 131,
+    "shift-enter": 306,
+    "theme-command": 305,
+    "prompt-queue": 25,
+    "enter-to-steer-in-relatime": 305,
+    "todo-list": 308,
+    "# for memory": 185,
+    "install-github-app": 300,
+    "permissions": 302,
+    "drag-and-drop-images": 294,
+    "double-esc": 102,
+    "continue": 303,
+    "custom-commands": 300,
+    "shift-tab": 303,
+    "custom-agents": 300,
+    "git-worktrees": 306,
+    "status-line": 294,
+    "ide-upsell-external-terminal": 306,
+    "image-paste": 300,
+    "plan-mode-for-complex-tasks": 245,
+    "double-esc-code-restore": 302,
+    "tab-toggle-thinking": 177,
+    "ultrathink-keyword": 190,
+    "stickers-command": 187,
+    "default-permission-mode-config": 306,
+    "colorterm-truecolor": 308,
+    "rename-conversation": 306,
+    "config-thinking-mode": 190,
+    "guest-passes": 306,
+    "install-slack-app": 306,
+    "web-app": 300,
+    "mobile-app": 306,
+    "btw-side-question": 193,
+    "agent-flag": 300,
+    "frontend-design-plugin": 306,
+    "overage-promo": 306
+  },
+  "memoryUsageCount": 3,
+  "promptQueueUseCount": 101,
+  "autoConnectIde": true,
+  "cachedStatsigGates": {
+    "tengu_disable_bypass_permissions_mode": false,
+    "tengu_use_file_checkpoints": true,
+    "tengu_tool_pear": false,
+    "tengu_migrate_ignore_patterns": true,
+    "tengu_halloween": false,
+    "tengu_glob_with_rg": false,
+    "tengu_web_tasks": true,
+    "tengu_vscode_review_upsell": false,
+    "tengu_log_1p_events": true,
+    "tengu_enable_versioned_plugins": false,
+    "code_slack_app_install_banner": false,
+    "tengu_c4w_usage_limit_notifications_enabled": true,
+    "tengu_thinkback": false,
+    "tengu_sumi": true,
+    "tengu_react_vulnerability_warning": false,
+    "tengu_backstage_only": false,
+    "tengu_tool_result_persistence": false,
+    "tengu_prompt_suggestion": true,
+    "tengu_ant_attribution_header_new": true,
+    "tengu_year_end_2025_campaign_promo": false,
+    "tengu_streaming_tool_execution2": false,
+    "tengu_vscode_onboarding": false,
+    "tengu_session_memory": false
+  },
+  "cachedDynamicConfigs": {
+    "tengu_1p_event_batch_config": {
+      "scheduledDelayMillis": 5000,
+      "maxExportBatchSize": 200,
+      "maxQueueSize": 8192
+    },
+    "tengu-top-of-feed-tip": {
+      "tip": "",
+      "color": ""
+    }
+  },
+  "cachedGrowthBookFeatures": {
+    "strawberry_granite_flag": "N/A",
+    "persimmon_marble_flag": "N/A",
+    "tengu_accept_with_feedback": false,
+    "tengu_mcp_tool_search": true,
+    "tengu_disable_bypass_permissions_mode": false,
+    "tengu_tool_pear": false,
+    "tengu_c4w_usage_limit_notifications_enabled": true,
+    "tengu_thinkback": false,
+    "tengu_sumi": true,
+    "tengu_react_vulnerability_warning": false,
+    "tengu_ant_attribution_header_new": true,
+    "tengu_1p_event_batch_config": {
+      "scheduledDelayMillis": 5000,
+      "maxExportBatchSize": 200,
+      "maxQueueSize": 8192
+    },
+    "tengu_pid_based_version_locking": true,
+    "tengu_event_sampling_config": {},
+    "tengu_tool_search_unsupported_models": [
+      "haiku"
+    ],
+    "tengu_scratch": false,
+    "tengu_log_segment_events": false,
+    "tengu_log_datadog_events": true,
+    "tengu_streaming_tool_execution2": true,
+    "tengu_vscode_review_upsell": false,
+    "tengu_vscode_onboarding": false,
+    "tengu-top-of-feed-tip": {
+      "tip": "",
+      "color": ""
+    },
+    "tengu_post_compact_survey": false,
+    "tengu_opus_default_pro_plan": false,
+    "enhanced_telemetry_beta": false,
+    "tengu_brass_pebble": false,
+    "tengu_claudeai_mcp_connectors": true,
+    "tengu_keybinding_customization": false,
+    "tengu_attribution_header": true,
+    "tengu_cache_plum_violet": true,
+    "tengu_bash_haiku_prefetch": true,
+    "tengu_code_diff_cli": true,
+    "tengu_compact_streaming_retry": false,
+    "tengu_session_memory": false,
+    "tengu_plank_river_frost": "user_intent",
+    "tengu_permission_explainer": true,
+    "tengu_plan_mode_interview_phase": false,
+    "tengu_scarf_coffee": false,
+    "tengu_keybinding_customization_release": true,
+    "tengu_marble_kite": false,
+    "tengu_kv7_prompt_sort": false,
+    "tengu_pr_status_cli": true,
+    "tengu_file_write_optimization": false,
+    "tengu_sm_compact": false,
+    "tengu_compact_cache_prefix": true,
+    "tengu_marble_anvil": true,
+    "tengu_coral_fern": false,
+    "tengu_tst_kx7": false,
+    "tengu_system_prompt_global_cache": true,
+    "tengu_workout": false,
+    "tengu_cork_m4q": true,
+    "tengu_quiet_fern": true,
+    "tengu_oboe": true,
+    "tengu_tst_names_in_messages": false,
+    "tengu_vinteuil_phrase": true,
+    "tengu_chomp_inflection": true,
+    "tengu_copper_lantern": true,
+    "tengu_marble_lantern_disabled": false,
+    "tengu_workout2": true,
+    "tengu_plum_vx3": true,
+    "tengu_silver_lantern": true,
+    "tengu_copper_lantern_config": {
+      "meridian": "2026-02-05T07:59:00Z"
+    },
+    "tengu_penguins_enabled": true,
+    "tengu_penguins_off": null,
+    "tengu_mcp_elicitation": false,
+    "tengu_snippet_save": true,
+    "tengu_bergotte_lantern": false,
+    "tengu_fgts": false,
+    "tengu_mulberry_fog": false,
+    "tengu_prompt_cache_1h_config": {
+      "allowlist": [
+        "repl_main_thread*",
+        "sdk"
+      ]
+    },
+    "tengu_amber_prism": false,
+    "tengu_disable_streaming_to_non_streaming_fallback": false,
+    "tengu_immediate_model_command": false,
+    "tengu_penguin_mode_promo": {
+      "discountPercent": 50,
+      "endDate": "Feb 16"
+    },
+    "tengu_birthday_hat": false,
+    "tengu_chrome_auto_enable": false
+  },
+  "hasSeenStashHint": true,
+  "firstStartTime": "2025-07-28T23:58:03.916Z",
+  "userID": "c656f67b788677bb8604567c9131650086bbfe91761ded35ab3307a7fa8afbea",
+  "projects": {
+    "/home/restful3": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "context7": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@upstash/context7-mcp"
+          ],
+          "env": {}
+        },
+        "2-geonhyup-dart-mcp": {
+          "type": "http",
+          "url": "https://server.smithery.ai/@2geonhyup/dart-mcp/mcp"
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "disabledMcpServers": [
+        "its-dart-dart-mcp-server"
+      ],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastAPIDurationWithoutRetries": 0,
+      "lastToolDuration": 0,
+      "lastDuration": 142734,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastModelUsage": {},
+      "lastSessionId": "bb3a0da5-5eac-4284-a782-524739ea2495",
+      "lastFpsAverage": 0.49,
+      "lastFpsLow1Pct": 141.88,
+      "hasCompletedProjectOnboarding": true,
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 80,
+        "frame_duration_ms_min": 0.04527199999984077,
+        "frame_duration_ms_max": 7.048190000000204,
+        "frame_duration_ms_avg": 1.199654612499506,
+        "frame_duration_ms_p50": 0.7391080000002148,
+        "frame_duration_ms_p95": 3.0209634999993566,
+        "frame_duration_ms_p99": 5.541175729999947
+      }
+    },
+    "/media/restful3/data/workspace/phoenix": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 3,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastCost": 0.5529011500000001,
+      "lastAPIDuration": 148442,
+      "lastDuration": 1515548,
+      "lastLinesAdded": 62,
+      "lastLinesRemoved": 14,
+      "lastTotalInputTokens": 452,
+      "lastTotalOutputTokens": 6859,
+      "lastTotalCacheCreationInputTokens": 78713,
+      "lastTotalCacheReadInputTokens": 517356,
+      "lastTotalWebSearchRequests": 0,
+      "lastSessionId": "97974d8e-8403-4516-a14b-36e4ff934a43"
+    },
+    "/media/restful3/data/workspace/binance": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "playwright": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "@playwright/mcp@latest"
+          ],
+          "env": {}
+        },
+        "context7": {
+          "type": "sse",
+          "url": "https://mcp.context7.com/sse",
+          "headers": {
+            "CONTEXT7_API_KEY": "ctx7sk-70ea40a7-46ea-4522-a79b-30d6a7ba4d56"
+          }
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 8,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "hasCompletedProjectOnboarding": true,
+      "lastCost": 10.817362099999999,
+      "lastAPIDuration": 2667079,
+      "lastToolDuration": 2454291,
+      "lastDuration": 106840901,
+      "lastLinesAdded": 1634,
+      "lastLinesRemoved": 46,
+      "lastTotalInputTokens": 88363,
+      "lastTotalOutputTokens": 98661,
+      "lastTotalCacheCreationInputTokens": 493532,
+      "lastTotalCacheReadInputTokens": 24906071,
+      "lastSessionId": "133e26fe-0dda-4391-aa08-a79516ca0b2f"
+    },
+    "/media/restful3/data/workspace/HandsOnAITradingBook/06 Applied Machine Learning/18 Amazon Chronos Model/01 Base Model": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/home/restful3/.config/claude": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastCost": 0.06104665,
+      "lastAPIDuration": 9971,
+      "lastDuration": 159263,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 1114,
+      "lastTotalOutputTokens": 183,
+      "lastTotalCacheCreationInputTokens": 14367,
+      "lastTotalCacheReadInputTokens": 14252,
+      "lastTotalWebSearchRequests": 0,
+      "lastSessionId": "cd2338ca-e3b1-488b-8f29-5791152997ba"
+    },
+    "/home/restful3/.claude": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "n8n-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "n8n-mcp"
+          ],
+          "env": {
+            "N8N_API_URL": "https://n8n.resteful3.shop/api/v1",
+            "N8N_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkYzE0YWFmNC1kZDExLTQ0NWEtOTE3MS00NDQzNDkyOWEwMTciLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU0MDA3MDMyfQ.UsOI_Ct6osVfOBOO-OztTqr9hPXGUyqtsg6QsPXZy5E"
+          }
+        },
+        "context7": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@upstash/context7-mcp"
+          ],
+          "env": {}
+        },
+        "playwright": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "@playwright/mcp@latest"
+          ],
+          "env": {}
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "lastCost": 0.11112555,
+      "lastAPIDuration": 25028,
+      "lastDuration": 3917700,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 10436,
+      "lastTotalOutputTokens": 1106,
+      "lastTotalCacheCreationInputTokens": 17839,
+      "lastTotalCacheReadInputTokens": 72911,
+      "lastSessionId": "dc45a538-18ce-423f-b8e3-8aeeda73ae15",
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "hasCompletedProjectOnboarding": true,
+      "lastAPIDurationWithoutRetries": 25025,
+      "lastToolDuration": 8923,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 10406,
+          "outputTokens": 473,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.012771
+        },
+        "claude-sonnet-4-5-20250929": {
+          "inputTokens": 30,
+          "outputTokens": 633,
+          "cacheReadInputTokens": 72911,
+          "cacheCreationInputTokens": 17839,
+          "webSearchRequests": 0,
+          "costUSD": 0.09835455
+        }
+      }
+    },
+    "/media/restful3/data/workspace/temp": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "lastCost": 0.03356195,
+      "lastAPIDuration": 25991,
+      "lastDuration": 44331,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 6341,
+      "lastTotalOutputTokens": 544,
+      "lastTotalCacheCreationInputTokens": 1233,
+      "lastTotalCacheReadInputTokens": 57294,
+      "lastSessionId": "d8ff5f32-11d2-4d5c-a7a1-5bdc194a861c"
+    },
+    "/media/restful3/data/workspace/seed": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "exampleFiles": [
+        "src/main.py",
+        "models/user.py",
+        "controllers/auth_controller.py",
+        "services/data_service.py",
+        "utils/helpers.py"
+      ],
+      "exampleFilesGeneratedAt": 1754563101553
+    },
+    "/media/restful3/data/workspace/scribe": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/ink": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/fast campus/딥러닝을 활용한 추천시스템 구현": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/media/restful3/data/workspace/ml4t": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "README.md",
+        "a.txt",
+        "chapter_2_the_basics_of_mean_reversion_ko.md",
+        "chapter_10_song.ipynb",
+        "Chapter6_Applied_Machine_Learning_ko.ipynb"
+      ],
+      "exampleFilesGeneratedAt": 1771151475354,
+      "lastTotalWebSearchRequests": 0,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastAPIDurationWithoutRetries": 0,
+      "lastToolDuration": 0,
+      "lastDuration": 26750,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastModelUsage": {},
+      "lastSessionId": "8782865c-85f3-467a-aa24-bc7505758e54",
+      "lastFpsAverage": 4.08,
+      "lastFpsLow1Pct": 275.65,
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 106,
+        "frame_duration_ms_min": 0.03515699999843491,
+        "frame_duration_ms_max": 5.993528999999967,
+        "frame_duration_ms_avg": 0.7115413679244454,
+        "frame_duration_ms_p50": 0.4922660000001997,
+        "frame_duration_ms_p95": 1.6984822500000973,
+        "frame_duration_ms_p99": 3.588553049999981
+      }
+    },
+    "/media/restful3/data/workspace/inflearn/파이썬 알고리즘 문제풀이 입문": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/inflearn/파이썬 알고리즘 문제풀이 입문/section2_implementation/2. K번째 수": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/inflearn/파이썬 알고리즘 문제풀이 입문/section2_implementation/3. k번째 큰 수": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/inflearn/파이썬 알고리즘 문제풀이 입문/section2_implementation": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 3,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/musthave_mldl_problem_solving_strategy": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": false,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "README.md",
+        "minimap/README.md",
+        "minimap/README.md",
+        "README.md",
+        "README.md"
+      ],
+      "exampleFilesGeneratedAt": 1755070070954,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/media/restful3/data/workspace/데싸노트의 실전에서 통하는 머신러닝": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "13_PCA.ipynb",
+        "11_LightGBM.ipynb",
+        "10_XGBoost.ipynb",
+        "09_Random Forest.ipynb",
+        "06_KNN.ipynb"
+      ],
+      "exampleFilesGeneratedAt": 1755168717058,
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastDuration": 18264646,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastTotalWebSearchRequests": 0,
+      "lastSessionId": "ee4b3d7a-fe0a-4e38-9ca4-7297c197517e"
+    },
+    "/media/restful3/data/workspace/inflearn/Python을 이용한 개인화 추천시스템": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/claude": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "context7": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@upstash/context7-mcp@latest"
+          ],
+          "env": {}
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/rebalancer": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastCost": 32.56053255000002,
+      "lastAPIDuration": 2983716,
+      "lastToolDuration": 428165,
+      "lastDuration": 38904618,
+      "lastLinesAdded": 5058,
+      "lastLinesRemoved": 3,
+      "lastTotalInputTokens": 83408,
+      "lastTotalOutputTokens": 108784,
+      "lastTotalCacheCreationInputTokens": 618125,
+      "lastTotalCacheReadInputTokens": 8534044,
+      "lastTotalWebSearchRequests": 5,
+      "lastSessionId": "febb67c7-93f5-4c00-9c50-7488b44ec9e2"
+    },
+    "/media/restful3/data/workspace/kaggle/avazu-ctr-prediction": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/media/restful3/data/workspace/kindcoach": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "hasCompletedProjectOnboarding": true,
+      "exampleFiles": [
+        "main.py",
+        "utils.py",
+        "config.py",
+        "models.py",
+        "views.py"
+      ],
+      "exampleFilesGeneratedAt": 1757327932502,
+      "lastTotalWebSearchRequests": 0,
+      "lastCost": 0.17448265,
+      "lastAPIDuration": 46759,
+      "lastToolDuration": 516,
+      "lastDuration": 78976,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 35667,
+      "lastTotalOutputTokens": 1825,
+      "lastTotalCacheCreationInputTokens": 18065,
+      "lastTotalCacheReadInputTokens": 81669,
+      "lastSessionId": "69eeadae-ad8b-485b-80ab-ad484e4b693e"
+    },
+    "/media/restful3/data/workspace/ds4th_study": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 4,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "stock_trading_env.py",
+        "main.py",
+        "Ch05_Prompt_Engineering_song.ipynb",
+        "Ch02_Understanding_Foundation_Models_song.ipynb",
+        "Ch06_RAG_and_Agents_song.ipynb"
+      ],
+      "exampleFilesGeneratedAt": 1770757993915,
+      "lastTotalWebSearchRequests": 0,
+      "hasCompletedProjectOnboarding": true,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      }
+    },
+    "/media/restful3/data/workspaces/vllm": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastCost": 0.11392619999999998,
+      "lastAPIDuration": 33797,
+      "lastToolDuration": 82,
+      "lastDuration": 61051,
+      "lastLinesAdded": 19,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 765,
+      "lastTotalOutputTokens": 1443,
+      "lastTotalCacheCreationInputTokens": 12718,
+      "lastTotalCacheReadInputTokens": 149405,
+      "lastTotalWebSearchRequests": 0,
+      "lastSessionId": "760a7f84-7142-4d2e-87b3-3580b9a478c4"
+    },
+    "/home/restful3/Downloads": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "kis-open-api-kis-code-assistant-mcp": {
+          "type": "http",
+          "url": "https://server.smithery.ai/@KISOpenAPI/kis-code-assistant-mcp/mcp"
+        },
+        "upstash-context-7-mcp": {
+          "type": "http",
+          "url": "https://server.smithery.ai/@upstash/context7-mcp/mcp"
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastCost": 0.25080824999999995,
+      "lastAPIDuration": 21988,
+      "lastToolDuration": 0,
+      "lastDuration": 59862,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 606,
+      "lastTotalOutputTokens": 723,
+      "lastTotalCacheCreationInputTokens": 30085,
+      "lastTotalCacheReadInputTokens": 89800,
+      "lastTotalWebSearchRequests": 0,
+      "lastSessionId": "eeef5bec-7b85-4139-b46d-1fe275417c24",
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastAPIDurationWithoutRetries": 21986,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 597,
+          "outputTokens": 42,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.000807
+        },
+        "claude-opus-4-5-20251101": {
+          "inputTokens": 9,
+          "outputTokens": 681,
+          "cacheReadInputTokens": 89800,
+          "cacheCreationInputTokens": 30085,
+          "webSearchRequests": 0,
+          "costUSD": 0.25000124999999995
+        }
+      },
+      "lastFpsAverage": 15.47,
+      "lastFpsLow1Pct": 303.63
+    },
+    "/media/restful3/data/workspace/AI_에이전트_생태계": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 3,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/langchain-academy/deep-agents-from-scratch": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "2_files.ipynb",
+        "3_subagents.ipynb",
+        "prompts.py",
+        "file_tools.py",
+        "state.py"
+      ],
+      "exampleFilesGeneratedAt": 1758953073551,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/langchain-academy/agents-from-scratch": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "email_assistant.py",
+        "email_assistant_hitl.py",
+        "prompts.py",
+        "agent.ipynb",
+        "memory.ipynb"
+      ],
+      "exampleFilesGeneratedAt": 1759100391265,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/voicify": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/coinagent": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "upstash-context-7-mcp": {
+          "type": "http",
+          "url": "https://server.smithery.ai/@upstash/context7-mcp/mcp"
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "lastTotalWebSearchRequests": 0,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/media/restful3/data/workspace/quantpulse": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "workflow.py",
+        "executor.py",
+        "main.py",
+        "decision.py",
+        "vwap_pullback.py"
+      ],
+      "exampleFilesGeneratedAt": 1760741783058,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/skill-test": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "ignorePatterns": [],
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/trendminer": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "ignorePatterns": [],
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": []
+    },
+    "/media/restful3/data/workspace/uptime-notifier": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "ignorePatterns": [],
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": []
+    },
+    "/media/restful3/data/workspace/multiagent-llm-research": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "ignorePatterns": [],
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/paperflow": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "context7": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@upstash/context7-mcp"
+          ],
+          "env": {}
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "ignorePatterns": [],
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "viewer.html",
+        "main_terminal.py",
+        "app.py",
+        "papers.py",
+        "api.py"
+      ],
+      "exampleFilesGeneratedAt": 1770993209512,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 13.612715499999982,
+      "lastAPIDuration": 2314631,
+      "lastAPIDurationWithoutRetries": 2314174,
+      "lastToolDuration": 1071442,
+      "lastDuration": 37199985,
+      "lastLinesAdded": 972,
+      "lastLinesRemoved": 40,
+      "lastTotalInputTokens": 100272,
+      "lastTotalOutputTokens": 116045,
+      "lastTotalCacheCreationInputTokens": 909866,
+      "lastTotalCacheReadInputTokens": 15735680,
+      "lastFpsAverage": 1.07,
+      "lastFpsLow1Pct": 65.12,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 99976,
+          "outputTokens": 27322,
+          "cacheReadInputTokens": 2919870,
+          "cacheCreationInputTokens": 245996,
+          "webSearchRequests": 0,
+          "costUSD": 0.8360680000000004
+        },
+        "claude-opus-4-6": {
+          "inputTokens": 296,
+          "outputTokens": 88723,
+          "cacheReadInputTokens": 12815810,
+          "cacheCreationInputTokens": 663870,
+          "webSearchRequests": 0,
+          "costUSD": 12.77664749999999
+        }
+      },
+      "lastSessionId": "75bdf8ad-4c90-4ed6-94cb-3fc2abdb9137",
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 39700,
+        "frame_duration_ms_min": 0.04473399929702282,
+        "frame_duration_ms_max": 50.44346899911761,
+        "frame_duration_ms_avg": 2.4500663295012246,
+        "frame_duration_ms_p50": 2.068409498780966,
+        "frame_duration_ms_p95": 4.213670800760154,
+        "frame_duration_ms_p99": 14.063052400648592
+      }
+    },
+    "/media/restful3/data/workspace/golden-rabbit-yojeum-claude-code-crypto-ranking-board": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "I don't have any file modification data to analyze. The lists provided are empty, so I cannot identify frequently modified files that represent core application logic.",
+        "",
+        "Please provide:",
+        "1. A list of files modified by the user with their modification counts",
+        "2. A list of files modified by other users with their modification counts",
+        "",
+        "Once you provide this data, I'll return exactly five diverse filenames representing core application logic."
+      ],
+      "hasCompletedProjectOnboarding": true,
+      "exampleFilesGeneratedAt": 1763093157212
+    },
+    "/media/restful3/data/workspace": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "playwright": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@playwright/mcp@latest"
+          ],
+          "env": {}
+        },
+        "context7": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@upstash/context7-mcp"
+          ],
+          "env": {}
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "lastTotalWebSearchRequests": 0,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 1.350488,
+      "lastAPIDuration": 404324,
+      "lastAPIDurationWithoutRetries": 404324,
+      "lastToolDuration": 1363,
+      "lastDuration": 478586,
+      "lastLinesAdded": 442,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 2,
+      "lastTotalOutputTokens": 22887,
+      "lastTotalCacheCreationInputTokens": 119330,
+      "lastTotalCacheReadInputTokens": 64981,
+      "lastModelUsage": {
+        "claude-opus-4-5-20251101": {
+          "inputTokens": 2,
+          "outputTokens": 22887,
+          "cacheReadInputTokens": 64981,
+          "cacheCreationInputTokens": 119330,
+          "webSearchRequests": 0,
+          "costUSD": 1.350488
+        }
+      },
+      "lastSessionId": "a0bc22c5-1019-4739-aaa5-f05467549a79"
+    },
+    "/media/restful3/data/workspace/nomads": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "playwright": {
+          "type": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@playwright/mcp@latest"
+          ],
+          "env": {}
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": []
+    },
+    "/media/restful3/data/workspace/claude-code-vibe-course": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "CLAUDE.md",
+        "index.html",
+        "main.js",
+        "style.css",
+        "README.md"
+      ],
+      "exampleFilesGeneratedAt": 1765420904046,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/media/restful3/data/workspace/daily-market-score-bot": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "hasCompletedProjectOnboarding": true
+    },
+    "/media/restful3/data/workspace/SuperClaude_Framework": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "mcp.py",
+        "__main__.py",
+        "__init__.py",
+        "pyproject.toml",
+        "features.json"
+      ],
+      "exampleFilesGeneratedAt": 1765157930259,
+      "hasCompletedProjectOnboarding": true,
+      "lastTotalWebSearchRequests": 0
+    },
+    "/media/restful3/data/workspace/upbit_shannon_rebalancer": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "I don't have any file data to analyze. The lists of files modified by user and other users appear to be empty. Please provide the actual file modification data including:",
+        "",
+        "1. Filenames with their paths",
+        "2. Modification counts for each file",
+        "3. Which files were modified by which users",
+        "",
+        "Once you provide this information, I'll analyze it and return five diverse filenames representing core application logic."
+      ],
+      "exampleFilesGeneratedAt": 1765511896157,
+      "hasCompletedProjectOnboarding": true,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 0.000403,
+      "lastAPIDuration": 2446,
+      "lastAPIDurationWithoutRetries": 2445,
+      "lastToolDuration": 0,
+      "lastDuration": 5313,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 123,
+      "lastTotalOutputTokens": 56,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 6.37,
+      "lastFpsLow1Pct": 235.96,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 123,
+          "outputTokens": 56,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.000403
+        }
+      },
+      "lastSessionId": "ce8dbba4-3f52-43f2-bfb2-dd3945af4985"
+    },
+    "/media/restful3/data/workspace/pdf-chapter-split": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "I don't have enough data to provide a meaningful answer. You've only provided modification counts for README.md (1 modification by user, 1 by others), which is a documentation file, not core application logic.",
+        "",
+        "To identify five frequently modified files representing core application logic, I would need:",
+        "- A substantially larger list of files",
+        "- Files with meaningful modification counts (ideally 5+)",
+        "- Diverse file types from different directories",
+        "- Exclusion of configuration and documentation files",
+        "",
+        "Please provide a more comprehensive git history dataset."
+      ],
+      "exampleFilesGeneratedAt": 1765755000470
+    },
+    "/home/restful3/qc-workspace": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      }
+    },
+    "/home/restful3/qc-workspace/shannon_spy_song": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastAPIDurationWithoutRetries": 0,
+      "lastToolDuration": 0,
+      "lastDuration": 117793,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastTotalWebSearchRequests": 0,
+      "lastModelUsage": {},
+      "lastSessionId": "ede14e83-b924-4063-9ec6-fcb223476601"
+    },
+    "/media/restful3/data/workspace/fundamentals-of-software-architecture-2": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "README.md",
+        "ch03_모듈성.md",
+        "ch06_아키텍처_특성의_측정과_거버넌스.md",
+        "ch01_서론.md",
+        "ch02_아키텍처적_사고.md"
+      ],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "exampleFilesGeneratedAt": 1767330155273
+    },
+    "/media/restful3/data/workspace/NL2SQL_Handbook": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "analyze.py",
+        "dataset.py",
+        "utils.py",
+        "Pre_Processing.md",
+        "Translation_method.md"
+      ],
+      "exampleFilesGeneratedAt": 1767745779535
+    },
+    "/media/restful3/data": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      }
+    },
+    "/media/restful3/data/workspace/moltbot": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "cli.md",
+        "agents.md",
+        "channels.md",
+        "hooks.md",
+        "plugins.md"
+      ],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "exampleFilesGeneratedAt": 1770933463378,
+      "hasCompletedProjectOnboarding": true,
+      "lastCost": 0.26515275,
+      "lastAPIDuration": 15698,
+      "lastAPIDurationWithoutRetries": 15694,
+      "lastToolDuration": 643,
+      "lastDuration": 82231,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 4929,
+      "lastTotalOutputTokens": 558,
+      "lastTotalCacheCreationInputTokens": 35259,
+      "lastTotalCacheReadInputTokens": 55218,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 25.83,
+      "lastFpsLow1Pct": 292.07,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 4925,
+          "outputTokens": 86,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.0053549999999999995
+        },
+        "claude-opus-4-5-20251101": {
+          "inputTokens": 4,
+          "outputTokens": 472,
+          "cacheReadInputTokens": 55218,
+          "cacheCreationInputTokens": 35259,
+          "webSearchRequests": 0,
+          "costUSD": 0.25979775
+        }
+      },
+      "lastSessionId": "1233ceb2-09d1-49f8-aeb4-1ca2d5ce9225"
+    },
+    "/home/restful3/dataset/ml4t/pinjoy": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 2,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 1.0060240000000003,
+      "lastAPIDuration": 159379,
+      "lastAPIDurationWithoutRetries": 159346,
+      "lastToolDuration": 1857472,
+      "lastDuration": 12727612,
+      "lastLinesAdded": 31,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 23216,
+      "lastTotalOutputTokens": 6269,
+      "lastTotalCacheCreationInputTokens": 40528,
+      "lastTotalCacheReadInputTokens": 1170494,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 14,
+      "lastFpsLow1Pct": 46.82,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 23177,
+          "outputTokens": 631,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.026331999999999998
+        },
+        "claude-opus-4-5-20251101": {
+          "inputTokens": 39,
+          "outputTokens": 5638,
+          "cacheReadInputTokens": 1170494,
+          "cacheCreationInputTokens": 40528,
+          "webSearchRequests": 0,
+          "costUSD": 0.9796920000000001
+        }
+      },
+      "lastSessionId": "79f52e91-2480-438c-afd8-1acb2240669f"
+    },
+    "/home/restful3/clawd": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    },
+    "/media/restful3/data/workspace/CLIProxyAPI": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "antigravity_executor.go",
+        "config.go",
+        "server.go",
+        "model_definitions.go",
+        "claude_executor.go"
+      ],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "exampleFilesGeneratedAt": 1770702078794,
+      "lastCost": 1.7553755999999991,
+      "lastAPIDuration": 558998,
+      "lastAPIDurationWithoutRetries": 558934,
+      "lastToolDuration": 1938746,
+      "lastDuration": 2158334,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 56088,
+      "lastTotalOutputTokens": 35003,
+      "lastTotalCacheCreationInputTokens": 246794,
+      "lastTotalCacheReadInputTokens": 5168485,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 9.37,
+      "lastFpsLow1Pct": 291.48,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 56062,
+          "outputTokens": 28955,
+          "cacheReadInputTokens": 4540116,
+          "cacheCreationInputTokens": 181490,
+          "webSearchRequests": 0,
+          "costUSD": 0.8817110999999997
+        },
+        "claude-opus-4-6": {
+          "inputTokens": 26,
+          "outputTokens": 6048,
+          "cacheReadInputTokens": 628369,
+          "cacheCreationInputTokens": 65304,
+          "webSearchRequests": 0,
+          "costUSD": 0.8736645000000001
+        }
+      },
+      "lastSessionId": "1b210eb5-9808-4b2f-84a5-cb3f84c659f1"
+    },
+    "/media/restful3/data/workspace/prism-insight": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "stock_tracking_agent.py",
+        "stock_analysis_orchestrator.py",
+        "telegram_ai_bot.py",
+        "report_generator.py",
+        "cores/analysis.py"
+      ],
+      "exampleFilesGeneratedAt": 1770373307300
+    },
+    "/media/restful3/data/workspace/tori-dashboard": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 1,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "page.tsx",
+        "LatestReportCard.tsx",
+        "MarkdownViewer.tsx",
+        "ReportList.tsx",
+        "reports.ts"
+      ],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 7.285272349999998,
+      "lastAPIDuration": 869650,
+      "lastAPIDurationWithoutRetries": 869547,
+      "lastToolDuration": 193339,
+      "lastDuration": 13900439,
+      "lastLinesAdded": 590,
+      "lastLinesRemoved": 322,
+      "lastTotalInputTokens": 40406,
+      "lastTotalOutputTokens": 35736,
+      "lastTotalCacheCreationInputTokens": 182105,
+      "lastTotalCacheReadInputTokens": 11113639,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 1.41,
+      "lastFpsLow1Pct": 20.32,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 40188,
+          "outputTokens": 2759,
+          "cacheReadInputTokens": 151316,
+          "cacheCreationInputTokens": 45735,
+          "webSearchRequests": 0,
+          "costUSD": 0.12628335000000002
+        },
+        "claude-opus-4-6": {
+          "inputTokens": 218,
+          "outputTokens": 32977,
+          "cacheReadInputTokens": 10962323,
+          "cacheCreationInputTokens": 136370,
+          "webSearchRequests": 0,
+          "costUSD": 7.158988999999997
+        }
+      },
+      "lastSessionId": "2cc12aff-2f9a-4ae3-802f-a528120806cb",
+      "exampleFilesGeneratedAt": 1771161389563,
+      "hasCompletedProjectOnboarding": true,
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 19656,
+        "frame_duration_ms_min": 0.1197420000000875,
+        "frame_duration_ms_max": 128.8159900000319,
+        "frame_duration_ms_avg": 3.9869531486063146,
+        "frame_duration_ms_p50": 2.3399474999750964,
+        "frame_duration_ms_p95": 8.749145349983092,
+        "frame_duration_ms_p99": 63.42523159004513
+      }
+    },
+    "/home/restful3/.openclaw": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 0.57337575,
+      "lastAPIDuration": 85646,
+      "lastAPIDurationWithoutRetries": 85637,
+      "lastToolDuration": 17501,
+      "lastDuration": 8089568,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 30298,
+      "lastTotalOutputTokens": 2203,
+      "lastTotalCacheCreationInputTokens": 38403,
+      "lastTotalCacheReadInputTokens": 511272,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 0.21,
+      "lastFpsLow1Pct": 224.52,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 30276,
+          "outputTokens": 387,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.032211
+        },
+        "claude-opus-4-6": {
+          "inputTokens": 22,
+          "outputTokens": 1816,
+          "cacheReadInputTokens": 511272,
+          "cacheCreationInputTokens": 38403,
+          "webSearchRequests": 0,
+          "costUSD": 0.54116475
+        }
+      },
+      "lastSessionId": "ef85a3cc-058b-43ab-994c-1cbafde10c44",
+      "hasCompletedProjectOnboarding": true,
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 1727,
+        "frame_duration_ms_min": 0.08889600075781345,
+        "frame_duration_ms_max": 13.73763700001291,
+        "frame_duration_ms_avg": 1.0232295182410178,
+        "frame_duration_ms_p50": 0.8315289999954985,
+        "frame_duration_ms_p95": 1.8685002999753118,
+        "frame_duration_ms_p99": 4.2063747499969715
+      }
+    },
+    "/media/restful3/data/workspace/ragflow": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "task_executor.py",
+        "document_service.py",
+        "kb_app.py",
+        "dialog_service.py",
+        "canvas.py"
+      ],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "exampleFilesGeneratedAt": 1770554018241,
+      "hasCompletedProjectOnboarding": true,
+      "lastCost": 4.885808699999998,
+      "lastAPIDuration": 1065216,
+      "lastAPIDurationWithoutRetries": 1065144,
+      "lastToolDuration": 37789,
+      "lastDuration": 21441086,
+      "lastLinesAdded": 2368,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 105979,
+      "lastTotalOutputTokens": 75221,
+      "lastTotalCacheCreationInputTokens": 437798,
+      "lastTotalCacheReadInputTokens": 4864902,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 5.58,
+      "lastFpsLow1Pct": 923.47,
+      "lastModelUsage": {
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 105933,
+          "outputTokens": 32374,
+          "cacheReadInputTokens": 2505457,
+          "cacheCreationInputTokens": 123981,
+          "webSearchRequests": 0,
+          "costUSD": 0.67332495
+        },
+        "claude-opus-4-6": {
+          "inputTokens": 46,
+          "outputTokens": 42847,
+          "cacheReadInputTokens": 2359445,
+          "cacheCreationInputTokens": 313817,
+          "webSearchRequests": 0,
+          "costUSD": 4.21248375
+        }
+      },
+      "lastSessionId": "b865db94-d02e-442a-927b-9513d023231d"
+    },
+    "/media/restful3/data/workspace/scout-agent": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "reactVulnerabilityCache": {
+        "detected": false,
+        "package": null,
+        "packageName": null,
+        "version": null,
+        "packageManager": null
+      },
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastAPIDurationWithoutRetries": 0,
+      "lastToolDuration": 0,
+      "lastDuration": 7514,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 3.15,
+      "lastFpsLow1Pct": 188.97,
+      "lastModelUsage": {},
+      "lastSessionId": "6583f778-f068-4d6c-af56-c8461d5b6bc4"
+    },
+    "/home/restful3/.openclaw/workspace": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [],
+      "lastCost": 0,
+      "lastAPIDuration": 0,
+      "lastAPIDurationWithoutRetries": 0,
+      "lastToolDuration": 0,
+      "lastDuration": 52462,
+      "lastLinesAdded": 0,
+      "lastLinesRemoved": 0,
+      "lastTotalInputTokens": 0,
+      "lastTotalOutputTokens": 0,
+      "lastTotalCacheCreationInputTokens": 0,
+      "lastTotalCacheReadInputTokens": 0,
+      "lastTotalWebSearchRequests": 0,
+      "lastFpsAverage": 1.15,
+      "lastFpsLow1Pct": 84.21,
+      "lastModelUsage": {},
+      "lastSessionId": "a4062532-58e1-4e6c-8baf-155bce90d25b",
+      "lastSessionMetrics": {
+        "frame_duration_ms_count": 97,
+        "frame_duration_ms_min": 0.17651599999999235,
+        "frame_duration_ms_max": 11.874400000000605,
+        "frame_duration_ms_avg": 1.919537175257582,
+        "frame_duration_ms_p50": 1.1845250000000078,
+        "frame_duration_ms_p95": 6.773229600003083,
+        "frame_duration_ms_p99": 10.128559360000057
+      }
+    },
+    "/workspace/project": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "exampleFiles": [
+        "main_terminal.py",
+        "app.py",
+        "papers.py",
+        "api.py",
+        "rag.py"
+      ],
+      "exampleFilesGeneratedAt": 1771231362248,
+      "hasCompletedProjectOnboarding": true
+    }
+  },
+  "isQualifiedForDataSharing": false,
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.21",
+  "subscriptionNoticeCount": 0,
+  "hasAvailableSubscription": false,
+  "changelogLastFetched": 1771298271735,
+  "fallbackAvailableWarningThreshold": 0.2,
+  "hasIdeOnboardingBeenShown": {
+    "cursor": true
+  },
+  "shiftEnterKeyBindingInstalled": true,
+  "lastReleaseNotesSeen": "2.1.42",
+  "s1mAccessCache": {
+    "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3": {
+      "hasAccess": false,
+      "hasAccessNotAsDefault": false,
+      "timestamp": 1771294708481
+    }
+  },
+  "hasOpusPlanDefault": false,
+  "claudeCodeFirstTokenDate": "2025-07-28T23:59:03.732531Z",
+  "lastPlanModeUse": 1771297903828,
+  "feedbackSurveyState": {
+    "lastShownTime": 1771241703529
+  },
+  "sonnet45MigrationComplete": true,
+  "anonymousId": "claudecode.v1.8c1e079e-8eec-42c9-96e8-103cf4019fd1",
+  "hasUsedBackslashReturn": true,
+  "passesEligibilityCache": {
+    "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3": {
+      "eligible": true,
+      "referral_code_details": {
+        "code": "xj4eDRXGzw",
+        "campaign": "claude_code_guest_pass",
+        "referral_link": "https://claude.ai/referral/xj4eDRXGzw"
+      },
+      "referrer_reward": null,
+      "remaining_passes": 3,
+      "timestamp": 1771294708655
+    }
+  },
+  "mcpServers": {
+    "quantconnect": {
+      "command": "quantconnect-mcp",
+      "args": [],
+      "env": {
+        "QUANTCONNECT_USER_ID": "446512",
+        "QUANTCONNECT_API_TOKEN": "e7f16b1ec17a5625c968ac2b5a23abd5cf2f1c404e16e04849a8bdbcadadd6b7"
+      }
+    },
+    "n8n": {
+      "command": "npx",
+      "args": [
+        "n8n-mcp"
+      ],
+      "env": {
+        "N8N_API_URL": "http://localhost:5678/api/v1",
+        "N8N_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkYzE0YWFmNC1kZDExLTQ0NWEtOTE3MS00NDQzNDkyOWEwMTciLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU0MDA3MDMyfQ.UsOI_Ct6osVfOBOO-OztTqr9hPXGUyqtsg6QsPXZy5E"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ]
+    }
+  },
+  "githubRepoPaths": {
+    "restful3/claude-code-vibe-course": [
+      "/media/restful3/data/workspace/claude-code-vibe-course/05_TodoApp/code",
+      "/media/restful3/data/workspace/claude-code-vibe-course"
+    ],
+    "superclaude-org/superclaude_framework": [
+      "/media/restful3/data/workspace/SuperClaude_Framework"
+    ],
+    "restful3/upbit-shannon-rebalancer": [
+      "/media/restful3/data/workspace/upbit_shannon_rebalancer"
+    ],
+    "restful3/paperflow": [
+      "/workspace/project",
+      "/media/restful3/data/workspace/paperflow/outputs/Conditional Memory via Scalable Lookup - A New Axis of Sparsity for Large Language Models",
+      "/media/restful3/data/workspace/paperflow/outputs/FLEX - Expert-level False-Less Execution Metric For Reliable Text-to-SQL Benchmark",
+      "/media/restful3/data/workspace/paperflow/outputs/A Survey on Employing Large Language Models for Text-to-SQL Tasks",
+      "/media/restful3/data/workspace/paperflow/outputs",
+      "/media/restful3/data/workspace/paperflow/outputs/ReFoRCE- A Text-to-SQL Agent with Self-Refinement, Format Restriction, and Column Exploration",
+      "/media/restful3/data/workspace/paperflow/outputs/AgentSM- Semantic Memory for Agentic Text-to-SQL",
+      "/media/restful3/data/workspace/paperflow/outputs/AGENTIQL- An Agent-Inspired Multi-Expert Framework for Text-to-SQL Generation",
+      "/media/restful3/data/workspace/paperflow"
+    ],
+    "restful3/ml4t": [
+      "/media/restful3/data/workspace/ml4t/source/Chan E. Algorithmic Trading - Winning Strategies and Their Rationale 2013",
+      "/media/restful3/data/workspace/ml4t/source/kaggle/stocks-return-prediction-v-2",
+      "/media/restful3/data/workspace/ml4t/source/papers/Campisi_2024-A comparison of machine learning methods for predicting the direction",
+      "/media/restful3/data/workspace/ml4t"
+    ],
+    "restful3/pdf-chapter-split": [
+      "/media/restful3/data/workspace/pdf-chapter-split"
+    ],
+    "restful3/fundamentals-of-software-architecture-2": [
+      "/media/restful3/data/workspace/fundamentals-of-software-architecture-2"
+    ],
+    "restful3/ds4th_study": [
+      "/media/restful3/data/workspace/ds4th_study"
+    ],
+    "hkustdial/nl2sql_handbook": [
+      "/media/restful3/data/workspace/NL2SQL_Handbook"
+    ],
+    "moltbot/moltbot": [
+      "/media/restful3/data/workspace/moltbot"
+    ],
+    "restful3/mymoltbot": [
+      "/media/restful3/data/workspace/moltbot"
+    ],
+    "router-for-me/cliproxyapi": [
+      "/media/restful3/data/workspace/CLIProxyAPI"
+    ],
+    "infiniflow/ragflow": [
+      "/media/restful3/data/workspace/ragflow"
+    ],
+    "restful3/tori-dashboard": [
+      "/media/restful3/data/workspace/tori-dashboard"
+    ]
+  },
+  "opus45MigrationComplete": true,
+  "hasShownOpus45Notice": {
+    "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3": true
+  },
+  "passesUpsellSeenCount": 3,
+  "officialMarketplaceAutoInstallAttempted": true,
+  "officialMarketplaceAutoInstalled": true,
+  "thinkingMigrationComplete": true,
+  "groveConfigCache": {
+    "4b6622b6-2f71-4d79-b445-a820ea61ceb9": {
+      "grove_enabled": true,
+      "timestamp": 1771245011445
+    }
+  },
+  "skillUsage": {
+    "markdown-formatter": {
+      "usageCount": 12,
+      "lastUsedAt": 1769849389196
+    },
+    "paper-translator-korean": {
+      "usageCount": 22,
+      "lastUsedAt": 1770355600352
+    },
+    "web-to-markdown": {
+      "usageCount": 1,
+      "lastUsedAt": 1768299632328
+    },
+    "init": {
+      "usageCount": 5,
+      "lastUsedAt": 1771151019267
+    },
+    "md-to-html": {
+      "usageCount": 1,
+      "lastUsedAt": 1769950532813
+    },
+    "sync-upstream": {
+      "usageCount": 3,
+      "lastUsedAt": 1770848065174
+    },
+    "update-docs-ko": {
+      "usageCount": 3,
+      "lastUsedAt": 1770857993106
+    },
+    "paper-explainer-korean": {
+      "usageCount": 22,
+      "lastUsedAt": 1771245717442
+    },
+    "create-chapter-analysis": {
+      "usageCount": 2,
+      "lastUsedAt": 1771156300678
+    },
+    "paper-explainer": {
+      "usageCount": 6,
+      "lastUsedAt": 1771298317105
+    }
+  },
+  "opusProMigrationComplete": true,
+  "opusProMigrationTimestamp": 1768388141504,
+  "cachedChromeExtensionInstalled": false,
+  "autoUpdatesProtectedForNative": true,
+  "clientDataCache": {
+    "data": {},
+    "timestamp": 1771298411390
+  },
+  "hasVisitedPasses": false,
+  "passesLastSeenRemaining": 3,
+  "hasShownOpus46Notice": {
+    "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3": true
+  },
+  "penguinModeOrgEnabled": true,
+  "opus46FeedSeenCount": 186,
+  "showSpinnerTree": false,
+  "effortCalloutDismissed": true,
+  "oauthAccount": {
+    "accountUuid": "4b6622b6-2f71-4d79-b445-a820ea61ceb9",
+    "emailAddress": "restful3@gmail.com",
+    "organizationUuid": "7f1fd3d0-5e8e-46e6-86ca-77a0a91c0ff3",
+    "hasExtraUsageEnabled": true,
+    "billingType": "stripe_subscription",
+    "accountCreatedAt": "2024-05-03T06:07:33.817217Z",
+    "subscriptionCreatedAt": "2024-07-02T11:15:00.901134Z",
+    "displayName": "Taeyoung"
+  }
+}

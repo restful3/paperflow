@@ -67,6 +67,7 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     paper_venue = info.get("venue") if info else None
     paper_doi = info.get("doi") if info else None
     paper_url = info.get("paper_url") if info else None
+    paper_doc_type = info.get("doc_type") if info else None
 
     # Server-side reading progress (fallback when localStorage is empty)
     all_progress = paper_svc.get_all_progress()
@@ -83,6 +84,7 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "paper_venue": paper_venue,
         "paper_doi": paper_doi,
         "paper_url": paper_url,
+        "paper_doc_type": paper_doc_type,
         "has_pdf": has_pdf,
         "has_md_ko": has_md_ko,
         "has_md_en": has_md_en,

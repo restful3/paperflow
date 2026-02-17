@@ -1,0 +1,190 @@
+{"debug":"Starting connection with timeout of 30000ms","timestamp":"2026-02-17T02:20:57.695Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"error":"Server stderr: [2026-02-17T02:20:58.695Z] [n8n-mcp] [WARN] Protocol version negotiated: client requested 2025-11-25, server will use 2025-03-26 {\n  reasoning: 'Client requested unsupported version 2025-11-25, using standard version'\n}\n","timestamp":"2026-02-17T02:20:58.697Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Successfully connected to undefined server in 1003ms","timestamp":"2026-02-17T02:20:58.697Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection established with capabilities: {\"hasTools\":true,\"hasPrompts\":false,\"hasResources\":true,\"serverVersion\":{\"name\":\"n8n-documentation-mcp\",\"version\":\"2.35.2\"}}","timestamp":"2026-02-17T02:20:58.697Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Expected ',' or ']' after array element in JSON at position 5","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'o', \"  toolName: '\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'i', \"  inputSchem\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"type\":\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"proper\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"node\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"ty\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"conf\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"ty\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"mode\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"ty\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"en\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      ],\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"prof\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"ty\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.698Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"en\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      ],\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    }\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"requir\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"node\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"conf\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  ],\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"additi\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '}',\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'h', \"  hasOutputS\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'd', \"  descriptio\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token '}', \"}\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Expected ',' or ']' after array element in JSON at position 5","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'o', \"  toolName: '\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'i', \"  inputSchem\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"type\":\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"proper\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"work\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"ty\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"opti\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"ty\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"pr\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        \"\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '         \"... is not valid JSON","timestamp":"2026-02-17T02:20:58.699Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '        }\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '      \"de\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    }\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  },\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"requir\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '    \"work\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  ],\\n' +\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '  \"additi\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token ''', \"    '}',\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'h', \"  hasOutputS\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token 'd', \"  descriptio\"... is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"STDIO connection dropped after 0s uptime","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}
+{"debug":"Connection error: Unexpected token '}', \"}\" is not valid JSON","timestamp":"2026-02-17T02:20:58.700Z","sessionId":"298bae15-1bc8-4deb-a56f-419fc3db05ed","cwd":"/workspace/project"}

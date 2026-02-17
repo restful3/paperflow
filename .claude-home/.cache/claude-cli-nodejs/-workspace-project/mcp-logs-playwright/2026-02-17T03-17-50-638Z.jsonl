@@ -1,0 +1,3 @@
+{"debug":"Starting connection with timeout of 30000ms","timestamp":"2026-02-17T03:17:51.167Z","sessionId":"970a01b7-9a25-4a62-85b6-1baaa38a6477","cwd":"/workspace/project"}
+{"debug":"Successfully connected to undefined server in 1273ms","timestamp":"2026-02-17T03:17:52.439Z","sessionId":"970a01b7-9a25-4a62-85b6-1baaa38a6477","cwd":"/workspace/project"}
+{"debug":"Connection established with capabilities: {\"hasTools\":true,\"hasPrompts\":false,\"hasResources\":false,\"serverVersion\":{\"name\":\"Playwright\",\"version\":\"0.0.68\"}}","timestamp":"2026-02-17T03:17:52.439Z","sessionId":"970a01b7-9a25-4a62-85b6-1baaa38a6477","cwd":"/workspace/project"}
