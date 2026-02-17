@@ -32,15 +32,15 @@ Use this skill when:
 
 ### Interactive Reliability Mode (TUI 운영 안정화)
 When running in Claude Code TUI with permission prompts:
-- For file-write confirmation prompts, prefer **"Yes, allow all edits during this session"**.
-- For read/search confirmation prompts in the same target folder, prefer **"Yes, allow reading from <target folder> during this session"**.
+- For file-write/read/search confirmation prompts, **always choose Yes**.
+- Prefer **"Yes, and don't ask again" / "allow all edits during this session"** whenever available.
 - Avoid repeated micro-confirmation loops.
 
-Quality-first rule:
-- Do **not** force early Write only because `Actioning…` / `Actualizing…` / `Blanching…` appears.
-- In TUI runs, treat long thinking as normal; allow at least **30 minutes** of uninterrupted reasoning/writing time before judging a stall.
-- Allow sufficient reasoning time for full rewrite quality.
-- Use forced Write fallback only when there is clear hard stall (no substantive progress) **after** the 30-minute minimum window, then continue quality pass after write.
+Quality-first wait policy (hard rule):
+- Do **not** interrupt due to `Actioning…` / `Actualizing…` / `Perusing…` / `Blanching…` style states.
+- In TUI runs, wait at least **30 minutes minimum** before judging a stall.
+- During that 30-minute window, do not restart session, do not cancel, and do not switch strategy.
+- Only after 30 minutes with no substantive progress, apply fallback/retry.
 
 ### Section-safe Mode
 - Automatically enters this mode when:
