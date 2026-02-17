@@ -42,11 +42,12 @@
             <!-- Chips -->
             <template x-for="(tag, idx) in searchTags" :key="tag.type + '-' + tag.text">
               <span class="inline-flex items-center gap-0.5 pl-1.5 pr-0.5 py-0.5 rounded text-[11px] font-medium shrink-0"
-                    :class="tag.type === 'category' ? 'bg-amber-500/20 text-amber-200'
+                    :class="tag.type === 'doc_type' ? 'bg-violet-500/20 text-violet-200'
+                          : tag.type === 'category' ? 'bg-amber-500/20 text-amber-200'
                           : tag.type === 'venue' ? 'bg-teal-500/20 text-teal-200'
                           : tag.type === 'year' ? 'bg-gray-500/30 text-gray-200'
                           : 'bg-blue-500/20 text-blue-200'">
-                <span class="text-[9px] opacity-70" x-text="tag.type === 'category' ? '#' : tag.type === 'author' ? '@' : tag.type === 'venue' ? 'V' : 'Y'"></span>
+                <span class="text-[9px] opacity-70" x-text="tag.type === 'doc_type' ? 'T' : tag.type === 'category' ? '#' : tag.type === 'author' ? '@' : tag.type === 'venue' ? 'V' : 'Y'"></span>
                 <span x-text="tag.text"></span>
                 <button @click.stop="removeTag(idx)" class="ml-0.5 rounded-full hover:bg-white/20 p-0.5 leading-none">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
@@ -76,11 +77,12 @@
                           : ($store.darkMode.on ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')
                       ]">
                 <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-                      :class="item.type === 'category' ? ($store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600')
+                      :class="item.type === 'doc_type' ? ($store.darkMode.on ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700')
+                            : item.type === 'category' ? ($store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600')
                             : item.type === 'venue' ? ($store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700')
                             : item.type === 'year' ? ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')
                             : ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')"
-                      x-text="item.type === 'category' ? '#' : item.type === 'author' ? '@' : item.type === 'venue' ? 'V' : 'Y'"></span>
+                      x-text="item.type === 'doc_type' ? 'T' : item.type === 'category' ? '#' : item.type === 'author' ? '@' : item.type === 'venue' ? 'V' : 'Y'"></span>
                 <span class="flex-1 truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'" x-text="item.text"></span>
                 <span class="text-[10px] shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="item.count"></span>
               </button>
@@ -136,11 +138,12 @@
         <!-- Chips -->
         <template x-for="(tag, idx) in searchTags" :key="'m-' + tag.type + '-' + tag.text">
           <span class="inline-flex items-center gap-0.5 pl-2 pr-1 py-1 rounded-lg text-xs font-medium shrink-0"
-                :class="tag.type === 'category' ? ($store.darkMode.on ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-50 text-amber-700 border border-amber-200')
+                :class="tag.type === 'doc_type' ? ($store.darkMode.on ? 'bg-violet-900/30 text-violet-300' : 'bg-violet-50 text-violet-700 border border-violet-200')
+                      : tag.type === 'category' ? ($store.darkMode.on ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-50 text-amber-700 border border-amber-200')
                       : tag.type === 'venue' ? ($store.darkMode.on ? 'bg-teal-900/30 text-teal-300' : 'bg-teal-50 text-teal-700 border border-teal-200')
                       : tag.type === 'year' ? ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600 border border-gray-200')
                       : ($store.darkMode.on ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-700 border border-blue-200')">
-            <span class="text-[10px] opacity-60" x-text="tag.type === 'category' ? '#' : tag.type === 'author' ? '@' : tag.type === 'venue' ? 'V' : 'Y'"></span>
+            <span class="text-[10px] opacity-60" x-text="tag.type === 'doc_type' ? 'T' : tag.type === 'category' ? '#' : tag.type === 'author' ? '@' : tag.type === 'venue' ? 'V' : 'Y'"></span>
             <span x-text="tag.text"></span>
             <button @click.stop="removeTag(idx)" class="ml-1 rounded-full p-0.5 leading-none transition"
                     :class="$store.darkMode.on ? 'hover:bg-white/10' : 'hover:bg-black/10'">
@@ -170,11 +173,12 @@
                     ? ($store.darkMode.on ? 'bg-gray-700' : 'bg-indigo-50')
                     : ($store.darkMode.on ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')">
             <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-                  :class="item.type === 'category' ? ($store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600')
+                  :class="item.type === 'doc_type' ? ($store.darkMode.on ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700')
+                        : item.type === 'category' ? ($store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600')
                         : item.type === 'venue' ? ($store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700')
                         : item.type === 'year' ? ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')
                         : ($store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')"
-                  x-text="item.type === 'category' ? '#' : item.type === 'author' ? '@' : item.type === 'venue' ? 'V' : 'Y'"></span>
+                  x-text="item.type === 'doc_type' ? 'T' : item.type === 'category' ? '#' : item.type === 'author' ? '@' : item.type === 'venue' ? 'V' : 'Y'"></span>
             <span class="flex-1 truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'" x-text="item.text"></span>
             <span class="text-[10px] shrink-0" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="item.count"></span>
           </button>
@@ -260,6 +264,20 @@
               </svg>
             </button>
           </div>
+          <!-- Doc type filter -->
+          <span class="text-gray-300 dark:text-gray-600">|</span>
+          <select x-model="filterDocType"
+                  @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
+                  class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
+                  :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
+            <option value="">All Types</option>
+            <option value="paper">Paper</option>
+            <option value="blog">Blog</option>
+            <option value="essay">Essay</option>
+            <option value="news">News</option>
+            <option value="report">Report</option>
+          </select>
+          <span class="text-gray-300 dark:text-gray-600">|</span>
           <!-- View mode toggle -->
           <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
                :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
@@ -312,6 +330,17 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
           </svg>
         </button>
+        <select x-model="filterDocType"
+                @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
+                class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
+                :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
+          <option value="">Type</option>
+          <option value="paper">Paper</option>
+          <option value="blog">Blog</option>
+          <option value="essay">Essay</option>
+          <option value="news">News</option>
+          <option value="report">Report</option>
+        </select>
       </div>
       <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
            :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-100'">
@@ -372,6 +401,20 @@
             <!-- Authors + Year + Venue metadata line -->
             <div class="flex items-center gap-1.5 mb-2 flex-wrap"
                  :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">
+              <span x-show="paper.doc_type && paper.doc_type !== 'other'"
+                    class="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide shrink-0 transition-colors"
+                    :class="$store.darkMode.on
+                      ? { 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30': paper.doc_type === 'paper',
+                          'bg-purple-500/15 text-purple-400 border border-purple-500/30': paper.doc_type === 'report',
+                          'bg-green-500/15 text-green-400 border border-green-500/30': paper.doc_type === 'blog',
+                          'bg-rose-500/15 text-rose-400 border border-rose-500/30': paper.doc_type === 'news',
+                          'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay' }[paper.doc_type] || ''
+                      : { 'bg-indigo-50 text-indigo-600 border border-indigo-200': paper.doc_type === 'paper',
+                          'bg-purple-50 text-purple-600 border border-purple-200': paper.doc_type === 'report',
+                          'bg-green-50 text-green-600 border border-green-200': paper.doc_type === 'blog',
+                          'bg-rose-50 text-rose-600 border border-rose-200': paper.doc_type === 'news',
+                          'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay' }[paper.doc_type] || ''"
+                    x-text="paper.doc_type"></span>
               <div x-show="paper.authors && paper.authors.length > 0" class="flex items-center gap-1 min-w-0">
                 <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
@@ -395,7 +438,7 @@
                  :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
                  x-text="(() => { const abs = ($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract; return abs ? abs.substring(0, 250) + (abs.length > 250 ? '...' : '') : ''; })()"></p>
             </div>
-            <!-- Category tags with overflow indicator -->
+            <!-- Category tags -->
             <div x-show="paper.categories && paper.categories.length > 0" class="flex flex-wrap gap-1.5">
               <template x-for="cat in (paper.categories || []).slice(0, 3)" :key="cat">
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs sm:text-[10px] font-medium transition-colors"
@@ -606,6 +649,20 @@
               </div>
 
               <div class="flex items-center gap-1.5 shrink-0">
+                <span x-show="paper.doc_type && paper.doc_type !== 'other'"
+                      class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+                      :class="$store.darkMode.on
+                        ? { 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30': paper.doc_type === 'paper',
+                            'bg-purple-500/15 text-purple-400 border border-purple-500/30': paper.doc_type === 'report',
+                            'bg-green-500/15 text-green-400 border border-green-500/30': paper.doc_type === 'blog',
+                            'bg-rose-500/15 text-rose-400 border border-rose-500/30': paper.doc_type === 'news',
+                            'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay' }[paper.doc_type] || ''
+                        : { 'bg-indigo-50 text-indigo-600 border border-indigo-200': paper.doc_type === 'paper',
+                            'bg-purple-50 text-purple-600 border border-purple-200': paper.doc_type === 'report',
+                            'bg-green-50 text-green-600 border border-green-200': paper.doc_type === 'blog',
+                            'bg-rose-50 text-rose-600 border border-rose-200': paper.doc_type === 'news',
+                            'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay' }[paper.doc_type] || ''"
+                      x-text="paper.doc_type"></span>
                 <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
                   <span class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors max-w-[10rem] truncate"
                         :class="$store.darkMode.on ? 'border border-amber-600/40 text-amber-400' : 'border border-amber-300 text-amber-600'"
@@ -1088,6 +1145,7 @@ function papersApp() {
     viewMode: localStorage.getItem('pf-view') || 'card',
     sortBy: localStorage.getItem('pf-sort') || 'last_read',
     sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
+    filterDocType: localStorage.getItem('pf-filter-doctype') || '',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
     dupModal: { show: false, filename: '', size_mb: '', papers: [], resolve: null },
     colCount: window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1,
@@ -1138,6 +1196,7 @@ function papersApp() {
       // Count from tag-filtered papers (so counts reflect current filter state)
       const tagFiltered = this.searchTags.length > 0
         ? this.papers.filter(p => this.searchTags.every(tag => {
+            if (tag.type === 'doc_type') return p.doc_type === tag.text;
             if (tag.type === 'category') return p.categories && p.categories.includes(tag.text);
             if (tag.type === 'author') return p.authors && p.authors.includes(tag.text);
             if (tag.type === 'venue') return (p.venue || p.source_domain) === tag.text;
@@ -1146,8 +1205,9 @@ function papersApp() {
           }))
         : this.papers;
 
-      const counts = { cat: {}, author: {}, venue: {}, year: {} };
+      const counts = { docType: {}, cat: {}, author: {}, venue: {}, year: {} };
       for (const p of tagFiltered) {
+        if (p.doc_type) { counts.docType[p.doc_type] = (counts.docType[p.doc_type] || 0) + 1; }
         if (p.categories) p.categories.forEach(c => { counts.cat[c] = (counts.cat[c] || 0) + 1; });
         if (p.authors) p.authors.forEach(a => { counts.author[a] = (counts.author[a] || 0) + 1; });
         const v = p.venue || p.source_domain; if (v) counts.venue[v] = (counts.venue[v] || 0) + 1;
@@ -1166,6 +1226,7 @@ function papersApp() {
           }
         }
       };
+      add(counts.docType, 'doc_type');
       add(counts.cat, 'category');
       add(counts.venue, 'venue');
       add(counts.author, 'author');
@@ -1178,7 +1239,7 @@ function papersApp() {
           const bPrefix = b.text.toLowerCase().startsWith(q) ? 0 : 1;
           if (aPrefix !== bPrefix) return aPrefix - bPrefix;
         }
-        const typeOrder = { category: 0, venue: 1, author: 2, year: 3 };
+        const typeOrder = { doc_type: 0, category: 1, venue: 2, author: 3, year: 4 };
         if (typeOrder[a.type] !== typeOrder[b.type]) return typeOrder[a.type] - typeOrder[b.type];
         return b.count - a.count;
       });
@@ -1298,9 +1359,15 @@ function papersApp() {
     get filtered() {
       let results = this.papers;
 
+      // Doc type dropdown filter
+      if (this.filterDocType) {
+        results = results.filter(p => p.doc_type === this.filterDocType);
+      }
+
       // AND filter by selected tags
       if (this.searchTags.length > 0) {
         results = results.filter(p => this.searchTags.every(tag => {
+          if (tag.type === 'doc_type') return p.doc_type === tag.text;
           if (tag.type === 'category') return p.categories && p.categories.includes(tag.text);
           if (tag.type === 'author') return p.authors && p.authors.includes(tag.text);
           if (tag.type === 'venue') return (p.venue || p.source_domain) === tag.text;
@@ -1322,6 +1389,7 @@ function papersApp() {
           || (p.categories && p.categories.some(c => c.toLowerCase().includes(q)))
           || (p.venue && p.venue.toLowerCase().includes(q))
           || (p.source_domain && p.source_domain.toLowerCase().includes(q))
+          || (p.doc_type && p.doc_type.toLowerCase().includes(q))
         );
       }
 
