@@ -519,7 +519,7 @@ If a deployment runs with `MCP_REQUIRE_TRANSLATION=false`:
 - Fix #2/3/5: `_classify_completion` returns `"skip"` for English-only outputs → status remains `complete`. No regression.
 - Fix #4: still applied (cleanup is translation-agnostic).
 
-If the operator forgets to set `MCP_REQUIRE_TRANSLATION=false` while running with translation disabled, English-only complete jobs will downgrade to `status=error` on next reconcile. This is an explicit operator configuration error, not a silent corruption — the error message tells the user to "resubmit with force_reprocess=true," which would re-run the disabled-translation pipeline and succeed again.
+If the operator forgets to set `MCP_REQUIRE_TRANSLATION=false` while running with translation disabled, English-only complete jobs will downgrade to `status=error` on next reconcile. This is an explicit operator configuration error, not silent corruption — the error message itself directs the operator to set `MCP_REQUIRE_TRANSLATION=false` (see §5.2.3). The operator fixes the env first, after which the affected job records can be reconciled (no migration script needed — next status query re-classifies them as `skip` → `complete`).
 
 ## 6. Testing
 
