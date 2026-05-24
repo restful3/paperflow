@@ -3,10 +3,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from .config import settings
 from .routers import api, pages
 
 
 def create_app() -> FastAPI:
+    settings.validate_runtime()
     application = FastAPI(title="PaperFlow Viewer", docs_url=None, redoc_url=None)
 
     # Routers
