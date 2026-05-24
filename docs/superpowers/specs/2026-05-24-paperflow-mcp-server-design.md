@@ -1,6 +1,6 @@
-# PaperFlow MCP Server — Design Spec (rev4, post-codex Round 3)
+# PaperFlow MCP Server — Design Spec (rev5, post-codex Round 4)
 
-**Version**: v1 (spec rev 4)
+**Version**: v1 (spec rev 5)
 **Date**: 2026-05-24
 **Status**: Draft (pre-implementation, awaiting user sign-off)
 **Owner**: restful3
@@ -8,8 +8,17 @@
 - `docs/reviews/2026-05-24-paperflow-mcp-server-codex.md` (Round 1)
 - `docs/reviews/2026-05-24-paperflow-mcp-server-codex-2.md` (Round 2)
 - `docs/reviews/2026-05-24-paperflow-mcp-server-codex-3.md` (Round 3)
+- `docs/reviews/2026-05-24-paperflow-mcp-server-codex-4.md` (Round 4)
 
 ---
+
+## Change Log (rev5 vs rev4 — addresses Round 4 codex review)
+
+| 변경 | 이유 (Round 4 항목) |
+|------|---------------------|
+| `_write_part_file` 는 sync `def`, `.part` 파일 작성/fsync 만 수행 | rev4 의 `async def _write_part_then_publish` 를 `asyncio.to_thread` 에 넘기면 coroutine 만 반환되고 실행 안 됨 (Round 4 high #1) |
+| publish 를 **2단계** 로 분리: (a) `to_thread(_write_part_file, bytes, part_path)` (b) coroutine 복귀 후 lock 안에서 `JobRecord.status == "downloading"` 재확인 → `os.replace(part_path, dest)` 한 atomic call | cancel 도착 시점이 to_thread 안이라도 `.pdf` publish 직전에 한 번 더 status 확인 → cancelled job 의 PDF 가 watch 에 노출되는 race 차단 (Round 4 high #2) |
+| `cleanup_expired_jobs()` startup path 에서 `newones/.mcp_tmp/*` 중 mtime > 1시간 인 파일 unlink | viewer crash 후 stale temp 누적 방지 (Round 4 medium #1) |
 
 ## Change Log (rev4 vs rev3 — addresses Round 3 codex review)
 
@@ -148,11 +157,14 @@ PaperFlow 의 PDF→Markdown(+이미지)→번역 파이프라인을 **MCP (Mode
 4. job_id 생성 (uuid4), expected_filename = `pfmcp-{job_id[:12]}-{slugify(host_or_title)[:40]}.pdf`
 5. **즉시** `JobRecord` 작성: `status="downloading"`, `import_method=None` (확정 전). `logs/mcp_jobs.json` 에 기록 → 도구 반환
 6. **백그라운드 task** (`asyncio.create_task(_download_and_publish(job_id, url, expected_filename))`):
-   a. `await asyncio.to_thread(papers._resolve_url_to_pdf_bytes, url)` → `(pdf_bytes, final_url, import_method)`. helper 가 blocking I/O (urllib, subprocess, PyPDF2) 라 `to_thread` 필수. 실패 시 `JobRecord.status="error"`, error 메시지 저장, task 종료
-   b. `await asyncio.to_thread(_write_part_then_publish, pdf_bytes, dest)` — `newones/{expected_filename}.part` write → `fsync(fileno)` → `os.replace(.part → .pdf)`
-   c. `_write_source_sidecar(expected_filename, url)` 호출 (paper 폴더가 컨버터에 의해 생성된 뒤 `paper_meta.json.paper_url` / `source_url_original` 백필 가능)
-   d. `JobRecord.status="queued"`, `import_method` 확정. (이제 watch 가 PDF 발견 → 처리 시작)
-   e. `CancelledError` (user cancel 또는 shutdown): `.part`/temp file cleanup → user cancel 은 status="cancelled", shutdown 은 status="error" + "download interrupted, retry submit" (caller 가 `reason` 전달)
+   a. `pdf_bytes, final_url, import_method = await asyncio.to_thread(papers._resolve_url_to_pdf_bytes, url)`. helper 가 blocking I/O (urllib, subprocess, PyPDF2) 라 `to_thread` 필수. 실패 시 `JobRecord.status="error"`, error 메시지 저장, task 종료
+   b. **Stage 1 — write only** (cancellation 안전): `part_path = dest.with_suffix(dest.suffix + ".part")` 후 `await asyncio.to_thread(_write_part_file, pdf_bytes, part_path)`. `_write_part_file` 은 **sync `def`** — `.part` write + `fsync` 만 (`os.replace` 안 함). cancel 가능 시점.
+   c. **Stage 2 — atomic publish under lock** (cancellation 차단): `async with _index_lock:` → `JobRecord.status` 가 여전히 `"downloading"` 인지 재확인 → 맞으면 `os.replace(part_path, dest)` (sync, 1ms 이내 atomic syscall) + `JobRecord.status="queued"`. cancelled 면 publish 안 함 + `part_path.unlink(missing_ok=True)`.
+   d. `_write_source_sidecar(expected_filename, url)` 호출 (paper 폴더가 컨버터에 의해 생성된 뒤 `paper_meta.json.paper_url` / `source_url_original` 백필 가능)
+   e. `import_method` 확정. (이제 watch 가 PDF 발견 → 처리 시작)
+   f. `CancelledError` (user cancel 또는 shutdown): try/except 에서 `part_path.unlink(missing_ok=True)` cleanup → user cancel 은 status="cancelled", shutdown 은 status="error" + "download interrupted, retry submit" (caller 가 `reason` 전달)
+
+**왜 2단계 publish**: `asyncio.to_thread` 안의 sync 코드는 task cancellation 으로 즉시 중단되지 않음. `.part` write 와 `os.replace` 를 같은 to_thread 에 묶으면 cancel 도착 시점에 이미 `.pdf` 가 publish 돼서 watch 가 집어갈 위험. Stage 1 (write) 만 to_thread 에 두고 Stage 2 (replace) 는 lock + status 재확인 후 짧게 실행하면 cancel race 가 닫힘.
 7. `{job_id, status: "downloading", cached: false, expected_filename}` 반환 (도구 호출은 수 ms 안에 끝남)
 8. task 등록 + cleanup:
    ```python
@@ -167,12 +179,13 @@ PaperFlow 의 PDF→Markdown(+이미지)→번역 파이프라인을 **MCP (Mode
 
 expected_filename 의 `pfmcp-{job12}-` prefix 가 fingerprint 역할 — 사용자가 파일 rename 하지 않는 한 안전. (rename 한 경우는 v1 미지원, 사용자 책임.)
 
-**Submit (File) — 동기 publish (fast path)**
-- File 입력은 다운로드 단계가 없음 (bytes 이미 제공). 처리:
+**Submit (File) — fast path, race 없음**
+- File 입력은 다운로드 단계가 없음 (bytes 이미 제공). 처리는 cancel race 가 의미 없는 fast path:
   1. PDF base64 디코드 (200MB 초과 거부, magic byte `%PDF-` 검증)
   2. expected_filename = `pfmcp-{job_id[:12]}-{slugify(original_filename)[:40]}.pdf`
-  3. `await asyncio.to_thread(_write_part_then_publish, pdf_bytes, dest)` — write/fsync/replace 가 blocking 이므로 to_thread (큰 파일 200MB 도 수 ms~수십 ms, 안전)
-  4. `JobRecord.status="queued"` 로 바로 시작, `cached=false` 반환 (background task 불필요 — 다운로드 없음)
+  3. `await asyncio.to_thread(_write_part_file, pdf_bytes, part_path)` — write/fsync 만 (cancel 가능 시점)
+  4. `_atomic_publish_part(part_path, dest)` — coroutine 안 1ms 이내 atomic call. lock 불필요 (background task 가 없으므로 race 자체가 없음 — submit 단일 호출 안)
+  5. `JobRecord.status="queued"`, `cached=false` 반환 (background task 불필요)
 - duplicate check: `find_processed_paper(original_filename=source)` 도 시도 — 단 file 입력은 사용자별 의도가 다양해 캐시 적중률 낮음, 그래도 시도는 함
 
 **Poll: reconcile_job(job_id)**
@@ -293,14 +306,19 @@ async def cancel_all_active_downloads(reason: Literal["shutdown","user"] = "shut
 async def _atomic_write_index(jobs: dict[str, dict]) -> None
 async def _load_index() -> dict[str, dict]
    # 손상 시 mcp_jobs.corrupt.<ts>.json 으로 quarantine, 빈 index 로 시작 + log WARN
-async def _write_part_then_publish(pdf_bytes: bytes, dest: Path) -> None
-   # .part write → os.fsync(fileno) → os.replace
+def _write_part_file(pdf_bytes: bytes, part_path: Path) -> None
+   # sync def — to_thread 에서 호출됨. .part 파일 write + os.fsync(fileno). os.replace 는 안 함 (cancel race 회피).
+def _atomic_publish_part(part_path: Path, dest_path: Path) -> None
+   # sync def — os.replace(part_path, dest_path) 1줄. caller (coroutine) 가 lock + status 재확인 후 호출.
 def _build_expected_filename(job_id: str, slug_source: str) -> str
    # pfmcp-{job_id[:12]}-{safe_slug[:40]}.pdf
 async def _download_and_publish(job_id: str, url: str, expected_filename: str) -> None
-   # bg task: resolve url → publish → status transition. except → status="error". CancelledError → cleanup .part
+   # bg task: resolve url (to_thread) → write .part (to_thread) → lock + status check + replace → status="queued"
+   # except → status="error". CancelledError → .part cleanup → status by reason
 async def _scan_outputs_for_filename(expected_filename: str) -> tuple[Path, str] | None
    # reconcile fallback: outputs/<*>/<expected_filename> or archives/<*>/<expected_filename>
+def _cleanup_stale_mcp_tmp(max_age_seconds: int = 3600) -> int
+   # startup cleanup: newones/.mcp_tmp/* 중 mtime > now-max_age 인 파일 unlink. viewer crash 후 잔존 정리.
 ```
 
 **module-level state**:
@@ -747,6 +765,7 @@ RUN pip install --no-cache-dir 'mcp>=1.27,<2'
 - `cleanup_expired_jobs()`:
   - viewer 시작 시 1회 + 매 1시간 background task
   - `JobRecord.expires_at < now` 이고 status in (complete, error, cancelled) → 인덱스에서 삭제
+  - **startup 시 추가**: `_cleanup_stale_mcp_tmp(max_age_seconds=3600)` 호출 — `newones/.mcp_tmp/` 의 1시간 이상 된 파일 삭제 (viewer crash/kill 후 잔존 정리). 1시간 기준은 정상 다운로드 + 처리 시간을 충분히 상회.
   - **outputs/<paper>/ 은 절대 건드리지 않음** (viewer 의 기존 페이퍼 라이프사이클)
 - processing/stalled 상태는 TTL 무시 (사용자 cancel 또는 reconcile 로 정리)
 
@@ -775,6 +794,8 @@ RUN pip install --no-cache-dir 'mcp>=1.27,<2'
 17. HTML fallback temp file 이 `newones/.mcp_tmp/` 하위에 생성, watch root scan 에 안 잡힘
 18. archive 이동된 paper 의 download → 정상 (`safe_paper_dir` 가 archives 찾음)
 19. delete 된 paper 의 download → 410, job error 마킹
+20. **2단계 publish cancel race**: `_write_part_file` 완료 후 `_atomic_publish_part` 직전에 cancel_job 호출 (asyncio sleep 으로 인위적 지연 삽입) → `.pdf` 미생성, `.part` 만 cleanup, status="cancelled". newones/ 에 expected_filename.pdf 가 절대 나타나지 않음
+21. `_cleanup_stale_mcp_tmp` 동작: `.mcp_tmp/` 안에 mtime 2시간 전 파일 + 30분 전 파일 섞어두기 → 1시간 임계 적용 시 2시간 전 파일만 삭제, 30분 전 파일 보존
 
 ### 8.2 통합 테스트 `viewer/tests/test_mcp_router.py`
 
