@@ -308,3 +308,95 @@ async def test_reconcile_stalled_when_converter_moved_on(tmp_workspace):
 
     new_rec = await mcp_jobs.reconcile_job(rec.job_id)
     assert new_rec.status == "stalled", f"Expected stalled, got {new_rec.status}"
+
+
+async def test_cleanup_expired_jobs(tmp_workspace):
+    from app.services import mcp_jobs
+    import datetime as dt
+    # Inject an expired complete + a fresh queued
+    expired_at = (dt.datetime.now() - dt.timedelta(days=1)).isoformat(timespec="seconds")
+    async with mcp_jobs._index_lock:
+        idx = await mcp_jobs._load_index()
+        idx["expired"] = {
+            "job_id": "expired", "input_type": "file", "source": "x.pdf",
+            "expected_filename": "pfmcp-expired-x.pdf",
+            "import_method": "file_upload",
+            "options": {"force_reprocess": False},
+            "status": "complete", "stage": None, "percent": 100,
+            "paper_name": "x", "location": "outputs", "error": None,
+            "submitted_at": "2020-01-01T00:00:00",
+            "completed_at": "2020-01-01T00:01:00",
+            "expires_at": expired_at,
+        }
+        idx["fresh"] = {
+            "job_id": "fresh", "input_type": "file", "source": "y.pdf",
+            "expected_filename": "pfmcp-fresh-y.pdf",
+            "import_method": "file_upload",
+            "options": {"force_reprocess": False},
+            "status": "queued", "stage": None, "percent": 0,
+            "paper_name": None, "location": None, "error": None,
+            "submitted_at": "2020-01-01T00:00:00",
+            "completed_at": None,
+            "expires_at": (dt.datetime.now() + dt.timedelta(days=7)).isoformat(timespec="seconds"),
+        }
+        await mcp_jobs._atomic_write_index(idx)
+
+    deleted = await mcp_jobs.cleanup_expired_jobs()
+    assert deleted == 1
+    assert await mcp_jobs.get_job("expired") is None
+    assert await mcp_jobs.get_job("fresh") is not None
+
+
+def test_cleanup_stale_mcp_tmp(tmp_workspace):
+    from app.services import mcp_jobs
+    import time, os as _os
+    tmp_dir = tmp_workspace / "newones" / ".mcp_tmp"
+    old_file = tmp_dir / "old.pdf"
+    new_file = tmp_dir / "new.pdf"
+    old_file.write_bytes(b"old")
+    new_file.write_bytes(b"new")
+    # Make old_file mtime 2 hours ago
+    two_hours_ago = time.time() - 7200
+    _os.utime(old_file, (two_hours_ago, two_hours_ago))
+
+    removed = mcp_jobs._cleanup_stale_mcp_tmp(max_age_seconds=3600)
+    assert removed == 1
+    assert not old_file.exists()
+    assert new_file.exists()
+
+
+async def test_submit_cached_url_returns_complete(tmp_workspace, monkeypatch):
+    """If find_processed_paper returns hit on URL, submit returns status=complete (no download)."""
+    from app.services import mcp_jobs
+    from app.services import papers as _papers
+
+    def fake_find(*, original_filename=None, source_url=None):
+        if source_url:
+            return {"name": "AlreadyHere", "location": "outputs", "viewer_path": "/viewer/AlreadyHere"}
+        return None
+
+    monkeypatch.setattr(_papers, "find_processed_paper", fake_find)
+
+    rec = await mcp_jobs.submit_job("url", "https://arxiv.org/abs/0000.00000",
+                                     mcp_jobs.JobOptions(force_reprocess=False))
+    assert rec.status == "complete"
+    assert rec.paper_name == "AlreadyHere"
+    assert rec.location == "outputs"
+
+
+async def test_force_reprocess_skips_cache(tmp_workspace, monkeypatch):
+    from app.services import mcp_jobs
+    from app.services import papers as _papers
+
+    def fake_find(*, original_filename=None, source_url=None):
+        return {"name": "AlreadyHere", "location": "outputs", "viewer_path": "x"}
+
+    def fake_resolve(url):
+        return b"%PDF-1.4 fake", url, "site_transform"
+
+    monkeypatch.setattr(_papers, "find_processed_paper", fake_find)
+    monkeypatch.setattr(_papers, "_resolve_url_to_pdf_bytes", fake_resolve)
+
+    rec = await mcp_jobs.submit_job("url", "https://arxiv.org/abs/0000.00000",
+                                     mcp_jobs.JobOptions(force_reprocess=True))
+    assert rec.status == "downloading"  # cache bypassed

@@ -185,7 +185,30 @@ async def submit_job(
             expires_at=_expires_at_iso(),
         )
     else:
-        # URL: background task does the work, this returns immediately
+        # URL: check cache first unless force_reprocess
+        from . import papers as _papers
+        if not options.force_reprocess:
+            hit = _papers.find_processed_paper(source_url=source)
+            if hit and not (hit.get("original_filename", "") or "").startswith("web-"):
+                # cached complete — synthesize a complete record
+                rec = JobRecord(
+                    job_id=job_id, input_type="url", source=source,
+                    expected_filename=expected_filename,
+                    import_method=None,
+                    options=options, status="complete", stage=None, percent=100,
+                    paper_name=hit["name"], location=hit["location"],
+                    error=None,
+                    submitted_at=_now_iso(),
+                    completed_at=_now_iso(),
+                    expires_at=_expires_at_iso(),
+                )
+                async with _index_lock:
+                    idx = await _load_index()
+                    idx[job_id] = rec.model_dump()
+                    await _atomic_write_index(idx)
+                return rec
+
+        # Not cached: URL background task does the work
         rec = JobRecord(
             job_id=job_id, input_type="url", source=source,
             expected_filename=expected_filename,
@@ -424,3 +447,41 @@ async def cancel_all_active_downloads(
                                    completed_at=_now_iso())
         count += 1
     return count
+
+
+# ── Cleanup ───────────────────────────────────────────────────────────────────
+def _cleanup_stale_mcp_tmp(max_age_seconds: int = 3600) -> int:
+    """Remove files in newones/.mcp_tmp older than max_age_seconds. Returns count removed."""
+    from ..config import settings
+    tmp_dir = settings.newones_dir / ".mcp_tmp"
+    if not tmp_dir.exists():
+        return 0
+    cutoff = _time.time() - max_age_seconds
+    removed = 0
+    for p in tmp_dir.iterdir():
+        try:
+            if p.is_file() and p.stat().st_mtime < cutoff:
+                p.unlink()
+                removed += 1
+        except Exception:
+            pass
+    return removed
+
+
+async def cleanup_expired_jobs() -> int:
+    """Remove expired terminal jobs from index. Also cleanup stale .mcp_tmp files."""
+    _cleanup_stale_mcp_tmp(max_age_seconds=3600)
+
+    now = _dt.datetime.now().isoformat(timespec="seconds")
+    removed = 0
+    async with _index_lock:
+        idx = await _load_index()
+        for job_id in list(idx.keys()):
+            rec = idx[job_id]
+            if rec.get("status") in ("complete", "error", "cancelled") \
+               and rec.get("expires_at") and rec["expires_at"] < now:
+                del idx[job_id]
+                removed += 1
+        if removed:
+            await _atomic_write_index(idx)
+    return removed
