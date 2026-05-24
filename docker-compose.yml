@@ -50,6 +50,10 @@ services:
     environment:
       - BASE_DIR=/data
       - OPENAI_BASE_URL=http://host.docker.internal:8317/v1
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - MCP_PUBLIC_BASE_URL=${MCP_PUBLIC_BASE_URL:-}
+      - MCP_JOB_TTL_DAYS=${MCP_JOB_TTL_DAYS:-7}
+      - MCP_ALLOWED_ORIGINS=${MCP_ALLOWED_ORIGINS:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
