@@ -1,16 +1,29 @@
 # PaperFlow MCP — v1.1 Bug Fixes Design Spec
 
-**Version**: v1.1 (spec rev 3)
+**Version**: v1.1 (spec rev 4)
 **Date**: 2026-05-24
-**Status**: Draft (pre-implementation, awaiting codex Round 3)
+**Status**: Draft (pre-implementation, awaiting codex Round 4 — final-approval candidate)
 **Owner**: restful3
 **Predecessor**: `2026-05-24-paperflow-mcp-server-design.md` (v1, rev5)
 **Prior reviews**:
 - `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex.md` (Round 1 — 3 Critical, 4 High, 5 Medium — all closed in rev2)
-- `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex-2.md` (Round 2 — 0 Critical, 3 High, 3 Medium — addressed in rev3)
+- `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex-2.md` (Round 2 — 0 Critical, 3 High, 3 Medium — closed in rev3)
+- `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex-3.md` (Round 3 — 0 Critical, 1 High, 3 Medium — addressed in rev4)
 **Trigger**: DeepSeek-V3 (arXiv 2412.19437) E2E surfaced 3 Critical bugs not caught by v1 codex Round 1–5 review. See `HANDOFF.md` § "🐛 v1 버그 — DeepSeek-V3 E2E 발견" for the incident log.
 
 ---
+
+## Change Log (rev4 vs rev3 — addresses Round 3 codex review)
+
+| 변경 | 이유 (Round 3 항목) |
+|------|---------------------|
+| `_resolve_completed_candidate` step 1 (outputs metadata) 이 `find_processed_paper` 대신 새 `_find_metadata_match_in_dir(base_dir, expected_filename)` 사용. outputs metadata 검사가 `find_processed_paper` newest-wins 와 독립. | High #1 — outputs metadata가 archives 보다 mtime 늦을 때 outputs hit 놓침. |
+| 새 helper `_find_metadata_match_in_dir` (mcp_jobs.py 내부, papers.py 무수정). `_safe_child_dir` 동등 containment check 포함 → symlink escape 방어. 동일 가드를 `_scan_outputs_dir_only` / `_scan_archives_dir_only` 에도 적용. | High #1 fix + Medium #1 (symlink escape). 두 fix 가 같은 helper 부근에 있어 함께 처리. |
+| `_find_metadata_match_in_dir` / 새 outputs-only / archives-only helper 들이 sub-directory 가 `base_dir` 의 직속 child 인지 (`sub.resolve().parent == base_dir.resolve()`) 검증. | Medium #1 — symlink containment. |
+| T7 / T15 / §11 risk 문구의 `_scan_outputs_for_filename` 명칭을 `_scan_outputs_dir_only` / `_find_metadata_match_in_dir` 로 통일. | Medium #2 — rev3 내부 명칭 불일치. |
+| §11 첫 번째 risk mitigation 을 "error message includes MCP_REQUIRE_TRANSLATION=false hint; operator fixes env before cleanup/resubmit" 로 갱신. | Medium #3 — risk 문구가 rev3 의 새 hint 메시지와 일치하지 않음. |
+| 새 테스트 T22 추가: outputs+archives metadata 모두 존재, archives mtime > outputs mtime, outputs folder 에는 source PDF 없음 → resolver 가 outputs metadata 우선 반환. | High #1 보강 — T21 은 filesystem scan 케이스만 커버. |
+| 새 테스트 T23 추가: outputs 안 symlink 가 외부 폴더를 가리킬 때 scan helper 가 외부 후보를 candidate 로 잡지 않는지. | Medium #1 보강. |
 
 ## Change Log (rev3 vs rev2 — addresses Round 2 codex review)
 
@@ -139,21 +152,39 @@ def _paper_has_ko_md(paper_dir: Path) -> bool | None:
         return None
 
 
-def _scan_outputs_dir_only(expected_filename: str) -> str | None:
-    """Scan outputs/ ONLY for a folder containing expected_filename.
-    Returns the folder name (str) or None. archives is never touched.
+def _is_safe_direct_child(base: Path, candidate: Path) -> bool:
+    """True iff `candidate` is a direct child of `base` and points within `base`
+    (symlink-resolved). Prevents scan helpers from following symlinks that
+    escape outputs/ or archives/.
 
-    Note: separate from the existing `_scan_outputs_for_filename` (which despite
-    its name scans both outputs AND archives — rev3 deprecates that for the
-    rev2 use cases below; existing v1 use sites for that function remain unless
-    they also benefit from this split).
+    Mirrors `papers._safe_child_dir` containment logic without depending on
+    papers.py internals (which v1.1 keeps untouched).
+    """
+    try:
+        base_resolved = base.resolve(strict=True)
+        cand_resolved = candidate.resolve(strict=True)
+    except (FileNotFoundError, OSError):
+        return False
+    if cand_resolved.parent != base_resolved:
+        return False
+    if not cand_resolved.is_dir():
+        return False
+    return True
+
+
+def _scan_outputs_dir_only(expected_filename: str) -> str | None:
+    """Scan outputs/ ONLY for a direct-child folder containing expected_filename.
+    Returns the folder name (str) or None. archives/ is never touched.
+    Symlink-escape via children of outputs/ is rejected by `_is_safe_direct_child`.
     """
     from ..config import settings
     base = settings.outputs_dir
     if not base.exists():
         return None
     for sub in base.iterdir():
-        if sub.is_dir() and (sub / expected_filename).is_file():
+        if not _is_safe_direct_child(base, sub):
+            continue
+        if (sub / expected_filename).is_file():
             return sub.name
     return None
 
@@ -165,7 +196,39 @@ def _scan_archives_dir_only(expected_filename: str) -> str | None:
     if not base.exists():
         return None
     for sub in base.iterdir():
-        if sub.is_dir() and (sub / expected_filename).is_file():
+        if not _is_safe_direct_child(base, sub):
+            continue
+        if (sub / expected_filename).is_file():
+            return sub.name
+    return None
+
+
+def _find_metadata_match_in_dir(base: Path, expected_filename: str) -> str | None:
+    """Scan a single directory (outputs/ XOR archives/) for a direct-child
+    folder whose paper_meta.json records original_filename == expected_filename.
+    Returns the folder name (str) or None. Read-only — never writes or follows
+    symlinks out of `base`.
+
+    Why this exists (rev4 fix for R3 H#1): `papers.find_processed_paper` merges
+    outputs+archives candidates and sorts by mtime, so an archives copy newer
+    than the outputs copy will mask the outputs match. We need an outputs-only
+    metadata lookup that ignores archives entirely. We keep papers.py untouched
+    (no-change constraint) and re-read paper_meta.json here.
+    """
+    import json
+    if not base.exists():
+        return None
+    for sub in base.iterdir():
+        if not _is_safe_direct_child(base, sub):
+            continue
+        meta_path = sub / "paper_meta.json"
+        if not meta_path.is_file():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if meta.get("original_filename") == expected_filename:
             return sub.name
     return None
 
@@ -175,35 +238,36 @@ def _resolve_completed_candidate(expected_filename: str) -> tuple[str, str] | No
     Returns (paper_name, location) or None.
 
     Outputs is strictly preferred over archives. The lookup order is:
-      1. outputs metadata match (via find_processed_paper, filtered to location='outputs')
-      2. outputs filesystem scan (source PDF presence)
-      3. archives metadata match
-      4. archives filesystem scan
+      1. outputs metadata match  — direct scan of outputs/ paper_meta.json
+      2. outputs filesystem scan — source PDF presence in outputs/
+      3. archives metadata match — direct scan of archives/ paper_meta.json
+      4. archives filesystem scan — source PDF presence in archives/
 
-    Steps 1–2 ensure outputs wins even when find_processed_paper's newest-wins
-    sort returns an archives copy (e.g., when archive mtime > outputs mtime).
+    Steps 1–2 use mcp_jobs-internal helpers that ignore archives entirely,
+    so outputs always wins regardless of newest-wins sort, mtime, or whether
+    the source PDF was moved.
     """
-    from . import papers as _papers
+    from ..config import settings
 
-    info = _papers.find_processed_paper(original_filename=expected_filename)
+    # 1. outputs metadata (independent of papers.find_processed_paper)
+    name = _find_metadata_match_in_dir(settings.outputs_dir, expected_filename)
+    if name:
+        return name, "outputs"
 
-    # 1. outputs metadata
-    if info and info["location"] == "outputs":
-        return info["name"], "outputs"
-
-    # 2. outputs filesystem (paper_meta missing/corrupt or stale metadata)
-    name_out = _scan_outputs_dir_only(expected_filename)
-    if name_out:
-        return name_out, "outputs"
+    # 2. outputs filesystem
+    name = _scan_outputs_dir_only(expected_filename)
+    if name:
+        return name, "outputs"
 
     # 3. archives metadata
-    if info and info["location"] == "archives":
-        return info["name"], "archives"
+    name = _find_metadata_match_in_dir(settings.archives_dir, expected_filename)
+    if name:
+        return name, "archives"
 
     # 4. archives filesystem
-    name_arch = _scan_archives_dir_only(expected_filename)
-    if name_arch:
-        return name_arch, "archives"
+    name = _scan_archives_dir_only(expected_filename)
+    if name:
+        return name, "archives"
 
     return None
 
@@ -214,7 +278,9 @@ def _paper_dir_for(name: str, location: str) -> Path:
     return base / name
 ```
 
-The legacy `_scan_outputs_for_filename` (lines 295-304) has exactly one caller — `reconcile_job` line 334, the v1 fallback scan branch — which rev3 replaces with `_resolve_completed_candidate`. After rev3, the legacy function is dead code. Implementation step 1 should `grep -n "_scan_outputs_for_filename"` after wiring the new helpers and remove the legacy function if the only remaining occurrence is its definition.
+The legacy `_scan_outputs_for_filename` (lines 295-304) has exactly one caller — `reconcile_job` line 334. rev3/rev4 replace it with `_resolve_completed_candidate`. After implementation, the legacy function becomes dead code; implementation step 1 removes it after `grep -n "_scan_outputs_for_filename"` confirms only the definition remains.
+
+`papers.find_processed_paper` is **no longer called by `_resolve_completed_candidate` in rev4.** It is still used by v1 callers elsewhere in viewer (paper listing, viewer pages, RAG) and remains untouched; only the MCP reconcile path uses the new direct-scan helpers.
 
 #### 5.2.3 `reconcile_job` modified flow
 
@@ -467,7 +533,7 @@ TDD. New test cases in `viewer/tests/test_mcp_jobs.py` (extending existing modul
 | T4 | `test_reconcile_archives_skipped_from_partial_check` | archives/{paper_dir}/ has only Title.md; no outputs match | status="complete" (archives are user-curated) |
 | T5 | `test_paper_has_ko_md_helper_three_states` | (a) folder w/ _ko.md, (b) folder w/o _ko.md, (c) folder absent, (d) folder w/ only _ko_explained.md | True / False / None / False |
 | T6 | `test_resolve_completed_candidate_outputs_wins` | Both outputs/{paper_dir}/ and archives/{paper_dir}/ contain matching meta. | Returns (name, "outputs") |
-| T7 | `test_resolve_completed_candidate_fallback_scan` | paper_meta.json absent/corrupt in outputs/{paper_dir}/, source PDF present | Returns (name, "outputs") via _scan_outputs_for_filename |
+| T7 | `test_resolve_completed_candidate_fallback_scan` | paper_meta.json absent/corrupt in outputs/{paper_dir}/, source PDF present | Returns (name, "outputs") via `_scan_outputs_dir_only` step #2 |
 | T8 | `test_cancel_job_error_status_with_delete_cleans_smart_rename` | Job status=error, outputs/{paper_dir}/ exists smart-renamed | After cancel_job(delete_file=true): folder removed, response.cleanup.attempted=True, deleted_path set |
 | T9 | `test_cancel_job_error_status_no_delete_no_cleanup` | Same as T8 but delete_file=False | Folder still exists, cleanup.attempted=False |
 | T10 | `test_cancel_job_archives_preserved` | Job status=error, archives/{paper_dir}/ exists, no outputs | cleanup.attempted=False, cleanup.warning mentions archives; archives folder intact |
@@ -475,13 +541,15 @@ TDD. New test cases in `viewer/tests/test_mcp_jobs.py` (extending existing modul
 | T12 | `test_cancel_job_queued_post_hook` | Job status=queued, source PDF in newones/, smart-renamed folder in outputs/ | After cancel_job(delete_file=true): source PDF gone AND smart-renamed folder gone, cleanup populated |
 | T13 | `test_zip_endpoint_calls_reconcile_and_rejects_partial` | Job stored as `status=complete` with paper_dir present, no _ko.md, MCP_REQUIRE_TRANSLATION=true | Calling /jobs/{id}/zip triggers reconcile → status=error → HTTP 404 |
 | T14 | `test_legacy_complete_partial_migration_via_get_job_status` | Job persisted at `status=complete` (v1 schema), filesystem has partial outputs | First `get_job_status` call after rev2: status flips to error with translation_missing msg |
-| T15 | `test_fallback_scan_path_partial_detected` | paper_meta absent in outputs folder; reconcile falls through to _scan_outputs_for_filename | _classify_completion returns "partial" → status=error |
+| T15 | `test_fallback_scan_path_partial_detected` | paper_meta absent in outputs folder; reconcile falls through to `_scan_outputs_dir_only` (step #2) | _classify_completion returns "partial" → status=error |
 | T16 | `test_outputs_partial_with_archives_complete_both_present` | outputs/{paper_dir}/ partial AND archives/{same-name}/ has _ko.md | `_resolve_completed_candidate` returns outputs hit; reconcile flags partial (outputs wins) |
 | T17 | `test_reconcile_paper_folder_missing_after_complete` | Job persisted complete, outputs/{paper_dir}/ deleted between reconcile calls (race) | status="error", error contains "no longer present" — NOT translation_missing |
 | T18 | `test_cancel_job_response_shape` | Various cancel scenarios | Response always has shape `{job_id, status, cleanup: {attempted, deleted_path, warning}}` |
 | T19 | `test_get_job_result_rejects_error_after_reconcile_downgrade` | Job persisted complete, partial fs state. Call get_job_result. | reconcile downgrades to error; get_job_result raises (FastMCP tool error response) |
 | T20 | `test_classify_completion_four_states_direct` | Helper unit test: (a) outputs+ko_md → "complete"; (b) outputs only Title.md + REQUIRE=true → "partial"; (c) outputs only Title.md + REQUIRE=false → "skip"; (d) candidate name resolved but paper_dir absent → "missing"; (e) archives-only → "complete" | Four-state verdict matrix exhaustive |
 | T21 | `test_resolve_completed_candidate_outputs_filesystem_beats_archives_metadata` | outputs/{paper_dir}/ contains source PDF but no paper_meta; archives/{paper_dir}/ has matching paper_meta + _ko.md; archives mtime > outputs mtime | Resolver returns (name, "outputs") — outputs filesystem step (#2) wins over archives metadata step (#3) |
+| T22 | `test_resolve_completed_candidate_outputs_metadata_beats_archives_metadata_when_archives_newer` | outputs/{paper_dir}/ has matching paper_meta only (no source PDF); archives/{paper_dir}/ has matching paper_meta + _ko.md; archives mtime > outputs mtime | Resolver returns (name, "outputs") — `_find_metadata_match_in_dir(outputs_dir, ...)` (step #1) catches outputs metadata regardless of newest-wins |
+| T23 | `test_scan_helpers_reject_symlink_escape` | outputs/ contains a symlink subdirectory whose target is `/tmp/external_dir/{expected_filename}`; outputs/ has no real folder containing expected_filename | `_scan_outputs_dir_only` returns None (symlink not followed). Same for `_find_metadata_match_in_dir` if symlink target has paper_meta.json |
 
 **Test update** (existing): `test_mcp_jobs.py:265-266` currently reads `cancelled.status` from a `JobRecord`. With the rev3 `cancel_job() -> dict | None` change, update to `cancelled["status"]`. T18 (response shape) is the primary regression guard; mention in implementation step 4.
 
@@ -489,7 +557,7 @@ Regression sweep: existing 40 tests must still pass.
 
 ## 7. Implementation order (for plan)
 
-1. **T5, T6, T7, T20, T21 (helpers)** → implement `_paper_has_ko_md`, `_scan_outputs_dir_only`, `_scan_archives_dir_only`, `_resolve_completed_candidate`, `_paper_dir_for`, `_classify_completion` → green
+1. **T5, T6, T7, T20, T21, T22, T23 (helpers)** → implement `_is_safe_direct_child`, `_paper_has_ko_md`, `_scan_outputs_dir_only`, `_scan_archives_dir_only`, `_find_metadata_match_in_dir`, `_resolve_completed_candidate`, `_paper_dir_for`, `_classify_completion` → green. After wiring complete, `grep -n "_scan_outputs_for_filename"` should show only the definition (no callers) → delete it as dead code.
 2. **T15 (fallback partial detection)** → already covered by `_classify_completion` from step 1 — verify regression
 3. **T1–T4, T13, T14, T16, T17 (reconcile policy)** → modify `reconcile_job` per §5.2.3 (both complete branch AND queued/processing branch handle partial/missing/skip explicitly) → green + regression
 4. **T18 (cancel response shape), T8–T12 (cancel cleanup)** → modify `cancel_job` + add `_cleanup_smart_renamed_paper` per §5.3 → green + regression. Update existing `test_mcp_jobs.py:265-266` from `cancelled.status` (JobRecord) to `cancelled["status"]` (dict) — see "Test update" note in §6.
@@ -509,7 +577,7 @@ Regression sweep: existing 40 tests must still pass.
 
 ## 9. Codex review plan
 
-Round 1 returned 3 Critical + 4 High + 5 Medium (all valid, all addressed in rev2). Round 2 returned 0 Critical + 3 High + 3 Medium (all valid, all addressed in rev3). Round 3 expected — submit rev3, request `===CODEX_FINAL_APPROVAL===`. If high-severity findings remain, Round 4. Hard cap at 4 (originally 2 in rev1, relaxed to 3 in rev2, +1 here because each round is producing diminishing-severity findings — pattern matches v1's 5-round cycle).
+Round 1 returned 3 Critical + 4 High + 5 Medium (all closed in rev2). Round 2 returned 0 Critical + 3 High + 3 Medium (all closed in rev3). Round 3 returned 0 Critical + 1 High + 3 Medium (all addressed in rev4). Round 4 expected — submit rev4, request `===CODEX_FINAL_APPROVAL===`. Hard cap remains 5 (matches v1's 5-round cycle).
 
 ## 10. Open questions
 
@@ -517,7 +585,7 @@ None — all rev1 ambiguities resolved.
 
 ## 11. Risks
 
-- **Risk**: User sets `MCP_REQUIRE_TRANSLATION=true` but actually runs `config.json` with `translate_to_korean: false`. English-only complete jobs all downgrade to `status=error`. **Mitigation**: error message tells the user to `cancel_job(delete_file=true)` + resubmit, which would loop back into the same disabled-translation pipeline and produce another English-only result. This loop is *visible* (status=error on every reconcile) — operator notices and corrects MCP_REQUIRE_TRANSLATION. Not silent corruption.
+- **Risk**: User sets `MCP_REQUIRE_TRANSLATION=true` but actually runs `config.json` with `translate_to_korean: false`. English-only complete jobs all downgrade to `status=error`. **Mitigation**: the `translation_missing` error message itself now includes a one-line operator hint — `"If this deployment intentionally disables Korean translation, set MCP_REQUIRE_TRANSLATION=false."` — so the operator fixes the env *before* running the cleanup/resubmit cycle. Repeated resubmit-loop is no longer the primary mitigation; the in-message hint is.
 - **Risk**: Reconcile cost. v1.1 makes `complete` re-validate the filesystem on every status query. Filesystem stat / iterdir on a paper folder is sub-ms, but high-frequency polling clients pay it per call. **Mitigation**: paper folders contain few files (< 50 typical); `_paper_has_ko_md` early-exits on first match. If profiling shows this matters, add an in-memory `(job_id, mtime) → verdict` cache with TTL ≤ 60s.
 - **Risk**: Concurrent reconcile races: two simultaneous status queries on the same job both pass the partial check and both write `status=error`. **Mitigation**: writes go through `_set_job_fields` which acquires `_index_lock`; the last write wins but both write the same error — idempotent. No correctness issue.
-- **Risk**: Smart-rename folder discovery via `_resolve_completed_candidate` depends on `_scan_outputs_for_filename` finding the source PDF inside the folder. If main_terminal.py moved the PDF *out* of the folder (a behavior change in some pipelines), the fallback misses. **Mitigation**: current main_terminal.py keeps the source PDF in `outputs/{paper_dir}/` after duplicate-skip cleanup (verified in DeepSeek-V3 logs). If this ever changes, the test suite (T15) catches the regression. Mention in `HANDOFF.md` for awareness.
+- **Risk**: Smart-rename folder discovery via `_resolve_completed_candidate` depends on either (a) `paper_meta.json` being readable and recording the original filename (`_find_metadata_match_in_dir` step) or (b) the source PDF physically sitting inside the folder (`_scan_outputs_dir_only` step). If main_terminal.py changes to move the PDF out AND deletes paper_meta.json, both steps miss. **Mitigation**: current main_terminal.py keeps the source PDF in `outputs/{paper_dir}/` after duplicate-skip cleanup AND writes paper_meta.json before duplicate check (verified in DeepSeek-V3 logs). If either invariant breaks, test suite (T7, T15, T22) catches the regression. Mention in `HANDOFF.md` for awareness.
