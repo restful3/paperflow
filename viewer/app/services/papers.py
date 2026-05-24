@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from urllib.parse import quote, urlparse, urljoin
 from urllib.request import Request, urlopen
@@ -203,6 +204,13 @@ def _candidate_pdf_urls_from_page(url: str, html: str) -> list[str]:
     return out
 
 
+_STRICT_PDF_DOMAINS = (
+    "arxiv.org", "openreview.net", "aclanthology.org", "proceedings.mlr.press",
+    "biorxiv.org", "medrxiv.org", "acm.org", "ieeexplore.ieee.org",
+    "springer.com", "nature.com", "sciencedirect.com",
+)
+
+
 def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
     """Resolve URL to PDF bytes. Used by import_url_as_paper and mcp_jobs.
 
@@ -260,19 +268,6 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
 
     # G. strict_pdf_required check (based on effective_url, not original doi.org)
     effective_host = (urlparse(effective_url).netloc or "").lower()
-    _STRICT_PDF_DOMAINS = (
-        "arxiv.org",
-        "openreview.net",
-        "aclanthology.org",
-        "proceedings.mlr.press",
-        "biorxiv.org",
-        "medrxiv.org",
-        "acm.org",
-        "ieeexplore.ieee.org",
-        "springer.com",
-        "nature.com",
-        "sciencedirect.com",
-    )
     if any(d in effective_host for d in _STRICT_PDF_DOMAINS):
         detail = f" direct-download failed ({'; '.join(download_errors[:2])})" if download_errors else ""
         raise ValueError("해당 논문 링크는 원문 PDF 직접 다운로드가 필요하지만 실패했습니다." + detail)
@@ -291,7 +286,6 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
 
     mcp_tmp_dir = settings.newones_dir / ".mcp_tmp"
     mcp_tmp_dir.mkdir(parents=True, exist_ok=True)
-    import tempfile
     with tempfile.NamedTemporaryFile(dir=mcp_tmp_dir, suffix=".pdf", delete=False) as tf:
         tmp_path = Path(tf.name)
     try:
@@ -310,6 +304,8 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
         ]
         try:
             subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
+        except FileNotFoundError:
+            raise ValueError("Headless browser executable missing.")
         except subprocess.TimeoutExpired:
             raise ValueError("PDF 생성 타임아웃(60s).")
         except subprocess.CalledProcessError as e:
