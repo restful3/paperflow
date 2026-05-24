@@ -1,14 +1,33 @@
-# PaperFlow MCP Server — Design Spec (v2, post-codex review)
+# PaperFlow MCP Server — Design Spec (rev3, post-codex Round 2)
 
-**Version**: v1 (spec rev 2)
+**Version**: v1 (spec rev 3)
 **Date**: 2026-05-24
 **Status**: Draft (pre-implementation, awaiting user sign-off)
 **Owner**: restful3
-**Prior review**: `docs/reviews/2026-05-24-paperflow-mcp-server-codex.md`
+**Prior reviews**:
+- `docs/reviews/2026-05-24-paperflow-mcp-server-codex.md` (Round 1)
+- `docs/reviews/2026-05-24-paperflow-mcp-server-codex-2.md` (Round 2)
 
 ---
 
-## Change Log (vs spec rev 1)
+## Change Log (rev3 vs rev2 — addresses Round 2 codex review)
+
+| 변경 | 이유 (Round 2 항목) |
+|------|---------------------|
+| `FastMCP(..., streamable_http_path="/")` 명시 | rev2 에서 미설정 → endpoint 가 `/mcp/mcp` 가 됨 (Round 2 high #1) |
+| zip endpoint 인증을 `Depends(verify_mcp_key)` 단일화, "ASGI middleware 가 이미 처리" 주석 삭제 | rev2 자기모순 (Round 2 high #2) |
+| `safe_paper_dir(paper_info["name"])` — 단일 인자 (실제 시그니처) | snippet TypeError (Round 2 high #3) |
+| reconcile 에 **fallback 추가**: `find_processed_paper` 미스 시 outputs/archives 하위 폴더 중 `(dir / expected_filename).is_file()` 인 폴더 스캔 | metadata 단계 실패/skip 시에도 정상 산출물 인식 (Round 2 high #4) |
+| **URL submit 비동기화**: submit 은 즉시 `status="downloading"` 반환, `asyncio.create_task` 가 다운로드 → publish → `status="queued"` 전이. cancel_job 이 downloading 상태도 처리 | URL submit tool call 안 동기 다운로드 35\~60초 timeout 위험 (Round 2 high #5) |
+| `user_middleware.insert + build_middleware_stack()` 폐기 → **ASGI wrapper 함수** | Open Question 1 해소, 더 안전 (Round 2 high #6) |
+| `RUN pip install --no-cache-dir 'mcp>=1.27,<2'` quote, 또는 `viewer/requirements.txt` 추가 | shell redirection 방지 (Round 2 신규 high #1) |
+| lifespan 의 cleanup background task handle 보관 → 종료 시 cancel/await | task 누수 방지 (Round 2 medium #2) |
+| `_resolve_url_to_pdf_bytes()` temp file 전략 명시: `tempfile.NamedTemporaryFile(dir=settings.newones_dir, suffix=".pdf")` 로 기존 file-based quality gate 보존 후 bytes 읽고 temp 삭제 | 기존 import_url_as_paper behavior 동일 (Round 2 medium #3) |
+| `mcp_errors/{job_id}.json` 사이드카 **폐기**. error 는 `JobRecord.error` (mcp_jobs.json 내부) 만 사용. converter 에러는 `processing_status.json.error` | 용도 불명확 (Round 2 medium #4) |
+| `MCP_ALLOWED_ORIGINS` 기본값 변경: `MCP_PUBLIC_BASE_URL` 의 origin + localhost 계열 (`http://localhost`, `http://127.0.0.1`) 자동 포함 | DNS rebinding 방어 MCP MUST (Round 2 medium #1) |
+| Open Question 1 (middleware 안정성) 제거 — wrapper 채택으로 해소 | (Round 2 high #6) |
+
+## Change Log (rev2 vs rev1)
 
 | 변경 | 이유 |
 |------|------|
@@ -82,7 +101,6 @@ PaperFlow 의 PDF→Markdown(+이미지)→번역 파이프라인을 **MCP (Mode
                                         │  reads/writes                        │
                                         │  ▼                                   │
                                         │  /data/logs/mcp_jobs.json (new)      │
-                                        │  /data/logs/mcp_errors/{job}.json    │
                                         │  /data/logs/processing_status.json   │
                                         │  /data/newones/{<name>.part →        │
                                         │                pfmcp-<j>-<s>.pdf}    │
@@ -109,22 +127,32 @@ PaperFlow 의 PDF→Markdown(+이미지)→번역 파이프라인을 **MCP (Mode
 
 ### 3.2 Data Flow
 
-**Submit (URL)**
+**Submit (URL) — 비동기 다운로더**
 1. `submit_paper(input_type="url", source=url, options={force_reprocess?})`
-2. URL 검증 (scheme/host basic check)
-3. `force_reprocess=false` (기본): `find_processed_paper(source_url=url)` 조회. 히트면 즉시 `status="complete"` job 반환 (`cached=true`). 단 히트한 paper 의 `paper_meta.json.original_filename` 이 `web-` 로 시작하면 legacy page-capture 일 가능성 → 캐시 미스로 fallthrough (기존 arXiv guard 와 일치하는 보수적 동작)
+2. URL 검증 (scheme/host basic check, ValueError on fail → job 미생성)
+3. `force_reprocess=false` (기본): `find_processed_paper(source_url=url)` 조회. 히트면 즉시 `status="complete"` job 반환 (`cached=true`). 단 히트한 paper 의 `paper_meta.json.original_filename` 이 `web-` 로 시작하면 legacy page-capture 일 가능성 → 캐시 미스로 fallthrough
 4. job_id 생성 (uuid4), expected_filename = `pfmcp-{job_id[:12]}-{slugify(host_or_title)[:40]}.pdf`
-5. URL → PDF 다운로드: 기존 `papers._site_transform_pdf_urls()` + `papers._download_pdf()` + DOI redirect resolve + HTML fallback 재사용 (현재 `import_url_as_paper()` 가 이미 구현한 흐름. v1 은 이 함수를 새 시그니처로 분리/래핑하지 않고, 작은 helper `_resolve_url_to_pdf_bytes(url) -> (bytes, final_url)` 만 추출해서 재사용)
-6. PDF 바이트를 `newones/{expected_filename}.part` 에 write → `fsync` → `os.replace(...part → .pdf)`. `.pdf` 파일이 시야에 나타나는 순간 완전체 보장
-7. URL 입력의 경우: 기존 `_write_source_sidecar(filename, url)` 호출 (paper 폴더가 생성된 뒤 `paper_meta.json.paper_url` / `source_url_original` 백필 가능)
-8. `logs/mcp_jobs.json` 에 `JobRecord` (import_method 필드 포함) 기록 (asyncio.Lock 하에서 load→modify→atomic replace)
-9. `{job_id, status: "queued", cached: false, expected_filename}` 반환
+5. **즉시** `JobRecord` 작성: `status="downloading"`, `import_method=None` (확정 전). `logs/mcp_jobs.json` 에 기록 → 도구 반환
+6. **백그라운드 task** (`asyncio.create_task(_download_and_publish(job_id, url, expected_filename))`):
+   a. `_resolve_url_to_pdf_bytes(url)` 호출 → `(pdf_bytes, final_url, import_method)`. 실패 시 `JobRecord.status="error"`, error 메시지 저장, task 종료
+   b. `newones/{expected_filename}.part` 에 write → `fsync(fileno)` → `os.replace(.part → .pdf)`
+   c. `_write_source_sidecar(expected_filename, url)` 호출 (paper 폴더가 컨버터에 의해 생성된 뒤 `paper_meta.json.paper_url` / `source_url_original` 백필 가능)
+   d. `JobRecord.status="queued"`, `import_method` 확정. (이제 watch 가 PDF 발견 → 처리 시작)
+7. `{job_id, status: "downloading", cached: false, expected_filename}` 반환 (도구 호출은 수 ms 안에 끝남)
+8. 다운로드 task handle 은 module-level dict `_active_download_tasks[job_id] = task` 에 보관 (cancel_job 이 접근, lifespan 종료 시 모두 cancel)
 
-**Reverse-lookup**: paper 폴더가 완성된 뒤 MCP reconciler 는 `find_processed_paper(original_filename=expected_filename)` 으로 job ↔ paper 매핑. expected_filename 의 `pfmcp-{job12}-` prefix 가 fingerprint 역할 — 사용자가 파일 rename 하지 않는 한 안전. (rename 한 경우는 v1 미지원, 사용자 책임.)
+**Reverse-lookup**: paper 폴더가 완성된 뒤 MCP reconciler 는 두 단계로 매핑.
+   - Primary: `find_processed_paper(original_filename=expected_filename)` (metadata 단계 성공 시 동작)
+   - **Fallback**: outputs/ 와 archives/ 의 하위 폴더를 스캔해 `(folder / expected_filename).is_file()` 인 폴더 찾기 — metadata 가 disabled/failed/skipped 여도 PDF 가 출력 폴더로 이동만 되면 매핑 성공. 기존 cancel cleanup 도 동일 패턴 사용 (`papers.py:1310-1314`)
 
-**Submit (File)**
-- 같은 흐름. PDF base64 디코드 (200MB 초과 거부, magic byte `%PDF-` 검증), expected_filename = `pfmcp-{job_id[:12]}-{slugify(original_filename)[:40]}.pdf`
-- 입력 `source` 는 사용자 제공 original_filename (메타 보존용)
+expected_filename 의 `pfmcp-{job12}-` prefix 가 fingerprint 역할 — 사용자가 파일 rename 하지 않는 한 안전. (rename 한 경우는 v1 미지원, 사용자 책임.)
+
+**Submit (File) — 동기 publish**
+- File 입력은 다운로드 단계가 없음 (bytes 이미 제공). 동기 처리:
+  1. PDF base64 디코드 (200MB 초과 거부, magic byte `%PDF-` 검증)
+  2. expected_filename = `pfmcp-{job_id[:12]}-{slugify(original_filename)[:40]}.pdf`
+  3. `.part` → fsync → `os.replace` (수 ms)
+  4. `JobRecord.status="queued"` 로 바로 시작, `cached=false` 반환
 - duplicate check: `find_processed_paper(original_filename=source)` 도 시도 — 단 file 입력은 사용자별 의도가 다양해 캐시 적중률 낮음, 그래도 시도는 함
 
 **Poll: reconcile_job(job_id)**
@@ -133,15 +161,14 @@ PaperFlow 의 PDF→Markdown(+이미지)→번역 파이프라인을 **MCP (Mode
 
 1. `mcp_jobs.json` 에서 JobRecord 로드 → 없으면 None
 2. 종료 상태(`complete|error|cancelled`) 이면 그대로 반환
-3. `logs/mcp_errors/{job_id}.json` 존재 → `status="error"`, error 메시지 저장, `completed_at` 설정
-4. `find_processed_paper(original_filename=expected_filename)` → 결과 있고 `paper_meta.json` 의 mtime > `submitted_at` 면 `status="complete"`, `paper_name` + `location` 저장
-5. `processing_status.json` 로드:
+3. status="downloading" 이면 `_active_download_tasks[job_id]` 가 살아있는지 확인. 없으면(viewer 재시작 등) → `status="error"` ("download interrupted, retry submit")
+4. **Complete 매핑 (primary)**: `find_processed_paper(original_filename=expected_filename)` → 결과 있고 `paper_meta.json` mtime > `submitted_at` → `status="complete"`, `paper_name` + `location` 저장
+5. **Complete 매핑 (fallback)**: primary 미스 시 outputs/ + archives/ 각 하위 폴더 스캔. `(dir / expected_filename).is_file()` AND `dir.stat().st_mtime > submitted_at` → `status="complete"`, paper_name = dir.name, location 설정. (metadata stage 가 skip/fail 해도 PDF 가 폴더로 이동만 되면 인식)
+6. `processing_status.json` 로드:
    - `current_file == expected_filename` 이고 `stage not in ("idle","complete","error")` → `status="processing"`, stage/percent 반영
-   - `current_file == expected_filename` 이고 `stage == "error"` → `status="error"`, error 메시지 반영
-   - `processing_status` mtime > 30분이고 stage 무변화 + 위 4 미히트 → `status="stalled"`
-6. 위 어디에도 안 잡히면 `newones/{expected_filename}` 존재 → `status="queued"`. 미존재 → `status="error"` (파일이 watch 에 의해 처리됐어야 하는데 outputs 도 없음 — 비정상)
-
-**중요**: 4번이 3번보다 뒤에 있는 이유 — 컨버터가 실패해서 sidecar 를 쓴 직후, 또 다른 watch 사이클이 이전 partial outputs 를 발견하면 거짓 complete 가 될 수 있음. error sidecar 우선.
+   - `current_file == expected_filename` 이고 `stage == "error"` → `status="error"`, `processing_status.error` 메시지 반영
+   - `processing_status` mtime > 30분이고 stage 무변화 + 위 4,5 미히트 → `status="stalled"`
+7. 위 어디에도 안 잡히면 `newones/{expected_filename}` 존재 → `status="queued"`. 미존재 → `status="error"` ("file disappeared from queue with no output" — 비정상 시나리오, 사용자가 viewer UI 에서 직접 삭제 등)
 
 **Result**
 1. `get_job_result(job_id, include_pdf=false, include_translation=true)` — status=complete 일 때만
@@ -166,8 +193,10 @@ PaperFlow 의 PDF→Markdown(+이미지)→번역 파이프라인을 **MCP (Mode
 
 **Cancel**
 1. `cancel_job(job_id, delete_file=true)`
-2. 기존 `paper_svc.request_cancel_processing(filename=expected_filename, delete_file, force=True)` 호출
-3. `JobRecord.status = "cancelled"`, completed_at 설정
+2. status="downloading": `_active_download_tasks[job_id].cancel()` + `.part` 파일 cleanup (있으면) → `JobRecord.status="cancelled"`
+3. status="queued"/"processing": 기존 `paper_svc.request_cancel_processing(filename=expected_filename, delete_file, force=True)` 호출
+4. 종료 상태 (complete/error/cancelled): no-op + ok (멱등)
+5. `JobRecord.status = "cancelled"`, completed_at 설정
 
 ---
 
@@ -215,7 +244,7 @@ class JobRecord(BaseModel):
     expected_filename: str          # pfmcp-{job12}-{slug}.pdf
     import_method: Literal["direct_pdf", "html_fallback", "site_transform", "file_upload"] | None
     options: JobOptions
-    status: Literal["queued", "processing", "complete", "error", "cancelled", "stalled"]
+    status: Literal["downloading", "queued", "processing", "complete", "error", "cancelled", "stalled"]
     stage: str | None
     percent: int                    # 0-100
     paper_name: str | None          # outputs/<paper_name> or archives/<paper_name>
@@ -227,12 +256,16 @@ class JobRecord(BaseModel):
 
 # Public (all async; module-level asyncio.Lock 보호):
 async def submit_job(input_type, source, options, *, pdf_bytes=None) -> JobRecord
+   # URL: status="downloading" 즉시 반환 + asyncio.create_task(_download_and_publish(...))
+   # File: bytes 검증 + .part publish + status="queued" 동기 반환
 async def get_job(job_id) -> JobRecord | None
 async def reconcile_job(job_id) -> JobRecord
 async def list_jobs(limit=50, status=None) -> list[JobRecord]
 async def cancel_job(job_id, delete_file=True) -> JobRecord
+   # status="downloading" 이면 _active_download_tasks[job_id].cancel() + partial cleanup
 async def cleanup_expired_jobs() -> int   # 시작 시 + 매 1시간 background task
 async def mark_paper_missing(job_id) -> JobRecord   # download 시 paper 폴더 사라진 경우
+async def cancel_all_active_downloads() -> int   # lifespan shutdown 호출
 
 # Private:
 async def _atomic_write_index(jobs: dict[str, dict]) -> None
@@ -242,6 +275,16 @@ async def _write_part_then_publish(pdf_bytes: bytes, dest: Path) -> None
    # .part write → os.fsync(fileno) → os.replace
 def _build_expected_filename(job_id: str, slug_source: str) -> str
    # pfmcp-{job_id[:12]}-{safe_slug[:40]}.pdf
+async def _download_and_publish(job_id: str, url: str, expected_filename: str) -> None
+   # bg task: resolve url → publish → status transition. except → status="error". CancelledError → cleanup .part
+async def _scan_outputs_for_filename(expected_filename: str) -> tuple[Path, str] | None
+   # reconcile fallback: outputs/<*>/<expected_filename> or archives/<*>/<expected_filename>
+```
+
+**module-level state**:
+```python
+_active_download_tasks: dict[str, asyncio.Task] = {}   # job_id → task, cleared on done
+_index_lock = asyncio.Lock()
 ```
 
 **동시성**: 단일 module-level `asyncio.Lock`. 모든 public API 가 async. 인덱스 read-modify-write 는 lock 안에서 `_load_index → 수정 → _atomic_write_index` 한 번에. 다중 worker → MCP 거부 (config validation).
@@ -266,18 +309,18 @@ def build_zip_stream(
 ### 4.3 `viewer/app/routers/mcp_router.py` (~200 lines)
 
 ```python
-import contextlib
-from mcp.server.fastmcp import FastMCP, Context
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request as StarletteRequest
-from starlette.responses import JSONResponse, Response
+import contextlib, json
+from mcp.server.fastmcp import FastMCP
 
 from ..config import settings
 from ..services import mcp_jobs
 
-mcp = FastMCP("paperflow",
-              stateless_http=True,        # 단순화 (세션 의존 없음)
-              json_response=True)
+mcp = FastMCP(
+    "paperflow",
+    stateless_http=True,            # 단발 도구 호출, 세션 무관
+    json_response=True,             # production 권장
+    streamable_http_path="/",       # mount root 에 endpoint — 클라이언트는 {base}/mcp 로 접속
+)
 
 @mcp.tool()
 async def submit_paper(input_type: Literal["url","file"],
@@ -293,59 +336,95 @@ async def submit_paper(input_type: Literal["url","file"],
 
 # ... 다른 4개 tool 동일 패턴
 
-# ASGI middleware: Bearer + Origin
-class MCPAuthMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, api_key: str, allowed_origins: set[str]):
-        super().__init__(app)
-        self.api_key = api_key
-        self.allowed_origins = allowed_origins   # set or {"*"} for permissive
-
-    async def dispatch(self, request: StarletteRequest, call_next):
+# ASGI wrapper: Bearer + Origin (Starlette internals 미변경, 가장 안전)
+def _make_auth_wrapper(inner_asgi, api_key: str, allowed_origins: set[str]):
+    async def authenticated(scope, receive, send):
+        if scope["type"] != "http":
+            await inner_asgi(scope, receive, send)
+            return
+        headers = {k.decode("latin1").lower(): v.decode("latin1")
+                   for k, v in scope.get("headers", [])}
         # Bearer
-        auth = request.headers.get("authorization", "")
-        if not auth.startswith("Bearer ") or auth[7:] != self.api_key:
-            return JSONResponse({"error": "unauthorized"}, status_code=401)
-        # Origin (DNS rebinding 방어, MCP spec MUST)
-        origin = request.headers.get("origin")
-        if origin and "*" not in self.allowed_origins and origin not in self.allowed_origins:
-            return JSONResponse({"error": "origin not allowed"}, status_code=403)
-        return await call_next(request)
+        auth = headers.get("authorization", "")
+        if not auth.startswith("Bearer ") or auth[7:] != api_key:
+            await _send_json(send, 401, {"error": "unauthorized"})
+            return
+        # Origin (DNS rebinding 방어, MCP MUST)
+        origin = headers.get("origin")
+        if origin and "*" not in allowed_origins and origin not in allowed_origins:
+            await _send_json(send, 403, {"error": "origin not allowed"})
+            return
+        await inner_asgi(scope, receive, send)
+    return authenticated
 
-# Lifespan helper: caller (main.py) 가 호출
+async def _send_json(send, status: int, payload: dict) -> None:
+    body = json.dumps(payload).encode()
+    await send({"type": "http.response.start", "status": status,
+                "headers": [(b"content-type", b"application/json"),
+                            (b"content-length", str(len(body)).encode())]})
+    await send({"type": "http.response.body", "body": body})
+
+# Lifespan helper: caller (main.py) 가 호출 (mcp.session_manager.run() delegation)
 @contextlib.asynccontextmanager
-async def mcp_lifespan(app):
+async def mcp_lifespan():
     async with mcp.session_manager.run():
         yield
 
 # Mount helper: caller 가 호출
 def mount_mcp(app, api_key: str, allowed_origins: set[str], path: str = "/mcp"):
-    from starlette.middleware import Middleware
     inner = mcp.streamable_http_app()
-    # Wrap with auth middleware
-    inner.user_middleware.insert(0,
-        Middleware(MCPAuthMiddleware, api_key=api_key, allowed_origins=allowed_origins))
-    inner.middleware_stack = inner.build_middleware_stack()
-    app.mount(path, inner)
+    wrapped = _make_auth_wrapper(inner, api_key, allowed_origins)
+    app.mount(path, wrapped)
 ```
 
-**왜 ASGI middleware**: FastAPI `Depends` 는 mount 된 sub-app 에 안 걸림 (공식 한계). TokenVerifier 는 OAuth 2.1 + RFC 9728 용으로 단순 정적 API key 에는 과함. ASGI middleware 가 정직한 fit.
+**왜 ASGI wrapper (not BaseHTTPMiddleware)**: Round 2 에서 codex 가 지적한 대로 `user_middleware.insert + build_middleware_stack()` 재호출은 Starlette internals 사후 변경이라 lifespan 시작 후 안정성 불확실. raw ASGI 함수로 감싸면 Starlette internals 미변경 → 가장 안전.
 
-**왜 stateless_http**: 우리 도구들은 모두 단발 호출. 세션 상태 불필요. 단순화 + 다중 worker 대비.
+**왜 `streamable_http_path="/"`**: SDK 기본은 `/mcp` 이므로 우리가 `app.mount("/mcp", ...)` 하면 최종 URL 이 `/mcp/mcp` 가 됨. root 로 두면 mount path 만 (`/mcp`) 가 최종 endpoint.
+
+**왜 ASGI 인증 + FastAPI Depends 분리**: FastAPI path operation dependency 는 mount 된 sub-app 안 path 에 안 걸림 (공식 한계). 따라서 `/mcp` 는 ASGI wrapper 가 책임, 별도 FastAPI route (`/api/mcp/jobs/{id}/zip`) 는 정상 `Depends(verify_mcp_key)` 사용. 두 경로 모두 동일 `MCP_API_KEY` 검증, 다른 매커니즘.
+
+**왜 stateless_http**: 우리 도구들은 모두 단발 호출. 세션 상태 불필요. 단순화 + multi-worker 대비.
 
 ### 4.4 `viewer/app/main.py` (+~15 lines)
 
 ```python
+import asyncio, contextlib
+from contextlib import suppress
 from .routers import mcp_router
+from .services import mcp_jobs
 
 @contextlib.asynccontextmanager
 async def app_lifespan(app):
-    # Other startup (if any)
+    cleanup_task: asyncio.Task | None = None
     if settings.mcp_enabled:
-        async with mcp_router.mcp_lifespan(app):
-            asyncio.create_task(_periodic_mcp_cleanup())
-            yield
+        async with mcp_router.mcp_lifespan():
+            # startup cleanup (1회)
+            await mcp_jobs.cleanup_expired_jobs()
+            # periodic cleanup background
+            cleanup_task = asyncio.create_task(_periodic_mcp_cleanup())
+            try:
+                yield
+            finally:
+                # 1) cancel periodic cleanup
+                if cleanup_task is not None:
+                    cleanup_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await cleanup_task
+                # 2) cancel all active URL download tasks
+                await mcp_jobs.cancel_all_active_downloads()
     else:
         yield
+
+async def _periodic_mcp_cleanup():
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            await mcp_jobs.cleanup_expired_jobs()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # never let exception kill the loop
+            pass
 
 def create_app() -> FastAPI:
     app = FastAPI(lifespan=app_lifespan)
@@ -356,6 +435,7 @@ def create_app() -> FastAPI:
         # zip download endpoint (별도 router, MCP 비활성 시 미등록)
         from .routers.mcp_router import mcp_zip_router
         app.include_router(mcp_zip_router)
+        # MCP ASGI mount (Bearer + Origin 은 wrapper 가 처리)
         mcp_router.mount_mcp(app, settings.MCP_API_KEY,
                               settings.mcp_allowed_origins_set)
     return app
@@ -365,36 +445,44 @@ def create_app() -> FastAPI:
 
 ### 4.5 `viewer/app/routers/api.py` 안의 zip endpoint → 별도 router
 
-`api.py` 는 무변경. zip endpoint 는 `mcp_router.py` 안의 `mcp_zip_router` (`APIRouter(prefix="/api/mcp")`) 에 정의:
+`api.py` 는 무변경. zip endpoint 는 `mcp_router.py` 안의 `mcp_zip_router` (`APIRouter(prefix="/api/mcp")`) 에 정의. **인증은 FastAPI `Depends` 로 단일화** (ASGI wrapper 는 `/mcp` mount 에만 적용; zip 은 별도 FastAPI route 라 wrapper 가 안 걸림):
 
 ```python
-mcp_zip_router = APIRouter(prefix="/api/mcp")
+mcp_zip_router = APIRouter(
+    prefix="/api/mcp",
+    dependencies=[Depends(verify_mcp_key)],   # router 전체 Bearer 검증
+)
+
+async def verify_mcp_key(
+    authorization: str = Header(default=""),
+) -> None:
+    if not authorization.startswith("Bearer ") or authorization[7:] != settings.MCP_API_KEY:
+        raise HTTPException(401, "unauthorized")
 
 @mcp_zip_router.get("/jobs/{job_id}/zip")
 async def download_zip(
     job_id: str,
     include_pdf: bool = False,
     include_translation: bool = True,
-    request: Request = None,
 ):
-    # ASGI middleware 가 인증 이미 처리 (mcp_zip_router 도 같은 미들웨어 적용)
-    # 정확히는 router 단위 Depends 로 한 번 더 검증 (defense in depth)
-    _verify_bearer(request, settings.MCP_API_KEY)
     job = await mcp_jobs.get_job(job_id)
     if not job or job.status != "complete":
         raise HTTPException(404, "Job not complete or not found")
-    paper_info = paper_svc.find_processed_paper(original_filename=job.expected_filename)
-    if not paper_info:
+    # paper 폴더 재해석 — JobRecord 의 paper_name 만 신뢰, location 은 safe_paper_dir 가 결정
+    paper_dir = paper_svc.safe_paper_dir(job.paper_name)   # 단일 인자, 실제 시그니처
+    if not paper_dir:
         await mcp_jobs.mark_paper_missing(job_id)
         raise HTTPException(410, "Paper folder no longer exists")
-    paper_dir = paper_svc.safe_paper_dir(paper_info["name"], paper_info["location"])
     stream = mcp_zip.build_zip_stream(paper_dir,
         include_pdf=include_pdf, include_translation=include_translation, job_record=job)
     return StreamingResponse(stream, media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{paper_info["name"]}.zip"'})
+        headers={"Content-Disposition": f'attachment; filename="{job.paper_name}.zip"'})
 ```
 
-**정의 위치 vs 인증**: zip endpoint 는 `app.include_router(mcp_zip_router)` 로 등록되므로 FastAPI path operation. 여기엔 `Depends(verify_mcp_key)` 가 정상 동작. ASGI middleware 는 `/mcp` mount 에만 적용, zip 은 자체 Depends 사용. 두 경로의 인증 코드가 분기되지만 같은 검증자 함수 공유.
+**인증 분리 명확화**:
+- `/mcp` mount: **ASGI wrapper** (`_make_auth_wrapper`) 가 Bearer + Origin 검증
+- `/api/mcp/jobs/{id}/zip`: **FastAPI `Depends(verify_mcp_key)`** 가 Bearer 검증
+- 두 경로 모두 동일 `settings.MCP_API_KEY` 사용. 동일 검증자 사용 불가 (서로 다른 ASGI 계층 — wrapper 는 raw scope, Depends 는 Request 객체) 라 코드 분기는 의도적.
 
 ### 4.6 `viewer/app/config.py` (+~10 lines)
 
@@ -416,9 +504,26 @@ class Settings(BaseSettings):
 
     @property
     def mcp_allowed_origins_set(self) -> set[str]:
-        if not self.MCP_ALLOWED_ORIGINS:
-            return {"*"}    # permissive when not configured
-        return {o.strip() for o in self.MCP_ALLOWED_ORIGINS.split(",") if o.strip()}
+        """DNS rebinding 방어 (MCP MUST). 기본값: MCP_PUBLIC_BASE_URL origin + localhost 계열.
+        env 가 명시되면 그것만 사용 (override). '*' 명시는 explicit opt-out 시에만."""
+        if self.MCP_ALLOWED_ORIGINS.strip() == "*":
+            return {"*"}
+        explicit = {o.strip() for o in self.MCP_ALLOWED_ORIGINS.split(",") if o.strip()}
+        if explicit:
+            return explicit
+        # default: derive from MCP_PUBLIC_BASE_URL + localhost
+        defaults: set[str] = set()
+        if self.MCP_PUBLIC_BASE_URL:
+            from urllib.parse import urlparse
+            p = urlparse(self.MCP_PUBLIC_BASE_URL)
+            if p.scheme and p.netloc:
+                defaults.add(f"{p.scheme}://{p.netloc}")
+        defaults.update({
+            "http://localhost", "https://localhost",
+            "http://127.0.0.1", "https://127.0.0.1",
+        })
+        # Origin 헤더가 port 포함이면 직접 추가 권장 (env 로 override)
+        return defaults
 ```
 
 **`MCP_PUBLIC_BASE_URL` 필수화 이유**: tool handler 에서 FastAPI Request 직접 접근 불가 (FastMCP context 와 별개). reverse proxy 뒤 호스트 헤더 신뢰 불가. v1 은 명시 설정 강제.
@@ -430,13 +535,28 @@ class Settings(BaseSettings):
 ```python
 def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
     """URL → (pdf_bytes, final_url, import_method).
-    DOI resolve → site transformer → direct download → HTML fallback.
+    DOI resolve → site transformer → direct download → HTML fallback (chromium print-to-pdf).
     Raises ValueError on failure with concrete message.
     """
-    # 기존 import_url_as_paper() 내부 로직 그대로 복사/분리
+    # 1) DOI redirect resolve, site transformer 시도 (기존 papers.py 로직 그대로)
+    # 2) 직접 PDF download — 성공하면 (bytes, final_url, "site_transform" | "direct_pdf") 반환
+    # 3) HTML fallback (headless chromium print-to-pdf) — 임시 파일 필요:
+    #    with tempfile.NamedTemporaryFile(dir=settings.newones_dir, suffix=".pdf", delete=False) as tf:
+    #        tmp_path = Path(tf.name)
+    #    try:
+    #        subprocess.run([browser_bin, ..., f"--print-to-pdf={tmp_path}", url], ...)
+    #        # 기존 quality gate (PyPDF2 page count + text length 검사) — 기존과 동일하게 file path 받음
+    #        if not _passes_quality_gate(tmp_path): raise ValueError("low-quality PDF")
+    #        return tmp_path.read_bytes(), final_url, "html_fallback"
+    #    finally:
+    #        tmp_path.unlink(missing_ok=True)
 ```
 
-`import_url_as_paper()` 는 이 helper 를 호출하도록 리팩토링. **기존 호출자 동작 변경 없음** (블랙박스 동일). 단위 테스트 추가.
+**기존 `import_url_as_paper()` 와의 호환성**:
+- 기존 함수는 `newones_dir/<name>.pdf` 에 직접 쓰는 file-path 기반 흐름. MCP 의 `_resolve_url_to_pdf_bytes` 는 bytes 를 반환.
+- 두 함수의 핵심 로직 (DOI resolve, transformer, fallback, quality gate) 은 **공통 inner helper** 로 추출해 둘 다 사용. file-vs-bytes 차이는 outer 에서만.
+- `import_url_as_paper()` 는 내부에서 `_resolve_url_to_pdf_bytes(url)` 호출 후 `dest.write_bytes(bytes)` — 외부 호출자 동작 변경 없음.
+- 단위 테스트로 회귀 방지 (기존 viewer URL import 흐름이 같은 결과 내는지 확인).
 
 ### 4.8 `main_terminal.py` 변경
 
@@ -444,11 +564,20 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
 
 기존 `processing_status.json.error` 필드를 MCP reconciler 가 읽음. 추가 사이드카 불필요. (당초 rev1 의 `last_error_<filename>.json` 아이디어는 컨버터 변경 필요해서 폐기. `processing_status.json` 의 error 필드를 1차 소스로 신뢰.)
 
-### 4.9 `viewer/Dockerfile` (+1 line)
+### 4.9 `viewer/Dockerfile` 또는 `viewer/requirements.txt`
 
-```dockerfile
-RUN pip install --no-cache-dir mcp>=1.27,<2
+**Option A** (권장 — 기존 requirements 패턴과 일치):
 ```
+# viewer/requirements.txt 마지막에 추가
+mcp>=1.27,<2
+```
+Dockerfile 무변경 (기존 `pip install -r requirements.txt` 가 처리).
+
+**Option B** (Dockerfile 직접 수정 시):
+```dockerfile
+RUN pip install --no-cache-dir 'mcp>=1.27,<2'
+```
+**Quote 필수** — shell form 에서 `<` 는 stdin redirection 으로 해석돼 깨짐.
 
 ---
 
@@ -475,7 +604,7 @@ RUN pip install --no-cache-dir mcp>=1.27,<2
 
 **Return**:
 ```json
-{"job_id": "uuid", "status": "queued|complete", "cached": false, "expected_filename": "pfmcp-..."}
+{"job_id": "uuid", "status": "downloading|queued|complete", "cached": false, "expected_filename": "pfmcp-..."}
 ```
 
 ### 5.2 `get_job_status`
@@ -491,7 +620,7 @@ RUN pip install --no-cache-dir mcp>=1.27,<2
 ```json
 {
   "job_id": "...",
-  "status": "queued|processing|complete|error|cancelled|stalled",
+  "status": "downloading|queued|processing|complete|error|cancelled|stalled",
   "stage": "converting|extracting_metadata|enriching|translating|verifying|null",
   "percent": 0,
   "error": null,
@@ -557,7 +686,7 @@ RUN pip install --no-cache-dir mcp>=1.27,<2
    "type": "object",
    "properties": {
      "limit": {"type": "integer", "default": 20, "maximum": 100},
-     "status": {"type": "string", "enum": ["queued","processing","complete","error","cancelled","stalled"]}
+     "status": {"type": "string", "enum": ["downloading","queued","processing","complete","error","cancelled","stalled"]}
    }
  }}
 ```
@@ -571,9 +700,11 @@ RUN pip install --no-cache-dir mcp>=1.27,<2
 | 카테고리 | 처리 |
 |---------|------|
 | 입력 검증 실패 (잘못된 URL scheme, base64 fail, file > 200MB, magic byte mismatch) | `ValueError` → MCP `isError: true`, job 생성 안 함 |
-| URL → PDF 변환 실패 (모든 방법 시도 후) | `_resolve_url_to_pdf_bytes` raises → job 생성 안 함, 명확한 에러 메시지 |
-| `newones/{name}.part` write 실패 (디스크 full) | partial 파일 cleanup (`.part` 삭제 시도) → job 생성 안 함 |
+| URL → PDF 변환 실패 (배경 task 안 모든 방법 시도 후) | 배경 task except → `JobRecord.status="error"` + 에러 메시지 저장 (도구 호출 자체는 이미 반환됨) |
+| `newones/{name}.part` write 실패 (디스크 full) | 배경 task except → status="error" + `.part` cleanup |
 | `.part → .pdf` rename 실패 | 위와 동일 |
+| viewer 재시작이 downloading 중간에 발생 | 부팅 시 status="downloading" 인 job 발견 → status="error" ("download interrupted, retry submit") + 사용자가 force_reprocess 로 재시도 |
+| cancel_job(downloading) | task.cancel() → CancelledError 핸들러가 `.part` cleanup → status="cancelled" |
 | `mcp_jobs.json` 손상 부팅 | `_load_index` 가 quarantine (`mcp_jobs.corrupt.<ts>.json`) + 빈 인덱스 시작 + WARN 로그 |
 | 컨버터 실패 (`processing_status.json.error` set) | reconcile 시 발견 → `status="error"` |
 | 컨버터 stall (mtime > 30분 + stage 무변화) | `status="stalled"` (사용자 결정 대기, 자동 cancel 안 함) |
@@ -591,7 +722,6 @@ RUN pip install --no-cache-dir mcp>=1.27,<2
 - `cleanup_expired_jobs()`:
   - viewer 시작 시 1회 + 매 1시간 background task
   - `JobRecord.expires_at < now` 이고 status in (complete, error, cancelled) → 인덱스에서 삭제
-  - `logs/mcp_errors/{job_id}.json` 도 같이 삭제
   - **outputs/<paper>/ 은 절대 건드리지 않음** (viewer 의 기존 페이퍼 라이프사이클)
 - processing/stalled 상태는 TTL 무시 (사용자 cancel 또는 reconcile 로 정리)
 
@@ -656,7 +786,7 @@ MCP SDK `mcp.client.streamable_http` 로 in-process 테스트:
 | `viewer/app/config.py` | 4개 env 추가 | 기본값 빈 문자열, 동작 동일 |
 | viewer 기존 라우터/템플릿 | 0줄 | 0 |
 | Docker compose | viewer service env 4개 추가 (optional) | 빈 값이면 동작 동일 |
-| 공유 볼륨 | `logs/mcp_jobs.json`, `logs/mcp_errors/` 신규 — 기존 파일 미변경 | 0 |
+| 공유 볼륨 | `logs/mcp_jobs.json` 신규 (atomic replace 시 `.tmp` 도 같은 폴더). 기존 파일 미변경 | 0 |
 | Dockerfile | pip install 1줄 | 이미지 크기 미미한 증가 |
 
 ---
@@ -705,8 +835,9 @@ claude mcp add paperflow --transport http \
 
 ---
 
-## 12. Open Questions (구현 시 확인)
+## 12. Open Questions (구현 시 E2E 로 확인)
 
-1. `mcp.streamable_http_app()` 의 ASGI app 에 추가로 user_middleware insert 후 `build_middleware_stack()` 재호출이 SDK 1.27 에서 안정적인지 — Starlette 의 미들웨어 가 lifespan 시작 후 변경 불가일 수 있음. POC 필요. 대안: ASGI wrapper 함수 (`async def wrapped_app(scope, receive, send)`) 로 외부 감싸기 — 더 안전.
-2. `find_processed_paper` 의 arXiv `web-` guard 가 v1 의 `pfmcp-` prefix 와 충돌 없는지 코드 한 번 더 읽기 (기대대로면 영향 0)
-3. converter 가 `pfmcp-` 파일을 정상 처리하는지 (filename slug 가 metadata 추출에 끼치는 영향) — 보통은 metadata extraction 이 PDF 내용 기반이라 무관, 확인 필요
+1. converter 가 `pfmcp-` 파일을 정상 처리하는지 (filename slug 가 metadata 추출에 끼치는 영향) — metadata extraction 은 PDF 내용 기반이라 무관할 가능성 높음, E2E 로 확인. 특히 `paper_meta.json.original_filename` 에 `pfmcp-...pdf` 가 그대로 보존되는지 (reconcile 의 primary lookup 가 의존)
+2. `find_processed_paper` 의 arXiv `web-` guard 가 `pfmcp-` 와 충돌 없음을 코드 한 번 더 확인 (Round 2 에서 codex 가 거의 closed 로 평가, 확인만)
+
+(rev2 에서 있던 "ASGI middleware 안정성 POC" 는 ASGI wrapper 채택으로 해소되어 제거)
