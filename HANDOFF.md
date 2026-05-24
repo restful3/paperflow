@@ -1,6 +1,7 @@
 # 세션 핸드오프 — PaperFlow MCP 서버 v1
 _최종 갱신: 2026-05-24 (Asia/Seoul)_
 _업데이트: 2026-05-24 — **E2E 검증 완료** (arXiv 1706.03762 full pipeline + cache hit). v1 ship-ready._
+_업데이트: 2026-05-24 — **DeepSeek-V3 E2E 에서 v1 Critical 버그 3개 발견** (translation timeout + self-duplicate skip + reconcile false-positive). 상세는 § "🐛 v1 버그" 참조._
 
 ## 🎯 목표
 PaperFlow의 PDF→Markdown(+이미지)→번역 파이프라인을 MCP (Model Context Protocol) 도구로 노출. 외부 클라이언트가 PDF/URL 제출 → 비동기 처리 → zip 다운로드. **기존 PaperFlow 기능 무변경 보장** (`main_terminal.py` 0줄, `run_batch_watch.sh` 0줄, `config.json` 0줄).
@@ -81,6 +82,43 @@ claude mcp add --transport http paperflow http://localhost:8090/mcp/ \
 - `cancel_job(downloading)` 의 late-stage race: cancel + Stage 2 publish 동시 발생 시 PDF 가 publish 될 수 있음 (확률 낮음). lock 안으로 task.cancel() 옮기면 닫힘.
 - `mcp.client.streamable_http` 로 5개 tool in-process 통합 테스트
 - Multi-worker 사용 시 `flock(2)` enforce (현재는 single-worker 가정만 문서화)
+
+### 🐛 v1 버그 — DeepSeek-V3 E2E 발견 (2026-05-24, **Critical**)
+
+**증상**: 큰 논문 (DeepSeek-V3 2412.19437, 50p / 72 sections) submit → 번역 44/72 (57%)에서 멈춤. MCP는 `status=complete` 반환하지만 zip 에는 **`_ko.md` 누락** (영문 .md + meta + images 만).
+
+**연쇄 메커니즘** (3 버그가 결합해서 사용자에게 잘못된 결과 노출):
+
+1. **watch SIGKILL on translation timeout** (`run_batch_watch.sh`)
+   - 청크별 timeout이 아닌 *PDF 전체 처리* 2400s (40min) hard timeout
+   - DeepSeek-V3 처럼 큰 논문은 정상 처리에 40분 초과 가능 → SIGKILL
+   - 결과: 영문 MD/metadata/images 만 outputs/ 에 남고 `_ko.md` 저장 전에 죽음 (번역은 마지막에 한 번에 저장)
+   - **fix 방향**: timeout 값 환경변수화 + 청크별 timeout으로 분할, 또는 진행 중 중간 저장
+
+2. **self-duplicate skip on retry** (`main_terminal.py` duplicate check)
+   - SIGKILL 후 newones/PDF 남아있어 watch retry 1/2 시작
+   - 새 폴더 `DeepSeek-V3 Technical Report-2` 임시 생성
+   - duplicate check: 자기 자신의 첫 시도 결과 `DeepSeek-V3 Technical Report/` 를 같은 title duplicate으로 인식 → **"Skipping translation to save resources"** + `-2` 폴더 삭제
+   - 결과: `_ko.md` 영영 생성되지 않음, 다음 retry도 동일 결과 (영구 미완)
+   - **fix 방향**: duplicate check 시 기존 폴더의 `_ko.md` 부재 → "incomplete prior run" 으로 분기 (skip 대신 force reprocess)
+
+3. **MCP reconcile false-positive complete** (`mcp_jobs.py`)
+   - `expected_filename` 기반 reconcile 이 outputs/ 폴더 + .md 존재만으로 status=complete 판정
+   - translation pipeline enabled 인데 `_ko.md` 없는 케이스 미체크
+   - zip endpoint도 `include_translation=true` 요청에 `_ko.md` 누락 시 경고 없이 200 + 영문만 zip 반환
+   - **fix 방향**:
+     - reconcile: 서버 config에서 translation enabled 면 `_ko.md` 필수 → 없으면 status=error / partial
+     - zip endpoint: `include_translation=true` 인데 `_ko.md` 없으면 422 또는 응답 헤더에 `X-Paperflow-Warnings: translation_missing`
+
+**재현 조건**: 번역 청크 수가 많아 watch 2400s timeout 초과하는 모든 논문 (대략 50+ sections 또는 LLM 응답이 평균보다 느린 경우).
+
+**우회 수단 (사용자 대응)**: 큰 논문은 일단 PDF 를 newones/ 에 직접 복사 (watch 처리) 후 다시 MCP submit (cached 경유). 또는 `force_reprocess=true` 후 timeout 늘림.
+
+**관련 파일**:
+- `run_batch_watch.sh` (timeout 정의)
+- `main_terminal.py` (duplicate check, lines ~3050+)
+- `viewer/app/services/mcp_jobs.py` (reconcile 로직)
+- `viewer/app/routers/mcp_router.py` (zip endpoint 검증)
 
 ## 🧠 대화에만 있던 핵심 컨텍스트
 
