@@ -203,30 +203,19 @@ def _candidate_pdf_urls_from_page(url: str, html: str) -> list[str]:
     return out
 
 
-def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, str | None]:
-    """Import a web URL by creating a PDF in newones/ queue.
+def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
+    """Resolve URL to PDF bytes. Used by import_url_as_paper and mcp_jobs.
 
-    Pipeline:
-      A. URL validation
-      B. DOI pre-resolve (doi.org -> actual publisher URL)
-      C. PDF filename generation
-      D. Site transformer -> PDF URL (zero network requests)
-      E. Try downloading from site transformer results
-      F. Fallback: single HTML fetch + HTML-based candidate discovery
-         (re-apply site transformer if redirect discovered)
-      G. strict_pdf_required check (based on effective_url, not original)
-      H. Headless browser print-to-pdf fallback
-      I. Quality gates
-
-    Returns: (ok, message, queued_pdf_name)
+    Returns: (pdf_bytes, final_url_after_redirects, import_method)
+      import_method in {"site_transform", "direct_pdf", "html_fallback"}
+    Raises: ValueError with concrete reason on failure.
     """
     # A. URL validation
     if not url or not url.startswith(("http://", "https://")):
-        return False, "Invalid URL. Use http(s) URL.", None
-
+        raise ValueError("Invalid URL. Use http(s) URL.")
     host = (urlparse(url).netloc or "").lower()
     if not host:
-        return False, "Invalid URL host.", None
+        raise ValueError("Invalid URL host.")
 
     # B. DOI pre-resolve
     effective_url = url
@@ -235,62 +224,39 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
         if resolved:
             effective_url = resolved
 
-    # C. PDF filename generation
-    settings.newones_dir.mkdir(parents=True, exist_ok=True)
-    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    slug = _slugify_name(title or host)
-    pdf_name = f"web-{slug}-{ts}.pdf"
-    pdf_path = settings.newones_dir / pdf_name
-
-    downloaded_direct = False
     download_errors: list[str] = []
 
     # D. Site transformer -> PDF URL candidates (zero network requests)
-    site_candidates = _site_transform_pdf_urls(effective_url)
-
-    # E. Try downloading from site transformer results
-    for cand in site_candidates:
+    for cand in _site_transform_pdf_urls(effective_url):
         try:
-            pdf_bytes = _download_pdf(cand, timeout=35)
-            pdf_path.write_bytes(pdf_bytes)
-            downloaded_direct = True
-            break
+            return _download_pdf(cand, timeout=35), effective_url, "site_transform"
         except Exception as e:
             download_errors.append(f"{cand}: {str(e)[:80]}")
 
     # F. Fallback: single HTML fetch + HTML-based candidate discovery
-    if not downloaded_direct:
-        html_for_discovery = ""
-        final_url = effective_url
-        try:
-            html_for_discovery, final_url = _fetch_url_html(effective_url)
-        except Exception:
-            html_for_discovery = ""
+    html_for_discovery = ""
+    final_url = effective_url
+    try:
+        html_for_discovery, final_url = _fetch_url_html(effective_url)
+    except Exception:
+        pass
 
-        # If redirect discovered a new URL, re-apply site transformer
-        if final_url and final_url != effective_url:
-            effective_url = final_url
-            redirect_candidates = _site_transform_pdf_urls(final_url)
-            for cand in redirect_candidates:
-                try:
-                    pdf_bytes = _download_pdf(cand, timeout=35)
-                    pdf_path.write_bytes(pdf_bytes)
-                    downloaded_direct = True
-                    break
-                except Exception as e:
-                    download_errors.append(f"{cand}: {str(e)[:80]}")
+    # If redirect discovered a new URL, re-apply site transformer
+    if final_url and final_url != effective_url:
+        effective_url = final_url
+        for cand in _site_transform_pdf_urls(final_url):
+            try:
+                return _download_pdf(cand, timeout=35), effective_url, "site_transform"
+            except Exception as e:
+                download_errors.append(f"{cand}: {str(e)[:80]}")
 
-        # HTML-based candidate discovery (meta tags, anchors)
-        if not downloaded_direct and html_for_discovery:
-            candidate_urls = _candidate_pdf_urls_from_page(effective_url, html_for_discovery)
-            for cand in candidate_urls:
-                try:
-                    pdf_bytes = _download_pdf(cand, timeout=35)
-                    pdf_path.write_bytes(pdf_bytes)
-                    downloaded_direct = True
-                    break
-                except Exception as e:
-                    download_errors.append(f"{cand}: {str(e)[:80]}")
+    # HTML-based candidate discovery (meta tags, anchors)
+    if html_for_discovery:
+        for cand in _candidate_pdf_urls_from_page(effective_url, html_for_discovery):
+            try:
+                return _download_pdf(cand, timeout=35), effective_url, "direct_pdf"
+            except Exception as e:
+                download_errors.append(f"{cand}: {str(e)[:80]}")
 
     # G. strict_pdf_required check (based on effective_url, not original doi.org)
     effective_host = (urlparse(effective_url).netloc or "").lower()
@@ -307,25 +273,28 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
         "nature.com",
         "sciencedirect.com",
     )
-    strict_pdf_required = any(d in effective_host for d in _STRICT_PDF_DOMAINS)
-
-    if not downloaded_direct and strict_pdf_required:
+    if any(d in effective_host for d in _STRICT_PDF_DOMAINS):
         detail = f" direct-download failed ({'; '.join(download_errors[:2])})" if download_errors else ""
-        return False, "해당 논문 링크는 원문 PDF 직접 다운로드가 필요하지만 실패했습니다." + detail, None
+        raise ValueError("해당 논문 링크는 원문 PDF 직접 다운로드가 필요하지만 실패했습니다." + detail)
 
     # H. Headless browser print-to-pdf fallback (non-academic/general pages)
-    if not downloaded_direct:
-        browser_bin = (
-            shutil.which("google-chrome")
-            or shutil.which("chromium")
-            or shutil.which("chromium-browser")
-        )
-        if not browser_bin:
-            msg = "No headless browser found (google-chrome/chromium)."
-            if download_errors:
-                msg += f" direct-download failed ({'; '.join(download_errors[:2])})"
-            return False, msg, None
+    browser_bin = (
+        shutil.which("google-chrome")
+        or shutil.which("chromium")
+        or shutil.which("chromium-browser")
+    )
+    if not browser_bin:
+        msg = "No headless browser found (google-chrome/chromium)."
+        if download_errors:
+            msg += f" direct-download failed ({'; '.join(download_errors[:2])})"
+        raise ValueError(msg)
 
+    mcp_tmp_dir = settings.newones_dir / ".mcp_tmp"
+    mcp_tmp_dir.mkdir(parents=True, exist_ok=True)
+    import tempfile
+    with tempfile.NamedTemporaryFile(dir=mcp_tmp_dir, suffix=".pdf", delete=False) as tf:
+        tmp_path = Path(tf.name)
+    try:
         cmd = [
             browser_bin,
             "--headless=new",
@@ -334,61 +303,83 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
             "--disable-dev-shm-usage",
             "--disable-blink-features=AutomationControlled",
             "--virtual-time-budget=30000",
-            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            f"--print-to-pdf={pdf_path}",
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            f"--print-to-pdf={tmp_path}",
             url,
         ]
-
         try:
             subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
-        except FileNotFoundError:
-            return False, "Headless browser executable missing.", None
         except subprocess.TimeoutExpired:
-            return False, "PDF 생성 타임아웃(60s).", None
+            raise ValueError("PDF 생성 타임아웃(60s).")
         except subprocess.CalledProcessError as e:
             err = (e.stderr or e.stdout or "").strip()
-            return False, f"PDF 생성 실패: {err[:200]}", None
+            raise ValueError(f"PDF 생성 실패: {err[:200]}")
 
-    # I. Quality gates
-    if not pdf_path.exists() or pdf_path.stat().st_size < 1024:
-        return False, "PDF 생성 결과가 비정상입니다.", None
+        # I. Quality gates (file-based)
+        if not tmp_path.exists() or tmp_path.stat().st_size < 1024:
+            raise ValueError("PDF 생성 결과가 비정상입니다.")
 
-    pdf_text = _extract_pdf_text_simple(pdf_path, max_pages=2)
-    norm = re.sub(r"\s+", " ", (pdf_text or "")).strip().lower()
-    bot_keywords = [
-        "verifying the device", "verifying your browser", "verify you are human",
-        "checking your browser", "device verification",
-        "captcha", "are you a robot", "access denied",
-        "just a moment", "ddos protection", "cloudflare",
-        "attention required", "unusual traffic",
-    ]
-    norm_nospace = norm.replace(" ", "")
-    bot_hit = sum(1 for k in bot_keywords if k in norm or k.replace(" ", "") in norm_nospace)
-    if bot_hit >= 1 and len(norm) < 600:
-        pdf_path.unlink(missing_ok=True)
-        return False, "사이트 봇 감지/인증 페이지가 캡처되었습니다. 이 사이트는 자동 가져오기를 지원하지 않습니다.", None
+        pdf_text = _extract_pdf_text_simple(tmp_path, max_pages=2)
+        norm = re.sub(r"\s+", " ", (pdf_text or "")).strip().lower()
+        bot_keywords = [
+            "verifying the device", "verifying your browser", "verify you are human",
+            "checking your browser", "device verification",
+            "captcha", "are you a robot", "access denied",
+            "just a moment", "ddos protection", "cloudflare",
+            "attention required", "unusual traffic",
+        ]
+        norm_nospace = norm.replace(" ", "")
+        bot_hit = sum(1 for k in bot_keywords if k in norm or k.replace(" ", "") in norm_nospace)
+        if bot_hit >= 1 and len(norm) < 600:
+            raise ValueError("사이트 봇 감지/인증 페이지가 캡처되었습니다. 이 사이트는 자동 가져오기를 지원하지 않습니다.")
 
-    error_keywords = [
-        "page not found", "404 not found", "403 forbidden",
-        "no longer exists", "has been moved", "page you requested",
-        "this page isn't available", "page doesn't exist",
-        "requested url was not found", "server error", "500 internal",
-    ]
-    error_hit = sum(1 for k in error_keywords if k in norm or k.replace(" ", "") in norm_nospace)
-    if error_hit >= 1 and len(norm) < 600:
-        pdf_path.unlink(missing_ok=True)
-        return False, "에러 페이지(404/403 등)가 캡처되었습니다. URL이 유효한지 확인해 주세요.", None
+        error_keywords = [
+            "page not found", "404 not found", "403 forbidden",
+            "no longer exists", "has been moved", "page you requested",
+            "this page isn't available", "page doesn't exist",
+            "requested url was not found", "server error", "500 internal",
+        ]
+        error_hit = sum(1 for k in error_keywords if k in norm or k.replace(" ", "") in norm_nospace)
+        if error_hit >= 1 and len(norm) < 600:
+            raise ValueError("에러 페이지(404/403 등)가 캡처되었습니다. URL이 유효한지 확인해 주세요.")
 
-    weak_keywords = ["privacy policy", "notify me", "owner login", "terms", "copyright", "built for agents"]
-    weak_hit = sum(1 for k in weak_keywords if k in norm)
-    if len(norm) < 220 or weak_hit >= 3:
-        try:
-            pdf_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        return False, "원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요.", None
+        weak_keywords = ["privacy policy", "notify me", "owner login", "terms", "copyright", "built for agents"]
+        weak_hit = sum(1 for k in weak_keywords if k in norm)
+        if len(norm) < 220 or weak_hit >= 3:
+            raise ValueError("원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요.")
 
-    # Save source URL sidecar for traceability
+        return tmp_path.read_bytes(), effective_url, "html_fallback"
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, str | None]:
+    """Import a web URL by creating a PDF in newones/ queue.
+
+    Returns: (ok, message, queued_pdf_name)
+    """
+    try:
+        pdf_bytes, _final_url, _method = _resolve_url_to_pdf_bytes(url)
+    except ValueError as e:
+        return False, str(e), None
+
+    settings.newones_dir.mkdir(parents=True, exist_ok=True)
+    host = (urlparse(url).netloc or "").lower()
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = _slugify_name(title or host)
+    pdf_name = f"web-{slug}-{ts}.pdf"
+    pdf_path = settings.newones_dir / pdf_name
+
+    # Atomic publish: write to .part then rename
+    part_path = pdf_path.with_suffix(pdf_path.suffix + ".part")
+    try:
+        part_path.write_bytes(pdf_bytes)
+        os.replace(part_path, pdf_path)
+    except Exception as e:
+        part_path.unlink(missing_ok=True)
+        return False, f"queue write failed: {e}", None
+
     try:
         _write_source_sidecar(pdf_name, url)
     except Exception:
