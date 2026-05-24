@@ -126,11 +126,11 @@ async def get_job_result(
 
 @mcp.tool()
 async def cancel_job(job_id: str, delete_file: bool = True) -> dict:
-    """Cancel a job. Idempotent."""
-    rec = await mcp_jobs.cancel_job(job_id, delete_file=delete_file)
-    if not rec:
+    """Cancel a job. Idempotent. Returns dict with cleanup details."""
+    res = await mcp_jobs.cancel_job(job_id, delete_file=delete_file)
+    if res is None:
         raise ValueError(f"job not found: {job_id}")
-    return {"job_id": job_id, "status": rec.status}
+    return res
 
 
 @mcp.tool()
@@ -206,7 +206,7 @@ async def download_zip(
     include_pdf: bool = False,
     include_translation: bool = True,
 ):
-    rec = await mcp_jobs.get_job(job_id)
+    rec = await mcp_jobs.reconcile_job(job_id)
     if not rec or rec.status != "complete":
         raise HTTPException(status_code=404, detail="Job not complete or not found")
     paper_dir = paper_svc.safe_paper_dir(rec.paper_name)
