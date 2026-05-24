@@ -644,3 +644,15 @@ def test_resolve_archives_filesystem_when_no_meta_anywhere(tmp_workspace):
 def test_resolve_returns_none_when_nothing_matches(tmp_workspace):
     from app.services import mcp_jobs
     assert mcp_jobs._resolve_completed_candidate("nope.pdf") is None
+
+
+def test_paper_dir_for_outputs(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    assert mcp_jobs._paper_dir_for("Foo", "outputs") == settings.outputs_dir / "Foo"
+
+
+def test_paper_dir_for_archives(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    assert mcp_jobs._paper_dir_for("Foo", "archives") == settings.archives_dir / "Foo"

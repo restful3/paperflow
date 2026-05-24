@@ -424,6 +424,12 @@ def _resolve_completed_candidate(expected_filename: str) -> tuple[str, str] | No
     return None
 
 
+def _paper_dir_for(name: str, location: str) -> Path:
+    from ..config import settings
+    base = settings.outputs_dir if location == "outputs" else settings.archives_dir
+    return base / name
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings
