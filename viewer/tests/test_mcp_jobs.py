@@ -84,12 +84,13 @@ async def test_submit_job_file_invalid_base64(tmp_workspace):
                                    pdf_bytes_b64="not-base64-!!!")
 
 
-async def test_submit_job_file_oversized(tmp_workspace):
+async def test_submit_job_file_oversized(tmp_workspace, monkeypatch):
     from app.services import mcp_jobs
-    huge = base64.b64encode(b"%PDF" + b"x" * (201 * 1024 * 1024)).decode()
+    monkeypatch.setattr(mcp_jobs, "_MAX_FILE_BYTES", 10)
+    small_but_over_threshold = base64.b64encode(b"%PDF-1.4 " + b"x" * 5).decode()
     with pytest.raises(ValueError, match="200MB"):
         await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
-                                   pdf_bytes_b64=huge)
+                                   pdf_bytes_b64=small_but_over_threshold)
 
 
 async def test_submit_job_file_not_pdf(tmp_workspace):

@@ -6,10 +6,12 @@ Single-worker viewer assumption — module-level asyncio.Lock for index access.
 from __future__ import annotations
 
 import asyncio
+import base64 as _b64
 import datetime as _dt
 import json
 import os
 import re
+import uuid as _uuid
 from pathlib import Path
 from typing import Iterator, Literal
 
@@ -19,6 +21,8 @@ from pydantic import BaseModel
 # ── Module state ──────────────────────────────────────────────────────────────
 _active_download_tasks: dict[str, asyncio.Task] = {}
 _index_lock = asyncio.Lock()
+
+_MAX_FILE_BYTES = 200 * 1024 * 1024  # 200MB hard limit for file submit
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -93,9 +97,6 @@ def _build_expected_filename(job_id: str, slug_source: str) -> str:
     return f"pfmcp-{short}-{slug}.pdf"
 
 
-import base64 as _b64
-import uuid as _uuid
-
 # ── Publish helpers ───────────────────────────────────────────────────────────
 def _write_part_file(pdf_bytes: bytes, part_path: Path) -> None:
     """Sync helper called via asyncio.to_thread. Write .part + fsync. NO replace."""
@@ -158,15 +159,19 @@ async def submit_job(
             pdf_bytes = _b64.b64decode(pdf_bytes_b64, validate=True)
         except Exception as e:
             raise ValueError(f"invalid base64: {e}") from e
-        if len(pdf_bytes) > 200 * 1024 * 1024:
+        if len(pdf_bytes) > _MAX_FILE_BYTES:
             raise ValueError("file exceeds 200MB limit")
         if not pdf_bytes.startswith(b"%PDF-"):
             raise ValueError("not a PDF (magic byte mismatch)")
 
         # 2-stage publish: write .part (in thread), then short atomic replace
         part_path = dest.with_suffix(dest.suffix + ".part")
-        await asyncio.to_thread(_write_part_file, pdf_bytes, part_path)
-        _atomic_publish_part(part_path, dest)
+        try:
+            await asyncio.to_thread(_write_part_file, pdf_bytes, part_path)
+            _atomic_publish_part(part_path, dest)
+        except BaseException:
+            part_path.unlink(missing_ok=True)
+            raise
 
         rec = JobRecord(
             job_id=job_id, input_type="file", source=source,
