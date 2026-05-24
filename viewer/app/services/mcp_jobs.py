@@ -470,6 +470,34 @@ def _classify_completion(
     return "skip"
 
 
+def _cleanup_smart_renamed_paper(expected_filename: str) -> dict:
+    """Find the smart-renamed paper folder in outputs/ (if any) and rmtree it.
+    Archives are never touched.
+
+    Returns:
+      {"attempted": bool, "deleted_path": str | None, "warning": str | None}
+    """
+    import shutil
+
+    cand = _resolve_completed_candidate(expected_filename)
+    if not cand:
+        return {"attempted": False, "deleted_path": None, "warning": None}
+    name, location = cand
+    if location != "outputs":
+        return {"attempted": False, "deleted_path": None,
+                "warning": "archives match found but skipped (never deletes archives)"}
+    paper_dir = _paper_dir_for(name, location)
+    if not paper_dir.exists():
+        return {"attempted": True, "deleted_path": None,
+                "warning": "candidate folder disappeared before cleanup"}
+    try:
+        shutil.rmtree(paper_dir)
+        return {"attempted": True, "deleted_path": str(paper_dir), "warning": None}
+    except Exception as e:
+        return {"attempted": True, "deleted_path": None,
+                "warning": f"rmtree failed: {e}"}
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings

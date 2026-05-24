@@ -894,3 +894,29 @@ async def test_reconcile_queued_missing_after_candidate_resolved(tmp_workspace):
     # OR: resolve+classify both empty → no completion path triggers.
     # Either way, the test guards against false "complete" on missing candidate.
     assert rec.status != "complete"
+
+
+def test_cleanup_smart_renamed_outputs_match(tmp_workspace):
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "SmartRenamed", has_ko=False)
+    result = mcp_jobs._cleanup_smart_renamed_paper("src.pdf")
+    assert result["attempted"] is True
+    assert result["deleted_path"] == str(pdir)
+    assert result["warning"] is None
+    assert not pdir.exists()
+
+
+def test_cleanup_smart_renamed_no_match(tmp_workspace):
+    from app.services import mcp_jobs
+    result = mcp_jobs._cleanup_smart_renamed_paper("nope.pdf")
+    assert result == {"attempted": False, "deleted_path": None, "warning": None}
+
+
+def test_cleanup_smart_renamed_archives_preserved(tmp_workspace):
+    """T10 partial — archives match → cleanup refuses, archives untouched."""
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "ArchOnly", has_ko=True, dest="archives")
+    result = mcp_jobs._cleanup_smart_renamed_paper("src.pdf")
+    assert result["attempted"] is False
+    assert result["warning"] and "archives" in result["warning"]
+    assert pdir.exists()  # archives intact
