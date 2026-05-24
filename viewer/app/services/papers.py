@@ -1248,6 +1248,7 @@ def delete_queued_file(filename: str) -> tuple[bool, str]:
 
 
 def request_cancel_processing(filename: str, delete_file: bool = True, force: bool = True) -> tuple[bool, str]:
+    from ..config import settings  # lazy import so test fixtures can replace settings
     """Request cancellation for a processing file.
 
     - If currently processing: enqueue cancel request for converter watchdog.

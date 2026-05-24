@@ -240,18 +240,35 @@ async def test_reconcile_error_via_processing_status(tmp_workspace):
 
 
 async def test_cancel_job_queued(tmp_workspace):
+    """Cancelling a queued job removes the file AND its source sidecar AND partial outputs."""
     from app.services import mcp_jobs
+    from app.services import papers as _papers
+    from app.config import settings
 
     rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
         pdf_bytes_b64=__import__("base64").b64encode(b"%PDF-fake").decode())
-    # File is queued (in newones/)
-    landed = tmp_workspace / "newones" / rec.expected_filename
+    landed = settings.newones_dir / rec.expected_filename
     assert landed.exists()
+
+    # Manually create a sidecar (simulating what URL submits do)
+    sidecar = settings.newones_meta_dir / f"{rec.expected_filename}.url.txt"
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text("https://example.com/source", encoding="utf-8")
+
+    # Manually create a partial output folder named by file stem
+    from pathlib import Path
+    stem = Path(rec.expected_filename).stem
+    partial_out = settings.outputs_dir / stem
+    partial_out.mkdir(parents=True)
+    (partial_out / "partial.md").write_text("draft", encoding="utf-8")
 
     cancelled = await mcp_jobs.cancel_job(rec.job_id, delete_file=True)
     assert cancelled.status == "cancelled"
-    # File should be removed
-    assert not landed.exists()
+
+    # All three artifacts cleaned up by request_cancel_processing delegation
+    assert not landed.exists(), "PDF file in newones/ not removed"
+    assert not sidecar.exists(), "URL sidecar not removed"
+    assert not partial_out.exists(), "partial output folder not removed"
 
 
 async def test_list_jobs(tmp_workspace):

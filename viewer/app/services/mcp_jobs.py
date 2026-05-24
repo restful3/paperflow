@@ -382,14 +382,7 @@ async def cancel_job(job_id: str, delete_file: bool = True) -> JobRecord | None:
                                completed_at=_now_iso())
         return await get_job(job_id)
 
-    # queued: delete file directly using our lazy settings (avoids stale settings ref in papers.py)
-    if rec.status == "queued":
-        if delete_file:
-            (settings.newones_dir / rec.expected_filename).unlink(missing_ok=True)
-        await _set_job_fields(job_id, status="cancelled", completed_at=_now_iso())
-        return await get_job(job_id)
-
-    # processing/stalled: delegate to existing helper (enqueues cancel signal for watchdog)
+    # queued/processing/stalled: delegate to existing helper
     ok, msg = _papers.request_cancel_processing(rec.expected_filename,
                                                   delete_file=delete_file, force=True)
     await _set_job_fields(job_id, status="cancelled",
