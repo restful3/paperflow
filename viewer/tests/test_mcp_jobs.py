@@ -59,3 +59,60 @@ def test_build_expected_filename():
     assert name.startswith("pfmcp-abcdef123456-")
     assert name.endswith(".pdf")
     assert len(name) <= 70  # reasonable bound
+
+
+import base64
+
+
+def test_write_part_file_then_publish(tmp_workspace):
+    from app.services import mcp_jobs
+    dest = tmp_workspace / "newones" / "pfmcp-test.pdf"
+    part = dest.with_suffix(dest.suffix + ".part")
+    mcp_jobs._write_part_file(b"%PDF-1.4 test", part)
+    assert part.exists()
+    assert not dest.exists()    # publish not yet
+    mcp_jobs._atomic_publish_part(part, dest)
+    assert dest.exists()
+    assert not part.exists()
+    assert dest.read_bytes() == b"%PDF-1.4 test"
+
+
+async def test_submit_job_file_invalid_base64(tmp_workspace):
+    from app.services import mcp_jobs
+    with pytest.raises(ValueError, match="base64"):
+        await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+                                   pdf_bytes_b64="not-base64-!!!")
+
+
+async def test_submit_job_file_oversized(tmp_workspace):
+    from app.services import mcp_jobs
+    huge = base64.b64encode(b"%PDF" + b"x" * (201 * 1024 * 1024)).decode()
+    with pytest.raises(ValueError, match="200MB"):
+        await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+                                   pdf_bytes_b64=huge)
+
+
+async def test_submit_job_file_not_pdf(tmp_workspace):
+    from app.services import mcp_jobs
+    not_pdf = base64.b64encode(b"hello world").decode()
+    with pytest.raises(ValueError, match="PDF"):
+        await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+                                   pdf_bytes_b64=not_pdf)
+
+
+async def test_submit_job_file_success(tmp_workspace):
+    from app.services import mcp_jobs
+    pdf_b64 = base64.b64encode(b"%PDF-1.4 hello").decode()
+    rec = await mcp_jobs.submit_job("file", "mydoc.pdf", mcp_jobs.JobOptions(),
+                                     pdf_bytes_b64=pdf_b64)
+    assert rec.status == "queued"
+    assert rec.expected_filename.startswith("pfmcp-")
+    assert rec.input_type == "file"
+    assert rec.import_method == "file_upload"
+    # File landed in newones/
+    landed = tmp_workspace / "newones" / rec.expected_filename
+    assert landed.exists()
+    assert landed.read_bytes() == b"%PDF-1.4 hello"
+    # Index has it
+    idx = await mcp_jobs._load_index()
+    assert rec.job_id in idx

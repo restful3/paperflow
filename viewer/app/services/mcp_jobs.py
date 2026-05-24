@@ -91,3 +91,171 @@ def _build_expected_filename(job_id: str, slug_source: str) -> str:
     slug = _FILENAME_SAFE_RE.sub("-", (slug_source or "doc").strip().lower())[:40]
     slug = slug.strip("-") or "doc"
     return f"pfmcp-{short}-{slug}.pdf"
+
+
+import base64 as _b64
+import uuid as _uuid
+
+# ── Publish helpers ───────────────────────────────────────────────────────────
+def _write_part_file(pdf_bytes: bytes, part_path: Path) -> None:
+    """Sync helper called via asyncio.to_thread. Write .part + fsync. NO replace."""
+    part_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(part_path, "wb") as f:
+        f.write(pdf_bytes)
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _atomic_publish_part(part_path: Path, dest_path: Path) -> None:
+    """Sync 1ms atomic call — separate from _write_part_file so cancel can intervene."""
+    os.replace(part_path, dest_path)
+
+
+# ── Submit ────────────────────────────────────────────────────────────────────
+def _now_iso() -> str:
+    return _dt.datetime.now().isoformat(timespec="seconds")
+
+
+def _expires_at_iso() -> str:
+    from ..config import settings
+    return (_dt.datetime.now() + _dt.timedelta(days=settings.MCP_JOB_TTL_DAYS)).isoformat(timespec="seconds")
+
+
+def _slug_from_source(input_type: str, source: str) -> str:
+    if input_type == "url":
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(source).netloc.lower()
+            return host or source
+        except Exception:
+            return source
+    # file
+    return Path(source).stem or source
+
+
+async def submit_job(
+    input_type: Literal["url", "file"],
+    source: str,
+    options: JobOptions,
+    *,
+    pdf_bytes_b64: str | None = None,
+) -> JobRecord:
+    """Create a new job. URL = background download. File = synchronous publish."""
+    if input_type not in ("url", "file"):
+        raise ValueError(f"input_type must be url or file, got {input_type!r}")
+    if input_type == "file" and not pdf_bytes_b64:
+        raise ValueError("file submission requires pdf_bytes_b64")
+
+    from ..config import settings
+
+    job_id = str(_uuid.uuid4())
+    expected_filename = _build_expected_filename(job_id, _slug_from_source(input_type, source))
+    dest = settings.newones_dir / expected_filename
+
+    if input_type == "file":
+        # Decode + validate
+        try:
+            pdf_bytes = _b64.b64decode(pdf_bytes_b64, validate=True)
+        except Exception as e:
+            raise ValueError(f"invalid base64: {e}") from e
+        if len(pdf_bytes) > 200 * 1024 * 1024:
+            raise ValueError("file exceeds 200MB limit")
+        if not pdf_bytes.startswith(b"%PDF-"):
+            raise ValueError("not a PDF (magic byte mismatch)")
+
+        # 2-stage publish: write .part (in thread), then short atomic replace
+        part_path = dest.with_suffix(dest.suffix + ".part")
+        await asyncio.to_thread(_write_part_file, pdf_bytes, part_path)
+        _atomic_publish_part(part_path, dest)
+
+        rec = JobRecord(
+            job_id=job_id, input_type="file", source=source,
+            expected_filename=expected_filename,
+            import_method="file_upload",
+            options=options, status="queued", stage=None, percent=0,
+            paper_name=None, location=None, error=None,
+            submitted_at=_now_iso(), completed_at=None,
+            expires_at=_expires_at_iso(),
+        )
+    else:
+        # URL: background task does the work, this returns immediately
+        rec = JobRecord(
+            job_id=job_id, input_type="url", source=source,
+            expected_filename=expected_filename,
+            import_method=None,
+            options=options, status="downloading", stage=None, percent=0,
+            paper_name=None, location=None, error=None,
+            submitted_at=_now_iso(), completed_at=None,
+            expires_at=_expires_at_iso(),
+        )
+
+    async with _index_lock:
+        idx = await _load_index()
+        idx[job_id] = rec.model_dump()
+        await _atomic_write_index(idx)
+
+    # URL: spawn bg downloader after index write
+    if input_type == "url":
+        task = asyncio.create_task(_download_and_publish(job_id, source, expected_filename))
+        _active_download_tasks[job_id] = task
+        task.add_done_callback(lambda _t: _active_download_tasks.pop(job_id, None))
+
+    return rec
+
+
+async def get_job(job_id: str) -> JobRecord | None:
+    async with _index_lock:
+        idx = await _load_index()
+    raw = idx.get(job_id)
+    return JobRecord.model_validate(raw) if raw else None
+
+
+# ── URL background downloader (Stage 1 + Stage 2) ─────────────────────────────
+async def _set_job_fields(job_id: str, **fields) -> None:
+    """Update specific fields on a JobRecord under lock."""
+    async with _index_lock:
+        idx = await _load_index()
+        if job_id not in idx:
+            return
+        idx[job_id].update(fields)
+        await _atomic_write_index(idx)
+
+
+async def _download_and_publish(job_id: str, url: str, expected_filename: str) -> None:
+    """Background task: resolve URL → write .part → atomic publish under lock."""
+    from . import papers as _papers
+    from ..config import settings
+    dest = settings.newones_dir / expected_filename
+    part_path = dest.with_suffix(dest.suffix + ".part")
+    try:
+        # Stage 0: blocking URL resolve in worker thread
+        pdf_bytes, _final_url, import_method = await asyncio.to_thread(
+            _papers._resolve_url_to_pdf_bytes, url
+        )
+        # Stage 1: blocking .part write in worker thread (cancellable between stages)
+        await asyncio.to_thread(_write_part_file, pdf_bytes, part_path)
+        # Stage 2: lock + status re-check + atomic publish (race-free)
+        async with _index_lock:
+            idx = await _load_index()
+            rec = idx.get(job_id)
+            if not rec or rec["status"] != "downloading":
+                # cancelled/error/superseded — abort publish
+                part_path.unlink(missing_ok=True)
+                return
+            _atomic_publish_part(part_path, dest)
+            idx[job_id]["status"] = "queued"
+            idx[job_id]["import_method"] = import_method
+            await _atomic_write_index(idx)
+        # Source sidecar (best effort)
+        try:
+            _papers._write_source_sidecar(expected_filename, url)
+        except Exception:
+            pass
+    except asyncio.CancelledError:
+        part_path.unlink(missing_ok=True)
+        # status update handled by canceller (cancel_job or cancel_all_active_downloads)
+        raise
+    except Exception as e:
+        part_path.unlink(missing_ok=True)
+        await _set_job_fields(job_id, status="error", error=str(e)[:400],
+                               completed_at=_now_iso())
