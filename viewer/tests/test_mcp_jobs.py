@@ -117,3 +117,84 @@ async def test_submit_job_file_success(tmp_workspace):
     # Index has it
     idx = await mcp_jobs._load_index()
     assert rec.job_id in idx
+
+
+async def test_submit_url_returns_downloading(tmp_workspace, monkeypatch):
+    """URL submit returns immediately with status=downloading; bg task does the work."""
+    from app.services import mcp_jobs
+
+    monkeypatch.setattr(
+        "app.services.papers._resolve_url_to_pdf_bytes",
+        lambda u: (b"%PDF-1.4 fake", u, "site_transform"),
+    )
+
+    import asyncio
+    rec = await mcp_jobs.submit_job("url", "https://arxiv.org/abs/1234.5678",
+                                     mcp_jobs.JobOptions())
+    assert rec.status == "downloading"
+    assert rec.expected_filename.startswith("pfmcp-")
+
+    # Wait for bg task to finish
+    task = mcp_jobs._active_download_tasks.get(rec.job_id)
+    if task:
+        await task
+
+    # Now should be queued + file landed
+    final = await mcp_jobs.get_job(rec.job_id)
+    assert final.status == "queued"
+    assert final.import_method == "site_transform"
+    landed = tmp_workspace / "newones" / rec.expected_filename
+    assert landed.exists()
+
+
+async def test_url_resolve_failure_marks_error(tmp_workspace, monkeypatch):
+    from app.services import mcp_jobs
+
+    def fail_resolve(url):
+        raise ValueError("dead link")
+
+    monkeypatch.setattr("app.services.papers._resolve_url_to_pdf_bytes", fail_resolve)
+
+    rec = await mcp_jobs.submit_job("url", "https://bad.example.com/x",
+                                     mcp_jobs.JobOptions())
+    # Wait for bg task
+    task = mcp_jobs._active_download_tasks.get(rec.job_id)
+    if task:
+        try:
+            await task
+        except Exception:
+            pass
+
+    final = await mcp_jobs.get_job(rec.job_id)
+    assert final.status == "error"
+    assert "dead link" in final.error
+
+
+async def test_cancel_race_during_publish(tmp_workspace, monkeypatch):
+    """Simulate cancel arriving between Stage 1 and Stage 2 — .pdf must not appear."""
+    from app.services import mcp_jobs
+
+    monkeypatch.setattr(
+        "app.services.papers._resolve_url_to_pdf_bytes",
+        lambda u: (b"%PDF-1.4 fake", u, "site_transform"),
+    )
+
+    rec = await mcp_jobs.submit_job("url", "https://arxiv.org/abs/9999.99999",
+                                     mcp_jobs.JobOptions())
+    # Flip status to cancelled BEFORE the bg task reaches Stage 2
+    # (race window: between to_thread(write_part) return and the lock acquire)
+    await mcp_jobs._set_job_fields(rec.job_id, status="cancelled",
+                                    completed_at=mcp_jobs._now_iso())
+
+    task = mcp_jobs._active_download_tasks.get(rec.job_id)
+    if task:
+        try:
+            await task
+        except Exception:
+            pass
+
+    # .pdf must NOT exist; .part must be cleaned
+    dest = tmp_workspace / "newones" / rec.expected_filename
+    part = dest.with_suffix(dest.suffix + ".part")
+    assert not dest.exists(), "cancelled job's PDF was published"
+    assert not part.exists(), "part file leaked"
