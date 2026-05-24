@@ -11,6 +11,7 @@ import datetime as _dt
 import json
 import os
 import re
+import time as _time
 import uuid as _uuid
 from pathlib import Path
 from typing import Iterator, Literal
@@ -23,6 +24,7 @@ _active_download_tasks: dict[str, asyncio.Task] = {}
 _index_lock = asyncio.Lock()
 
 _MAX_FILE_BYTES = 200 * 1024 * 1024  # 200MB hard limit for file submit
+_STALLED_AFTER_SECONDS = 30 * 60  # converter must have moved off this job for 30 min
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -337,11 +339,10 @@ async def reconcile_job(job_id: str) -> JobRecord | None:
                                            stage=stage, percent=pct)
                     return await get_job(job_id)
 
-            # stalled detection: mtime > 30min + still processing
-            import time as _time
-            if rec.status == "processing":
+            # stalled detection: converter moved off our job + mtime old
+            if rec.status == "processing" and ps.get("current_file") != rec.expected_filename:
                 age = _time.time() - ps_path.stat().st_mtime
-                if age > 30 * 60:
+                if age > _STALLED_AFTER_SECONDS:
                     await _set_job_fields(job_id, status="stalled")
                     return await get_job(job_id)
         except Exception:
@@ -395,7 +396,12 @@ async def cancel_job(job_id: str, delete_file: bool = True) -> JobRecord | None:
 async def list_jobs(limit: int = 50, status: str | None = None) -> list[JobRecord]:
     async with _index_lock:
         idx = await _load_index()
-    records = [JobRecord.model_validate(v) for v in idx.values()]
+    records = []
+    for v in idx.values():
+        try:
+            records.append(JobRecord.model_validate(v))
+        except Exception:
+            pass  # skip malformed entry
     if status:
         records = [r for r in records if r.status == status]
     records.sort(key=lambda r: r.submitted_at, reverse=True)

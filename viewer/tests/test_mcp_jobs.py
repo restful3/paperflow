@@ -281,3 +281,30 @@ async def test_list_jobs(tmp_workspace):
     assert len(jobs) == 3
     statuses = {j.status for j in jobs}
     assert statuses == {"queued"}
+
+
+async def test_reconcile_stalled_when_converter_moved_on(tmp_workspace):
+    """Status=processing + processing_status references different file with old mtime → stalled."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json as _json
+    import time as _time
+    import os as _os
+
+    rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+        pdf_bytes_b64=__import__("base64").b64encode(b"%PDF-fake").decode())
+    # Mark job as processing
+    await mcp_jobs._set_job_fields(rec.job_id, status="processing", stage="converting", percent=50)
+    # Converter moved to a different file (or is idle), and processing_status hasn't been touched in 31 min
+    ps_path = settings.logs_dir / "processing_status.json"
+    ps_path.write_text(_json.dumps({"current_file": "some-other-file.pdf", "stage": "converting"}))
+    # Backdate the mtime to 31 minutes ago
+    old = _time.time() - 31 * 60
+    _os.utime(ps_path, (old, old))
+    # Remove the newones file so reconcile doesn't downgrade to queued.
+    # Stalled check is inside the ps_path.exists() block, BEFORE the newones fallback,
+    # so stalled fires first even when the file is gone.
+    (tmp_workspace / "newones" / rec.expected_filename).unlink()
+
+    new_rec = await mcp_jobs.reconcile_job(rec.job_id)
+    assert new_rec.status == "stalled", f"Expected stalled, got {new_rec.status}"
