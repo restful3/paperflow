@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     MCP_JOB_TTL_DAYS: int = 7
     MCP_PUBLIC_BASE_URL: str = ""        # required when MCP enabled, e.g. http://localhost:8090
     MCP_ALLOWED_ORIGINS: str = ""        # CSV. empty → derive. explicit "*" → permissive opt-out.
+    MCP_REQUIRE_TRANSLATION: bool = True  # rev4: reconcile downgrades complete→error when _ko.md missing
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000

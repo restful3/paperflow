@@ -54,3 +54,16 @@ def test_origin_explicit_csv(mcp_enabled_workspace, monkeypatch):
     from app import config as _cfg
     _cfg.settings = _cfg.Settings()
     assert _cfg.settings.mcp_allowed_origins_set == {"https://a.com", "https://b.com"}
+
+
+def test_mcp_require_translation_default_true(tmp_workspace):
+    from app.config import Settings
+    s = Settings()
+    assert s.MCP_REQUIRE_TRANSLATION is True
+
+
+def test_mcp_require_translation_env_false(tmp_workspace, monkeypatch):
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "false")
+    from app.config import Settings
+    s = Settings()
+    assert s.MCP_REQUIRE_TRANSLATION is False
