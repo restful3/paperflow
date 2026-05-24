@@ -490,7 +490,29 @@ async def reconcile_job(job_id: str) -> JobRecord | None:
     rec = await get_job(job_id)
     if not rec:
         return None
-    if rec.status in ("complete", "error", "cancelled"):
+    # rev4: error/cancelled remain terminal idempotent; complete is re-validated.
+    if rec.status in ("error", "cancelled"):
+        return rec
+
+    if rec.status == "complete":
+        verdict = _classify_completion(rec.expected_filename)
+        if verdict == "complete":
+            return rec
+        if verdict == "partial":
+            await _set_job_fields(job_id, status="error",
+                error=("translation_missing — prior run was killed mid-translation. "
+                       "Call cancel_job(delete_file=true) to clear partial outputs, "
+                       "then resubmit with force_reprocess=true. "
+                       "If this deployment intentionally disables Korean translation, "
+                       "set MCP_REQUIRE_TRANSLATION=false."),
+                completed_at=_now_iso())
+            return await get_job(job_id)
+        if verdict == "missing":
+            await _set_job_fields(job_id, status="error",
+                error="paper folder no longer present (archived or deleted externally)",
+                completed_at=_now_iso())
+            return await get_job(job_id)
+        # "skip" — translation not required; leave complete as-is
         return rec
 
     # Downloading: bg task interrupted (viewer restart)?

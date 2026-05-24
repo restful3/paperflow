@@ -709,3 +709,137 @@ def test_classify_completion_archives_always_complete(tmp_workspace):
     (arch / "src.pdf").touch()
     # No _ko.md, but archives skip the partial check
     assert mcp_jobs._classify_completion("src.pdf") == "complete"
+
+
+import asyncio
+
+
+async def _persist_job(status: str, expected_filename: str = "src.pdf",
+                       paper_name: str | None = None,
+                       location: str | None = None):
+    """Helper: write a JobRecord at the given status straight to the index."""
+    from app.services import mcp_jobs
+    rec = mcp_jobs.JobRecord(
+        job_id="job1",
+        input_type="url",
+        source="https://example.com/p.pdf",
+        expected_filename=expected_filename,
+        import_method=None,
+        options=mcp_jobs.JobOptions(force_reprocess=False),
+        status=status,
+        stage=None,
+        percent=100 if status == "complete" else 0,
+        paper_name=paper_name,
+        location=location,
+        error=None,
+        submitted_at="2026-05-24T10:00:00",
+        completed_at=None,
+        expires_at="2026-05-31T10:00:00",
+    )
+    async with mcp_jobs._index_lock:
+        idx = await mcp_jobs._load_index()
+        idx[rec.job_id] = rec.model_dump()
+        await mcp_jobs._atomic_write_index(idx)
+
+
+def _make_paper_folder(tmp_workspace, name: str, has_ko: bool, has_pdf: bool = True,
+                        has_meta: bool = True, dest: str = "outputs"):
+    from app.config import settings
+    import json
+    base = settings.outputs_dir if dest == "outputs" else settings.archives_dir
+    pdir = base / name
+    pdir.mkdir(parents=True, exist_ok=True)
+    (pdir / f"{name}.md").write_text("en")
+    if has_ko:
+        (pdir / f"{name}_ko.md").write_text("ko")
+    if has_pdf:
+        (pdir / "src.pdf").touch()
+    if has_meta:
+        (pdir / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    return pdir
+
+
+async def test_reconcile_complete_with_ko_md_stays_complete(tmp_workspace):
+    """T3 — complete + _ko.md present → status stays complete (regression)."""
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Good", has_ko=True)
+    await _persist_job("complete", paper_name="Good", location="outputs")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "complete"
+
+
+async def test_reconcile_complete_partial_downgrades_to_error(tmp_workspace, monkeypatch):
+    """T1 — complete + _ko.md missing + REQUIRE=true → status=error."""
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "true")
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Bad", has_ko=False)
+    await _persist_job("complete", paper_name="Bad", location="outputs")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "error"
+    assert "translation_missing" in rec.error
+    assert "cancel_job(delete_file=true)" in rec.error
+    assert "force_reprocess=true" in rec.error
+    assert "MCP_REQUIRE_TRANSLATION=false" in rec.error
+
+
+async def test_reconcile_complete_skip_when_translation_disabled(tmp_workspace, monkeypatch):
+    """T2 — complete + _ko.md missing + REQUIRE=false → stays complete."""
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "false")
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "EnOnly", has_ko=False)
+    await _persist_job("complete", paper_name="EnOnly", location="outputs")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "complete"
+
+
+async def test_reconcile_complete_archives_unchanged(tmp_workspace):
+    """T4 — archives folder with no _ko.md → still complete."""
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Archived", has_ko=False, dest="archives")
+    await _persist_job("complete", paper_name="Archived", location="archives")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "complete"
+
+
+async def test_reconcile_complete_folder_disappeared_becomes_error(tmp_workspace):
+    """T17 — folder was deleted externally → status=error 'no longer present'."""
+    from app.services import mcp_jobs
+    # Job persisted complete, but no folder exists anywhere
+    await _persist_job("complete", paper_name="Vanished", location="outputs")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "error"
+    assert "no longer present" in rec.error
+    assert "translation_missing" not in rec.error
+
+
+async def test_reconcile_legacy_complete_migration(tmp_workspace):
+    """T14 — v1 partial job persisted complete → next reconcile call surfaces error."""
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Legacy", has_ko=False)
+    # paper_name/location may even be missing on truly legacy records
+    await _persist_job("complete", paper_name=None, location=None)
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "error"
+    assert "translation_missing" in rec.error
+
+
+async def test_reconcile_error_status_stays_error(tmp_workspace):
+    """error remains terminal — no re-validation."""
+    from app.services import mcp_jobs
+    await _persist_job("error")
+    # Even if the filesystem now looks valid, error stays
+    _make_paper_folder(tmp_workspace, "DoesntMatter", has_ko=True)
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "error"
+
+
+async def test_reconcile_cancelled_status_stays_cancelled(tmp_workspace):
+    """cancelled remains terminal."""
+    from app.services import mcp_jobs
+    await _persist_job("cancelled")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "cancelled"
