@@ -498,18 +498,6 @@ def _cleanup_smart_renamed_paper(expected_filename: str) -> dict:
                 "warning": f"rmtree failed: {e}"}
 
 
-def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
-    """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
-    from ..config import settings
-    for loc_name, base in (("outputs", settings.outputs_dir), ("archives", settings.archives_dir)):
-        if not base.exists():
-            continue
-        for sub in base.iterdir():
-            if sub.is_dir() and (sub / expected_filename).is_file():
-                return sub.name, loc_name
-    return None
-
-
 async def reconcile_job(job_id: str) -> JobRecord | None:
     """Refresh status by inspecting filesystem + processing_status.json."""
     from ..config import settings
