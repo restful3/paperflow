@@ -490,3 +490,52 @@ def test_paper_has_ko_md_only_ko_explained(tmp_workspace):
     (pdir / "OnlyExplained.md").write_text("en")
     (pdir / "OnlyExplained_ko_explained.md").write_text("ko_explained")
     assert mcp_jobs._paper_has_ko_md(pdir) is False
+
+
+def test_scan_outputs_dir_only_finds_match(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    sub = settings.outputs_dir / "MyPaper"
+    sub.mkdir()
+    (sub / "src.pdf").touch()
+    assert mcp_jobs._scan_outputs_dir_only("src.pdf") == "MyPaper"
+
+
+def test_scan_outputs_dir_only_ignores_archives(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    arch = settings.archives_dir / "ArchPaper"
+    arch.mkdir()
+    (arch / "src.pdf").touch()
+    assert mcp_jobs._scan_outputs_dir_only("src.pdf") is None
+
+
+def test_scan_archives_dir_only_finds_match(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    arch = settings.archives_dir / "ArchPaper"
+    arch.mkdir()
+    (arch / "src.pdf").touch()
+    assert mcp_jobs._scan_archives_dir_only("src.pdf") == "ArchPaper"
+
+
+def test_scan_outputs_dir_only_rejects_symlink_escape(tmp_workspace, tmp_path):
+    """T23 — scan helpers ignore symlinks that escape the base dir."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    # External target contains the file the scan would otherwise find
+    external = tmp_path / "external_paper_dir"
+    external.mkdir()
+    (external / "src.pdf").touch()
+    # Symlink inside outputs/ points at the external dir
+    (settings.outputs_dir / "evil_link").symlink_to(external)
+    assert mcp_jobs._scan_outputs_dir_only("src.pdf") is None
+
+
+def test_scan_outputs_dir_only_no_outputs_dir(tmp_workspace):
+    """Defensive: function returns None when outputs/ does not exist."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    import shutil
+    shutil.rmtree(settings.outputs_dir)
+    assert mcp_jobs._scan_outputs_dir_only("anything.pdf") is None

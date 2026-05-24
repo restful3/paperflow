@@ -332,6 +332,37 @@ def _paper_has_ko_md(paper_dir: Path) -> bool | None:
         return None
 
 
+def _scan_outputs_dir_only(expected_filename: str) -> str | None:
+    """Scan outputs/ ONLY for a direct-child folder containing expected_filename.
+    Returns the folder name (str) or None. archives/ is never touched.
+    Symlinks that escape outputs/ are rejected by `_is_safe_direct_child`.
+    """
+    from ..config import settings
+    base = settings.outputs_dir
+    if not base.exists():
+        return None
+    for sub in base.iterdir():
+        if not _is_safe_direct_child(base, sub):
+            continue
+        if (sub / expected_filename).is_file():
+            return sub.name
+    return None
+
+
+def _scan_archives_dir_only(expected_filename: str) -> str | None:
+    """Same as _scan_outputs_dir_only but for archives/."""
+    from ..config import settings
+    base = settings.archives_dir
+    if not base.exists():
+        return None
+    for sub in base.iterdir():
+        if not _is_safe_direct_child(base, sub):
+            continue
+        if (sub / expected_filename).is_file():
+            return sub.name
+    return None
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings
