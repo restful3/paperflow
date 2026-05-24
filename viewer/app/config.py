@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     BRAVE_SEARCH_API_KEY: str = ""
 
+    # MCP server (opt-in: empty MCP_API_KEY → completely disabled)
+    MCP_API_KEY: str = ""
+    MCP_JOB_TTL_DAYS: int = 7
+    MCP_PUBLIC_BASE_URL: str = ""        # required when MCP enabled, e.g. http://localhost:8090
+    MCP_ALLOWED_ORIGINS: str = ""        # CSV. empty → derive. explicit "*" → permissive opt-out.
+
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
@@ -77,6 +83,45 @@ class Settings(BaseSettings):
     @property
     def logs_dir(self) -> Path:
         return Path(self.BASE_DIR) / "logs"
+
+    @property
+    def mcp_enabled(self) -> bool:
+        """Opt-in: MCP server is mounted only when MCP_API_KEY is set (>= 32 chars)
+        AND MCP_PUBLIC_BASE_URL is configured."""
+        if not (self.MCP_API_KEY and len(self.MCP_API_KEY) >= 32):
+            return False
+        if not self.MCP_PUBLIC_BASE_URL:
+            raise RuntimeError(
+                "MCP_API_KEY is set but MCP_PUBLIC_BASE_URL is missing. "
+                "Set MCP_PUBLIC_BASE_URL (e.g. http://localhost:8090) or clear MCP_API_KEY."
+            )
+        return True
+
+    @property
+    def mcp_allowed_origins_set(self) -> set[str]:
+        """DNS rebinding defense (MCP MUST).
+        - explicit "*" → permissive opt-out
+        - explicit CSV → exactly those
+        - empty → derive MCP_PUBLIC_BASE_URL origin + localhost/127.0.0.1 (http/https)
+        """
+        from urllib.parse import urlparse
+
+        raw = self.MCP_ALLOWED_ORIGINS.strip()
+        if raw == "*":
+            return {"*"}
+        explicit = {o.strip() for o in raw.split(",") if o.strip()}
+        if explicit:
+            return explicit
+        defaults: set[str] = set()
+        if self.MCP_PUBLIC_BASE_URL:
+            p = urlparse(self.MCP_PUBLIC_BASE_URL)
+            if p.scheme and p.netloc:
+                defaults.add(f"{p.scheme}://{p.netloc}")
+        defaults.update({
+            "http://localhost", "https://localhost",
+            "http://127.0.0.1", "https://127.0.0.1",
+        })
+        return defaults
 
 
 settings = Settings()
