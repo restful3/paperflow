@@ -216,6 +216,10 @@
                 ? '{{ {"paper": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30", "report": "bg-purple-500/15 text-purple-400 border-purple-500/30", "blog": "bg-green-500/15 text-green-400 border-green-500/30", "news": "bg-rose-500/15 text-rose-400 border-rose-500/30", "essay": "bg-orange-500/15 text-orange-400 border-orange-500/30"}.get(paper_doc_type, "") }}'
                 : '{{ {"paper": "bg-indigo-50 text-indigo-600 border-indigo-200", "report": "bg-purple-50 text-purple-600 border-purple-200", "blog": "bg-green-50 text-green-600 border-green-200", "news": "bg-rose-50 text-rose-600 border-rose-200", "essay": "bg-orange-50 text-orange-600 border-orange-200"}.get(paper_doc_type, "") }}'">{{ paper_doc_type }}</span>
         {% endif %}
+        {% if paper_year %}
+        <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors border"
+              :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-100 text-gray-600 border-gray-200'">{{ paper_year }}</span>
+        {% endif %}
 
         <div class="flex items-center gap-1 shrink-0">
           <!-- Language toggle quick access (mobile) -->
@@ -429,6 +433,10 @@
             :class="$store.darkMode.on
               ? '{{ {"paper": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30", "report": "bg-purple-500/15 text-purple-400 border-purple-500/30", "blog": "bg-green-500/15 text-green-400 border-green-500/30", "news": "bg-rose-500/15 text-rose-400 border-rose-500/30", "essay": "bg-orange-500/15 text-orange-400 border-orange-500/30"}.get(paper_doc_type, "") }}'
               : '{{ {"paper": "bg-indigo-50 text-indigo-600 border-indigo-200", "report": "bg-purple-50 text-purple-600 border-purple-200", "blog": "bg-green-50 text-green-600 border-green-200", "news": "bg-rose-50 text-rose-600 border-rose-200", "essay": "bg-orange-50 text-orange-600 border-orange-200"}.get(paper_doc_type, "") }}'">{{ paper_doc_type }}</span>
+      {% endif %}
+      {% if paper_year %}
+      <span class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors border"
+            :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-100 text-gray-600 border-gray-200'">{{ paper_year }}</span>
       {% endif %}
 
       <!-- Star rating -->
@@ -704,8 +712,8 @@
            @touchcancel="handleTouchCancel($event)"
            @click.self="handleContainerClick($event)">
 
-        <!-- Mobile fallback: open PDF in native viewer (more reliable scroll/fit on iOS) -->
-        <div x-show="isMobile()" class="h-full flex flex-col items-center justify-center p-6 text-center gap-3"
+        <!-- Touch-device fallback: open PDF in native viewer (more reliable scroll/fit on iPad/iPhone) -->
+        <div x-show="isMobile() || isTabletTouch()" class="h-full flex flex-col items-center justify-center p-6 text-center gap-3"
              :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-700'">
           <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">
             모바일에서는 내장 iframe PDF가 확대/스크롤 이슈가 있어,
@@ -724,8 +732,8 @@
           </div>
         </div>
 
-        <!-- Desktop/tablet: inline iframe -->
-        <iframe x-show="!isMobile()"
+        <!-- Desktop only: inline iframe (touch devices use native viewer fallback) -->
+        <iframe x-show="!(isMobile() || isTabletTouch())"
                 :src="pdfUrl"
                 class="w-full h-full border-0 pointer-events-auto"></iframe>
       </div>
@@ -755,8 +763,23 @@
           <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 w-full lg:w-1/2 h-1/2 lg:h-full overflow-y-auto min-h-0"
                :class="[$store.darkMode.on && 'dark', $store.darkMode.on ? 'border-b lg:border-b-0 lg:border-r border-gray-700' : 'border-b lg:border-b-0 lg:border-r border-gray-300']"
                x-html="splitMdContent"></div>
-          <iframe :src="isMobile() ? mobilePdfUrl : pdfUrl"
-                  :style="isMobile() ? mobilePdfStyle : ''"
+
+          <!-- iPad/touch devices: avoid inline iframe scroll lock -->
+          <div x-show="isTabletTouch()"
+               class="w-full lg:w-1/2 h-1/2 lg:h-full flex flex-col items-center justify-center p-6 text-center gap-3"
+               :class="$store.darkMode.on ? 'text-gray-300 bg-gray-800' : 'text-gray-700 bg-gray-50'">
+            <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">
+              iPad에서는 Split 뷰의 내장 PDF 스크롤이 불안정해서, 오른쪽 패널은 네이티브 PDF 열기로 제공합니다.
+            </p>
+            <a :href="mobilePdfUrl" target="_blank" rel="noopener"
+               class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition">
+              PDF 열기 (새 탭)
+            </a>
+          </div>
+
+          <!-- desktop: inline iframe -->
+          <iframe x-show="!isTabletTouch()"
+                  :src="pdfUrl"
                   class="w-full lg:w-1/2 h-1/2 lg:h-full border-0"></iframe>
         </div>
       </div>
@@ -2307,6 +2330,11 @@ function viewerApp() {
     // Helper: Check if mobile viewport
     isMobile() {
       return window.innerWidth < 768; // Tailwind md: breakpoint
+    },
+
+    // Helper: iPad/tablet touch devices
+    isTabletTouch() {
+      return window.innerWidth >= 768 && window.matchMedia('(pointer: coarse)').matches;
     },
 
     updateAppViewportHeight() {

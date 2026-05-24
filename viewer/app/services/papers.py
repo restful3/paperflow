@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urljoin
 from urllib.request import Request, urlopen
 
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
@@ -19,11 +19,12 @@ def _slugify_name(text: str, max_len: int = 80) -> str:
     return (s[:max_len] or "untitled")
 
 
-def _fetch_url_html(url: str, timeout: int = 20) -> str:
+def _fetch_url_html(url: str, timeout: int = 20) -> tuple[str, str]:
     req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
     with urlopen(req, timeout=timeout) as resp:
+        final_url = resp.geturl()
         data = resp.read()
-    return data.decode("utf-8", errors="ignore")
+    return data.decode("utf-8", errors="ignore"), final_url
 
 
 def _extract_text_from_html(html: str, max_chars: int = 24000) -> str:
@@ -36,30 +37,6 @@ def _extract_text_from_html(html: str, max_chars: int = 24000) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     return text[:max_chars]
 
-
-def _translate_text_ko(text: str, max_chars: int = 12000) -> str:
-    text = (text or "").strip()
-    if not text:
-        return ""
-    text = text[:max_chars]
-    out_parts: list[str] = []
-    chunk_size = 2200
-    for i in range(0, len(text), chunk_size):
-        chunk = text[i:i + chunk_size]
-        try:
-            tr_url = (
-                "https://translate.googleapis.com/translate_a/single"
-                f"?client=gtx&sl=auto&tl=ko&dt=t&q={quote(chunk)}"
-            )
-            req = Request(tr_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(req, timeout=10) as resp:
-                raw = resp.read().decode("utf-8", errors="ignore")
-            data = _json.loads(raw)
-            ko = "".join(seg[0] for seg in data[0] if seg and seg[0]).strip()
-            out_parts.append(ko)
-        except Exception:
-            out_parts.append(chunk)
-    return "\n\n".join(p for p in out_parts if p)
 
 
 def _extract_pdf_text_simple(pdf_path: Path, max_pages: int = 2) -> str:
@@ -74,15 +51,176 @@ def _extract_pdf_text_simple(pdf_path: Path, max_pages: int = 2) -> str:
         return ""
 
 
+def _looks_like_pdf_bytes(data: bytes) -> bool:
+    return bool(data and data[:5] == b"%PDF-")
+
+
+def _download_pdf(url: str, timeout: int = 30) -> bytes:
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
+    with urlopen(req, timeout=timeout) as resp:
+        content_type = (resp.headers.get("Content-Type") or "").lower()
+        data = resp.read()
+    if _looks_like_pdf_bytes(data):
+        return data
+    # Some servers mislabel content-type but still return real PDF.
+    if "application/pdf" in content_type and data:
+        return data
+    raise ValueError("Not a PDF response")
+
+
+def _arxiv_transform(m: re.Match, url: str) -> list[str]:
+    arxiv_id = m.group(1)
+    v = m.group(2) or ""
+    return [f"https://arxiv.org/pdf/{arxiv_id}{v}.pdf"]
+
+
+def _arxiv_old_transform(m: re.Match, url: str) -> list[str]:
+    cat_id = m.group(1)
+    v = m.group(2) or ""
+    return [f"https://arxiv.org/pdf/{cat_id}{v}.pdf"]
+
+
+def _ar5iv_transform(m: re.Match, url: str) -> list[str]:
+    arxiv_id = m.group(1)
+    return [f"https://arxiv.org/pdf/{arxiv_id}.pdf"]
+
+
+def _openreview_transform(m: re.Match, url: str) -> list[str]:
+    oid = m.group(1)
+    return [f"https://openreview.net/pdf?id={oid}"]
+
+
+def _acl_transform(m: re.Match, url: str) -> list[str]:
+    paper_id = m.group(1).rstrip("/")
+    return [f"https://aclanthology.org/{paper_id}.pdf"]
+
+
+def _huggingface_transform(m: re.Match, url: str) -> list[str]:
+    arxiv_id = m.group(1)
+    return [f"https://arxiv.org/pdf/{arxiv_id}.pdf"]
+
+
+def _pmlr_transform(m: re.Match, url: str) -> list[str]:
+    prefix = m.group(1)
+    return [f"https://proceedings.mlr.press/{prefix}.pdf"]
+
+
+def _semanticscholar_transform(m: re.Match, url: str) -> list[str]:
+    sha = m.group(1)
+    return [f"https://pdfs.semanticscholar.org/{sha[:4]}/{sha}.pdf"]
+
+
+def _paperswithcode_transform(m: re.Match, url: str) -> list[str]:
+    return []
+
+
+def _biorxiv_transform(m: re.Match, url: str) -> list[str]:
+    doi_path = m.group(1)
+    host = m.group(0).split("/content/")[0]
+    if "://" not in host:
+        host = "https://" + host
+    return [f"{host}/content/{doi_path}.full.pdf"]
+
+
+_SITE_PDF_TRANSFORMERS: list[tuple[re.Pattern, callable]] = [
+    # arXiv new-style: arxiv.org/abs/2301.12345 or arxiv.org/abs/2301.12345v2
+    (re.compile(r"arxiv\.org/abs/(\d{4}\.\d{4,5})(v\d+)?"), _arxiv_transform),
+    # arXiv old-style: arxiv.org/abs/hep-ph/0512345
+    (re.compile(r"arxiv\.org/abs/([-a-z]+/\d{7})(v\d+)?"), _arxiv_old_transform),
+    # ar5iv (HTML rendering of arXiv papers)
+    (re.compile(r"ar5iv\.labs\.arxiv\.org/html/(\d{4}\.\d{4,5})"), _ar5iv_transform),
+    # OpenReview: openreview.net/forum?id=xxx
+    (re.compile(r"openreview\.net/forum\?id=([A-Za-z0-9_-]+)"), _openreview_transform),
+    # ACL Anthology: aclanthology.org/2023.acl-long.1/
+    (re.compile(r"aclanthology\.org/([A-Za-z0-9._-]+)/?\s*$"), _acl_transform),
+    # HuggingFace Papers: huggingface.co/papers/2301.12345
+    (re.compile(r"huggingface\.co/papers/(\d{4}\.\d{4,5})"), _huggingface_transform),
+    # PMLR: proceedings.mlr.press/v235/chen24a.html
+    (re.compile(r"proceedings\.mlr\.press/(v\d+/[^/]+?)\.html"), _pmlr_transform),
+    # Semantic Scholar: semanticscholar.org/paper/Title/40-char-hex
+    (re.compile(r"semanticscholar\.org/paper/[^/]+/([0-9a-f]{40})"), _semanticscholar_transform),
+    # Papers with Code (no direct PDF, fall back to HTML anchors)
+    (re.compile(r"paperswithcode\.com/paper/"), _paperswithcode_transform),
+    # bioRxiv / medRxiv: (bio|med)rxiv.org/content/10.1101/...
+    (re.compile(r"(?:bio|med)rxiv\.org/content/(10\.\d{4,9}/[\w./-]+?)(?:v\d+)?$"), _biorxiv_transform),
+]
+
+
+def _site_transform_pdf_urls(url: str) -> list[str]:
+    for pattern, fn in _SITE_PDF_TRANSFORMERS:
+        m = pattern.search(url)
+        if m:
+            return fn(m, url)
+    return []
+
+
+def _resolve_doi_redirect(url: str, timeout: int = 15) -> str | None:
+    if "doi.org/" not in url:
+        return None
+    try:
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
+        with urlopen(req, timeout=timeout) as resp:
+            final = resp.geturl()
+        if final and final != url:
+            return final
+    except Exception:
+        pass
+    return None
+
+
+def _candidate_pdf_urls_from_page(url: str, html: str) -> list[str]:
+    candidates: list[str] = []
+
+    # If original URL already points to PDF
+    if url.lower().endswith(".pdf"):
+        candidates.append(url)
+
+    # Standard scholarly meta tags
+    meta_patterns = [
+        r'<meta[^>]+name=["\']citation_pdf_url["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+property=["\']og:pdf["\'][^>]+content=["\']([^"\']+)["\']',
+    ]
+    for pat in meta_patterns:
+        for u in re.findall(pat, html, flags=re.I):
+            candidates.append(urljoin(url, u.strip()))
+
+    # Common anchor patterns
+    anchor_patterns = [
+        r'href=["\']([^"\']+\.pdf(?:\?[^"\']*)?)["\']',
+        r'href=["\']([^"\']+/pdf(?:\?[^"\']*)?)["\']',
+    ]
+    for pat in anchor_patterns:
+        for u in re.findall(pat, html, flags=re.I):
+            candidates.append(urljoin(url, u.strip()))
+
+    # de-dup preserve order
+    out: list[str] = []
+    seen: set[str] = set()
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
 def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, str | None]:
     """Import a web URL by creating a PDF in newones/ queue.
 
-    Pipeline alignment:
-      URL -> PDF(newones) -> existing PaperFlow pipeline(main_terminal.py)
-      -> metadata extraction -> markdown -> ko translation.
+    Pipeline:
+      A. URL validation
+      B. DOI pre-resolve (doi.org -> actual publisher URL)
+      C. PDF filename generation
+      D. Site transformer -> PDF URL (zero network requests)
+      E. Try downloading from site transformer results
+      F. Fallback: single HTML fetch + HTML-based candidate discovery
+         (re-apply site transformer if redirect discovered)
+      G. strict_pdf_required check (based on effective_url, not original)
+      H. Headless browser print-to-pdf fallback
+      I. Quality gates
 
     Returns: (ok, message, queued_pdf_name)
     """
+    # A. URL validation
     if not url or not url.startswith(("http://", "https://")):
         return False, "Invalid URL. Use http(s) URL.", None
 
@@ -90,58 +228,157 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
     if not host:
         return False, "Invalid URL host.", None
 
-    # Soft precheck only: do not fail import if HTML extraction is weak.
-    # Some sites block simple fetch but still print fine in headless browser.
-    try:
-        html = _fetch_url_html(url)
-        text = _extract_text_from_html(html)
-        if len(text) < 120:
-            pass
-    except Exception:
-        pass
+    # B. DOI pre-resolve
+    effective_url = url
+    if "doi.org/" in url:
+        resolved = _resolve_doi_redirect(url)
+        if resolved:
+            effective_url = resolved
 
+    # C. PDF filename generation
     settings.newones_dir.mkdir(parents=True, exist_ok=True)
     ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     slug = _slugify_name(title or host)
     pdf_name = f"web-{slug}-{ts}.pdf"
     pdf_path = settings.newones_dir / pdf_name
 
-    # Generate PDF via headless browser (chrome/chromium)
-    browser_bin = (
-        shutil.which("google-chrome")
-        or shutil.which("chromium")
-        or shutil.which("chromium-browser")
+    downloaded_direct = False
+    download_errors: list[str] = []
+
+    # D. Site transformer -> PDF URL candidates (zero network requests)
+    site_candidates = _site_transform_pdf_urls(effective_url)
+
+    # E. Try downloading from site transformer results
+    for cand in site_candidates:
+        try:
+            pdf_bytes = _download_pdf(cand, timeout=35)
+            pdf_path.write_bytes(pdf_bytes)
+            downloaded_direct = True
+            break
+        except Exception as e:
+            download_errors.append(f"{cand}: {str(e)[:80]}")
+
+    # F. Fallback: single HTML fetch + HTML-based candidate discovery
+    if not downloaded_direct:
+        html_for_discovery = ""
+        final_url = effective_url
+        try:
+            html_for_discovery, final_url = _fetch_url_html(effective_url)
+        except Exception:
+            html_for_discovery = ""
+
+        # If redirect discovered a new URL, re-apply site transformer
+        if final_url and final_url != effective_url:
+            effective_url = final_url
+            redirect_candidates = _site_transform_pdf_urls(final_url)
+            for cand in redirect_candidates:
+                try:
+                    pdf_bytes = _download_pdf(cand, timeout=35)
+                    pdf_path.write_bytes(pdf_bytes)
+                    downloaded_direct = True
+                    break
+                except Exception as e:
+                    download_errors.append(f"{cand}: {str(e)[:80]}")
+
+        # HTML-based candidate discovery (meta tags, anchors)
+        if not downloaded_direct and html_for_discovery:
+            candidate_urls = _candidate_pdf_urls_from_page(effective_url, html_for_discovery)
+            for cand in candidate_urls:
+                try:
+                    pdf_bytes = _download_pdf(cand, timeout=35)
+                    pdf_path.write_bytes(pdf_bytes)
+                    downloaded_direct = True
+                    break
+                except Exception as e:
+                    download_errors.append(f"{cand}: {str(e)[:80]}")
+
+    # G. strict_pdf_required check (based on effective_url, not original doi.org)
+    effective_host = (urlparse(effective_url).netloc or "").lower()
+    _STRICT_PDF_DOMAINS = (
+        "arxiv.org",
+        "openreview.net",
+        "aclanthology.org",
+        "proceedings.mlr.press",
+        "biorxiv.org",
+        "medrxiv.org",
+        "acm.org",
+        "ieeexplore.ieee.org",
+        "springer.com",
+        "nature.com",
+        "sciencedirect.com",
     )
-    if not browser_bin:
-        return False, "No headless browser found (google-chrome/chromium).", None
+    strict_pdf_required = any(d in effective_host for d in _STRICT_PDF_DOMAINS)
 
-    cmd = [
-        browser_bin,
-        "--headless=new",
-        "--disable-gpu",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--virtual-time-budget=10000",
-        f"--print-to-pdf={pdf_path}",
-        url,
-    ]
+    if not downloaded_direct and strict_pdf_required:
+        detail = f" direct-download failed ({'; '.join(download_errors[:2])})" if download_errors else ""
+        return False, "해당 논문 링크는 원문 PDF 직접 다운로드가 필요하지만 실패했습니다." + detail, None
 
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
-    except FileNotFoundError:
-        return False, "Headless browser executable missing.", None
-    except subprocess.TimeoutExpired:
-        return False, "PDF 생성 타임아웃(60s).", None
-    except subprocess.CalledProcessError as e:
-        err = (e.stderr or e.stdout or "").strip()
-        return False, f"PDF 생성 실패: {err[:200]}", None
+    # H. Headless browser print-to-pdf fallback (non-academic/general pages)
+    if not downloaded_direct:
+        browser_bin = (
+            shutil.which("google-chrome")
+            or shutil.which("chromium")
+            or shutil.which("chromium-browser")
+        )
+        if not browser_bin:
+            msg = "No headless browser found (google-chrome/chromium)."
+            if download_errors:
+                msg += f" direct-download failed ({'; '.join(download_errors[:2])})"
+            return False, msg, None
 
+        cmd = [
+            browser_bin,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-blink-features=AutomationControlled",
+            "--virtual-time-budget=30000",
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            f"--print-to-pdf={pdf_path}",
+            url,
+        ]
+
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
+        except FileNotFoundError:
+            return False, "Headless browser executable missing.", None
+        except subprocess.TimeoutExpired:
+            return False, "PDF 생성 타임아웃(60s).", None
+        except subprocess.CalledProcessError as e:
+            err = (e.stderr or e.stdout or "").strip()
+            return False, f"PDF 생성 실패: {err[:200]}", None
+
+    # I. Quality gates
     if not pdf_path.exists() or pdf_path.stat().st_size < 1024:
         return False, "PDF 생성 결과가 비정상입니다.", None
 
-    # Basic quality gate: prevent importing pages where print CSS captured only footer/cookie banner.
     pdf_text = _extract_pdf_text_simple(pdf_path, max_pages=2)
     norm = re.sub(r"\s+", " ", (pdf_text or "")).strip().lower()
+    bot_keywords = [
+        "verifying the device", "verifying your browser", "verify you are human",
+        "checking your browser", "device verification",
+        "captcha", "are you a robot", "access denied",
+        "just a moment", "ddos protection", "cloudflare",
+        "attention required", "unusual traffic",
+    ]
+    norm_nospace = norm.replace(" ", "")
+    bot_hit = sum(1 for k in bot_keywords if k in norm or k.replace(" ", "") in norm_nospace)
+    if bot_hit >= 1 and len(norm) < 600:
+        pdf_path.unlink(missing_ok=True)
+        return False, "사이트 봇 감지/인증 페이지가 캡처되었습니다. 이 사이트는 자동 가져오기를 지원하지 않습니다.", None
+
+    error_keywords = [
+        "page not found", "404 not found", "403 forbidden",
+        "no longer exists", "has been moved", "page you requested",
+        "this page isn't available", "page doesn't exist",
+        "requested url was not found", "server error", "500 internal",
+    ]
+    error_hit = sum(1 for k in error_keywords if k in norm or k.replace(" ", "") in norm_nospace)
+    if error_hit >= 1 and len(norm) < 600:
+        pdf_path.unlink(missing_ok=True)
+        return False, "에러 페이지(404/403 등)가 캡처되었습니다. URL이 유효한지 확인해 주세요.", None
+
     weak_keywords = ["privacy policy", "notify me", "owner login", "terms", "copyright", "built for agents"]
     weak_hit = sum(1 for k in weak_keywords if k in norm)
     if len(norm) < 220 or weak_hit >= 3:
@@ -151,7 +388,7 @@ def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, 
             pass
         return False, "원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요.", None
 
-    # Save source URL sidecar for traceability (.meta preferred path)
+    # Save source URL sidecar for traceability
     try:
         _write_source_sidecar(pdf_name, url)
     except Exception:
@@ -216,6 +453,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         "md_en": False,
         "md_ko_explained": False,
         "md_en_explained": False,
+        "md_lint_report": False,
     }
     for f in paper_dir.iterdir():
         if not f.is_file():
@@ -226,6 +464,8 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
             files["md_ko_explained"] = True
         elif f.name.endswith("_explained.md"):
             files["md_en_explained"] = True
+        elif f.name.endswith("_mdlint_report.json"):
+            files["md_lint_report"] = True
         elif f.name.endswith("_ko.md"):
             files["md_ko"] = True
         elif f.name.endswith(".md"):
@@ -372,6 +612,25 @@ def find_processed_paper(original_filename: str | None = None, source_url: str |
     if not original_filename and not source_url:
         return None
 
+    def _norm_url(u: str | None) -> str:
+        if not u:
+            return ""
+        try:
+            p = urlparse(u.strip())
+            host = (p.netloc or "").lower()
+            path = (p.path or "").rstrip("/")
+            query = ("?" + p.query) if p.query else ""
+            # Normalize arXiv to https + canonical host/path for stable matching
+            if host in ("arxiv.org", "www.arxiv.org"):
+                return f"https://arxiv.org{path}{query}"
+            scheme = (p.scheme or "https").lower()
+            return f"{scheme}://{host}{path}{query}"
+        except Exception:
+            return (u or "").strip()
+
+    norm_source_url = _norm_url(source_url)
+    is_arxiv_abs = "arxiv.org/abs/" in norm_source_url
+
     candidates: list[tuple[Path, str]] = []
     for base, loc in [(settings.outputs_dir, "outputs"), (settings.archives_dir, "archives")]:
         if not base.exists():
@@ -389,16 +648,26 @@ def find_processed_paper(original_filename: str | None = None, source_url: str |
         if original_filename and meta.get("original_filename") == original_filename:
             return _resolve_result(paper_dir, loc)
         if source_url and (
-            meta.get("paper_url") == source_url
-            or meta.get("source_url_original") == source_url
+            _norm_url(meta.get("paper_url")) == norm_source_url
+            or _norm_url(meta.get("source_url_original")) == norm_source_url
         ):
-            return _resolve_result(paper_dir, loc)
+            # Guard: for arXiv abs links, ignore legacy page-capture imports
+            # (e.g., original_filename like web-*.pdf from print fallback).
+            orig = (meta.get("original_filename") or "").lower()
+            if is_arxiv_abs and orig.startswith("web-"):
+                pass
+            else:
+                return _resolve_result(paper_dir, loc)
 
         # Fallback: check source sidecar (.meta first, legacy path fallback)
         if source_url and meta.get("original_filename"):
             try:
                 sidecar_url = _read_source_sidecar(meta["original_filename"])
-                if sidecar_url == source_url:
+                if _norm_url(sidecar_url) == norm_source_url:
+                    # Guard: for arXiv abs links, ignore legacy page-capture imports
+                    orig = (meta.get("original_filename") or "").lower()
+                    if is_arxiv_abs and orig.startswith("web-"):
+                        continue
                     # Backfill source_url_original into paper_meta.json for future lookups
                     meta_path = paper_dir / "paper_meta.json"
                     try:
@@ -513,14 +782,38 @@ def get_pdf_path(name: str) -> Path | None:
 
 
 def get_md_ko_path(name: str) -> Path | None:
-    """Get Korean markdown file path."""
+    """Get Korean markdown file path with deterministic priority.
+
+    Priority:
+    1) <folder_name>_ko.md exact match
+    2) Other *_ko.md files excluding backup/explained variants (newest first)
+    """
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
+
+    exact = paper_dir / f"{name}_ko.md"
+    if exact.is_file():
+        return exact
+
+    cands: list[Path] = []
     for f in paper_dir.iterdir():
-        if f.name.endswith("_ko.md"):
-            return f
-    return None
+        if not f.is_file():
+            continue
+        fn = f.name
+        if not fn.endswith("_ko.md"):
+            continue
+        if fn.endswith("_ko_explained.md"):
+            continue
+        if ".bak" in fn or "_backup_" in fn:
+            continue
+        cands.append(f)
+
+    if not cands:
+        return None
+
+    cands.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return cands[0]
 
 
 def get_md_en_path(name: str) -> Path | None:
@@ -965,6 +1258,95 @@ def delete_queued_file(filename: str) -> tuple[bool, str]:
         return True, f"'{filename}' removed from queue."
     except Exception as e:
         return False, f"Failed to delete '{filename}': {e}"
+
+
+def request_cancel_processing(filename: str, delete_file: bool = True, force: bool = True) -> tuple[bool, str]:
+    """Request cancellation for a processing file.
+
+    - If currently processing: enqueue cancel request for converter watchdog.
+    - If queued only: delete immediately when delete_file=True.
+    """
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return False, "Invalid filename."
+
+    status_path = settings.logs_dir / "processing_status.json"
+    cancel_path = settings.logs_dir / "cancel_requests.json"
+    filepath = settings.newones_dir / filename
+
+    current = None
+    stage = "idle"
+    if status_path.is_file():
+        try:
+            with open(status_path, "r", encoding="utf-8") as f:
+                st = _json.load(f)
+            current = st.get("current_file")
+            stage = st.get("stage", "idle")
+        except Exception:
+            pass
+
+    is_processing = (current == filename and stage not in ("idle", "complete", "error"))
+
+    # queued (not processing): delete now if requested
+    if not is_processing:
+        if delete_file and filepath.exists():
+            try:
+                filepath.unlink()
+                # cleanup sidecars + partial outputs
+                stem = Path(filename).stem
+                for side in [
+                    settings.newones_meta_dir / f"{filename}.url.txt",
+                    settings.newones_dir / f"{filename}.url.txt",
+                ]:
+                    try:
+                        if side.exists():
+                            side.unlink()
+                    except Exception:
+                        pass
+
+                out_by_stem = settings.outputs_dir / stem
+                if out_by_stem.exists() and out_by_stem.is_dir():
+                    shutil.rmtree(out_by_stem, ignore_errors=True)
+
+                # remove any output folder that already contains the source pdf
+                if settings.outputs_dir.exists():
+                    for d in settings.outputs_dir.iterdir():
+                        if d.is_dir() and (d / filename).exists():
+                            shutil.rmtree(d, ignore_errors=True)
+
+                return True, f"'{filename}' removed from queue (with partial outputs)."
+            except Exception as e:
+                return False, f"Failed to delete '{filename}': {e}"
+        return True, f"Cancel request accepted for '{filename}'."
+
+    # processing: write cancel request for converter watchdog
+    payload = {"requests": []}
+    if cancel_path.is_file():
+        try:
+            with open(cancel_path, "r", encoding="utf-8") as f:
+                payload = _json.load(f) or {"requests": []}
+        except Exception:
+            payload = {"requests": []}
+
+    reqs = payload.get("requests") or []
+    # dedupe by filename
+    reqs = [r for r in reqs if r.get("filename") != filename]
+    reqs.append({
+        "filename": filename,
+        "delete_file": bool(delete_file),
+        "force": bool(force),
+        "requested_at": _dt.datetime.now().isoformat(),
+    })
+    payload["requests"] = reqs
+
+    try:
+        cancel_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = str(cancel_path) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, cancel_path)
+        return True, f"Cancel requested for '{filename}'."
+    except Exception as e:
+        return False, f"Failed to request cancel: {e}"
 
 
 # ── Reading Progress ───────────────────────────────────────────────────────

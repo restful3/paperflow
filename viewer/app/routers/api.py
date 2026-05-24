@@ -594,3 +594,17 @@ async def delete_queued_file(filename: str, _user: str = Depends(get_current_use
     return {"ok": True, "message": msg}
 
 
+@router.post("/processing/cancel/{filename}")
+async def cancel_processing_file(
+    filename: str,
+    delete_file: bool = True,
+    force: bool = True,
+    _user: str = Depends(get_current_user_api),
+):
+    filename = unquote(filename)
+    ok, msg = paper_svc.request_cancel_processing(filename, delete_file=delete_file, force=force)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"ok": True, "message": msg}
+
+
