@@ -377,8 +377,9 @@ def find_processed_paper(original_filename: str | None = None, source_url: str |
         if not base.exists():
             continue
         for item in base.iterdir():
-            if item.is_dir() and not item.name.startswith("."):
-                candidates.append((item, loc))
+            if not _safe_child_dir(base, item):
+                continue
+            candidates.append((item, loc))
 
     # Prefer newest first
     candidates.sort(key=lambda x: x[0].stat().st_mtime if x[0].exists() else 0, reverse=True)
@@ -476,7 +477,7 @@ def safe_paper_dir(name: str) -> Path | None:
         if not d.is_dir():
             continue
         if not _is_within(base, d):
-            return None
+            continue
         return d
     return None
 
@@ -1009,6 +1010,8 @@ def get_all_last_read() -> dict[str, str]:
 
 
 def touch_last_read(paper_name: str) -> bool:
+    if not _is_safe_paper_name(paper_name):
+        return False
     data = get_all_last_read()
     data[paper_name] = _dt.datetime.now().isoformat()
     try:
@@ -1020,6 +1023,8 @@ def touch_last_read(paper_name: str) -> bool:
 
 
 def delete_last_read(paper_name: str) -> None:
+    if not _is_safe_paper_name(paper_name):
+        return
     data = get_all_last_read()
     if paper_name in data:
         del data[paper_name]
