@@ -261,7 +261,7 @@ async def test_cancel_job_queued(tmp_workspace):
     (partial_out / "partial.md").write_text("draft", encoding="utf-8")
 
     cancelled = await mcp_jobs.cancel_job(rec.job_id, delete_file=True)
-    assert cancelled.status == "cancelled"
+    assert cancelled["status"] == "cancelled"
 
     # All three artifacts cleaned up by request_cancel_processing delegation
     assert not landed.exists(), "PDF file in newones/ not removed"
@@ -919,4 +919,65 @@ def test_cleanup_smart_renamed_archives_preserved(tmp_workspace):
     result = mcp_jobs._cleanup_smart_renamed_paper("src.pdf")
     assert result["attempted"] is False
     assert result["warning"] and "archives" in result["warning"]
-    assert pdir.exists()  # archives intact
+
+
+async def test_cancel_job_error_status_with_delete_cleans_outputs(tmp_workspace):
+    """T8 — error status + delete_file=true → outputs folder removed, response shape correct."""
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "Recovering", has_ko=False)
+    await _persist_job("error", paper_name="Recovering", location="outputs")
+    res = await mcp_jobs.cancel_job("job1", delete_file=True)
+    assert res["job_id"] == "job1"
+    assert res["status"] == "error"
+    assert res["cleanup"]["attempted"] is True
+    assert res["cleanup"]["deleted_path"] == str(pdir)
+    assert res["cleanup"]["warning"] is None
+    assert not pdir.exists()
+
+
+async def test_cancel_job_error_status_no_delete_no_cleanup(tmp_workspace):
+    """T9 — error status + delete_file=false → no cleanup."""
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "Keep", has_ko=False)
+    await _persist_job("error", paper_name="Keep", location="outputs")
+    res = await mcp_jobs.cancel_job("job1", delete_file=False)
+    assert res["status"] == "error"
+    assert res["cleanup"]["attempted"] is False
+    assert pdir.exists()
+
+
+async def test_cancel_job_archives_preserved(tmp_workspace):
+    """T10 — error status, only archives match → archives untouched."""
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "Archived", has_ko=True, dest="archives")
+    await _persist_job("error", paper_name="Archived", location="archives")
+    res = await mcp_jobs.cancel_job("job1", delete_file=True)
+    assert res["cleanup"]["attempted"] is False
+    assert "archives" in (res["cleanup"]["warning"] or "")
+    assert pdir.exists()
+
+
+async def test_cancel_job_complete_idempotent_no_cleanup(tmp_workspace):
+    """T11 — complete status → cancel is idempotent no-op, no fs change."""
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "Done", has_ko=True)
+    await _persist_job("complete", paper_name="Done", location="outputs")
+    res = await mcp_jobs.cancel_job("job1", delete_file=True)
+    assert res["status"] == "complete"
+    assert res["cleanup"]["attempted"] is False
+    assert pdir.exists()
+
+
+async def test_cancel_job_response_shape(tmp_workspace):
+    """T18 — return shape contract: {job_id, status, cleanup:{attempted,deleted_path,warning}}."""
+    from app.services import mcp_jobs
+    await _persist_job("error")
+    res = await mcp_jobs.cancel_job("job1", delete_file=False)
+    assert set(res.keys()) == {"job_id", "status", "cleanup"}
+    assert set(res["cleanup"].keys()) == {"attempted", "deleted_path", "warning"}
+
+
+async def test_cancel_job_not_found_returns_none(tmp_workspace):
+    from app.services import mcp_jobs
+    res = await mcp_jobs.cancel_job("does_not_exist")
+    assert res is None

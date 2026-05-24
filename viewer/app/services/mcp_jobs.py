@@ -619,35 +619,55 @@ async def reconcile_job(job_id: str) -> JobRecord | None:
 
 
 # ── Cancel ────────────────────────────────────────────────────────────────────
-async def cancel_job(job_id: str, delete_file: bool = True) -> JobRecord | None:
-    """Cancel job. Behavior depends on current status."""
+async def cancel_job(job_id: str, delete_file: bool = True) -> dict | None:
+    """Cancel job. Behavior depends on current status.
+    Returns:
+      - dict {"job_id", "status", "cleanup": {attempted, deleted_path, warning}}
+      - None if job_id not found
+    """
     from . import papers as _papers
     from ..config import settings
 
     rec = await get_job(job_id)
     if not rec:
         return None
-    if rec.status in ("complete", "error", "cancelled"):
-        return rec  # idempotent
+
+    cleanup = {"attempted": False, "deleted_path": None, "warning": None}
+
+    # rev4: error-status + delete is a cleanup-intent call (not a state transition).
+    if rec.status == "error" and delete_file:
+        cleanup = _cleanup_smart_renamed_paper(rec.expected_filename)
+        # Also clean source PDF if still in newones/
+        src = settings.newones_dir / rec.expected_filename
+        if src.exists():
+            try:
+                src.unlink()
+            except Exception:
+                pass
+        return {"job_id": job_id, "status": "error", "cleanup": cleanup}
+
+    if rec.status in ("error", "complete", "cancelled"):
+        return {"job_id": job_id, "status": rec.status, "cleanup": cleanup}
 
     if rec.status == "downloading":
         task = _active_download_tasks.get(job_id)
         if task:
             task.cancel()
-        # cleanup .part if exists
         part = settings.newones_dir / (rec.expected_filename + ".part")
         part.unlink(missing_ok=True)
         await _set_job_fields(job_id, status="cancelled",
                                completed_at=_now_iso())
-        return await get_job(job_id)
+        return {"job_id": job_id, "status": "cancelled", "cleanup": cleanup}
 
-    # queued/processing/stalled: delegate to existing helper
+    # queued/processing/stalled — delegate to papers helper + post-hook cleanup
     ok, msg = _papers.request_cancel_processing(rec.expected_filename,
                                                   delete_file=delete_file, force=True)
+    if delete_file:
+        cleanup = _cleanup_smart_renamed_paper(rec.expected_filename)
     await _set_job_fields(job_id, status="cancelled",
                            error=None if ok else msg,
                            completed_at=_now_iso())
-    return await get_job(job_id)
+    return {"job_id": job_id, "status": "cancelled", "cleanup": cleanup}
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
