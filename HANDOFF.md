@@ -1,5 +1,5 @@
 # 세션 핸드오프 — PaperFlow MCP 서버 v1 / v1.1
-_최종 갱신: 2026-05-24 (Asia/Seoul)_
+_최종 갱신: 2026-05-24 19:47 KST_
 _업데이트: 2026-05-24 — **E2E 검증 완료** (arXiv 1706.03762 full pipeline + cache hit). v1 ship-ready._
 _업데이트: 2026-05-24 — **DeepSeek-V3 E2E 에서 v1 Critical 버그 3개 발견** (translation timeout + self-duplicate skip + reconcile false-positive). 상세는 § "🐛 v1 버그" 참조._
 _업데이트: 2026-05-24 — **v1.1 spec rev4 codex 4라운드 final approval** + **구현 16/16 task TDD 완료**, 96/96 tests pass, ship-ready. 무변경 제약 유지 (main_terminal.py / run_batch_watch.sh / config.json / papers.py 0줄). 상세는 § "✅ v1.1 구현 완료" 참조._
@@ -210,17 +210,20 @@ claude mcp add --transport http paperflow http://localhost:8090/mcp/ \
 - Codex 리뷰 워크플로우 (5라운드, `===CODEX_FINAL_APPROVAL===` 토큰): 매우 효과적. critical 5개 + high 11개 + medium 다수 발견, 모두 진짜 버그/약점. 향후 다른 spec 작업 시 동일 패턴 권장.
 - subagent-driven-development 패턴 (implementer → spec reviewer → quality reviewer → fix → re-review) 도 효과적. fixture isolation 패턴 같은 미묘한 버그가 review 단계에서 잡힘.
 
-## ⚠️ 클리어 전 주의
+## ⚠️ 클리어 전 주의 (2026-05-24 19:47 KST 기준)
 
-- **커밋 안 됨**: 코드 변경 0건 (작업 결과물은 모두 main 에 커밋됨, b91bf09 → 8c49494). `.claude-home/` 의 cache/log 잡음만 미커밋 — 무시 가능.
+- **커밋 안 됨**: 추가 코드 변경 0건. v1.1 작업물 모두 main 에 커밋 + push 완료 (`4ae6cb3` → `825d039`, 18 commits, origin 동기화). 미트래킹 2건은 이번 세션 무관 (이전부터 존재):
+  - `REPORT_EXPLAINER_BACKFILL_2026-02-24.md`
+  - `scripts/quality_baseline_report.py`
+  - `.claude-home/` 의 cache/log 잡음 — 무시 가능
 - **백그라운드**:
-  - **Docker 컨테이너 2개 실행 중**:
-    - `paperflow_viewer` (포트 8090→8000, MCP 활성, "StreamableHTTP session manager started" 로그 확인됨)
-    - `paperflow_converter` (3주 전 시작, 기존 watch loop)
+  - **Docker 컨테이너 2개 실행 중** (26분 전 v1.1 env 로 재시작됨):
+    - `paperflow_viewer` (포트 8090→8000, MCP 활성, `MCP_REQUIRE_TRANSLATION=true` 적용)
+    - `paperflow_converter` (`PROCESS_TIMEOUT_SECONDS=7200` 적용)
     - 그대로 두면 됨 — 다음 세션에서 그대로 사용 가능
-  - **tmux 창 `codex`**: 코덱스 인스턴스 5라운드 리뷰 후 idle 상태. `tmux kill-window -t paperflow:codex` 또는 그대로 둬도 OK
-  - 백그라운드 Bash task 모두 완료됨 (코덱스 polling 작업들)
-- **미완료 todo**: 없음. Plan task 13/13 완료. E2E 검증 완료 (5/5 단계 통과).
+  - **tmux 윈도우**: `claude` (active), `codex` (idle, 4라운드 리뷰 후 정지). `tmux kill-window -t paperflow:codex` 또는 그대로 둬도 OK
+  - **백그라운드 Bash/Monitor task**: 모두 종료됨 (Monitor 5개, codex polling 4개)
+- **미완료 todo**: 없음. v1.1 Plan task 16/16 완료. Spec / Plan / Implementation / Final Review 모두 종결.
 
 ## 📂 관련 파일
 
