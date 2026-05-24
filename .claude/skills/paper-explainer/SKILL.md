@@ -82,10 +82,43 @@ Papers converted from PDF via OCR or marker-pdf may contain noise:
 
 **Clean first, then rewrite.**
 
-## Core Rewriting Principles — 8 Rules
+## Core Rewriting Principles — 9 Rules
+
+### Rule 0: NO Condensation — Expand, Never Shrink (축약 절대 금지 — 확장 필수)
+
+**THIS IS THE SUPREME RULE. It overrides all other considerations.**
+
+This skill produces a **해설판 (annotated commentary)**, NOT a summary. The output must be a **full rewrite of the entire original** with added explanations — never a condensed version.
+
+**Hard constraints:**
+- The output MUST be **longer** than the input. Target: **1.5x–2.5x** the input length (measured in characters or lines)
+- If the output is shorter than the input, **something is wrong** — go back and find what was skipped
+- Every paragraph in the original MUST have a corresponding paragraph (or more) in the output
+- Every subsection in the original MUST appear in the output — do NOT merge or skip subsections
+- "한눈에 보기", "핵심 요약", "방법 요약" style summary headings are **FORBIDDEN** as replacements for original section structure. They may only appear as **additions** alongside the full content.
+
+**Paragraph-level mapping rule (문단 대응 원칙):**
+```
+Original paragraph → Explained paragraph(s)
+- 1 original paragraph = 1 or more explained paragraphs (NEVER 0)
+- Each explained paragraph should be ≥ the original in length
+- If a paragraph is purely technical, add a plain-language explanation BEFORE or AFTER it
+- If a paragraph contains data/numbers, add interpretation
+```
+
+**What "축약" (condensation) looks like — AVOID these patterns:**
+- Replacing 5 paragraphs of methodology with a 3-bullet summary
+- Skipping subsections because they seem "repetitive" or "minor"
+- Writing "이 부분에서는 X를 다룹니다" instead of actually rewriting X
+- Using the heading structure of a summary (한눈에 보기/핵심 기여/방법 요약) instead of the original paper's heading structure
+
+**What "해설" (commentary) looks like — DO these patterns:**
+- Keep the original's structure (section → subsection → paragraph) intact
+- For each paragraph: rewrite in easy Korean + add explanation/context/analogy as needed
+- The result reads like a "professor's annotated version" of the full paper, not a cliff notes
 
 ### Rule 1: Accuracy First (정확성 우선)
-**The most important rule.** Enrichment must never distort the original.
+Enrichment must never distort the original.
 
 - Do NOT add claims, data, or conclusions not present in the original paper
 - Do NOT exaggerate or speculate — only explain what the authors actually wrote
@@ -203,7 +236,7 @@ Transform dense academic paragraphs into scannable, readable content.
 - **White space**: Liberal use of blank lines between concept groups
 
 ### Rule 8: Content Enrichment (내용 보강)
-The output must be RICHER than the input. Never omit or summarize. But do NOT pad with empty repetition.
+The output must be RICHER than the input. Never omit or summarize.
 
 **Add:**
 - "Why this matters" introductions where the original jumps straight into details
@@ -217,10 +250,11 @@ The output must be RICHER than the input. Never omit or summarize. But do NOT pa
 - Any formula, table, or figure reference
 - Any citation or reference
 
-**Guard against verbosity:**
-- Enrichment means adding understanding, not adding words for their own sake
-- If a concept is already clear, don't over-explain it
-- Avoid repeating the same point in different words within the same section
+**Priority: under-writing is FAR worse than over-writing.**
+- A section that is too long can be trimmed later; a section that was summarized has lost information forever
+- When in doubt, write MORE rather than less
+- Avoid empty repetition (saying the same thing twice in different words), but do NOT cut content to avoid being "verbose"
+- Every paragraph of the original deserves its own full treatment in the output
 
 ## Step-by-Step Rewriting Process
 
@@ -229,11 +263,14 @@ The output must be RICHER than the input. Never omit or summarize. But do NOT pa
 ### Step 1: Analyze the Paper
 - Read the entire input file
 - Detect the source language
-- Identify all sections and subsections
+- **Count total lines and note the file size** — the output must exceed this
+- Identify all sections and subsections — **list them with approximate line counts**
 - Map key concepts and their relationships
-- Note sections to handle specially:
+- Classify each section:
+  - Content sections (intro, methods, experiments, etc.) → full rewrite
   - References/Bibliography → keep content in original language
   - Acknowledgements → keep content in original language (translate header only)
+  - Appendix → classify as content vs raw data (see Step 7)
 
 ### Step 2: Design the Analogy System
 Before writing anything, choose 3-5 core analogies:
@@ -251,19 +288,22 @@ Before writing anything, choose 3-5 core analogies:
   ```
 - Add author context: briefly explain who the authors are and where they work (institution context)
 
-### Step 4: Rewrite Each Section
+### Step 4: Rewrite Each Section (with per-section verification)
 For each section in the original paper:
-1. Transform the heading with Korean subtitle: `## N장. 제목 — 부제`
-2. Add "why this matters" opening if the original lacks one
-3. Rewrite content:
+1. **Count the original section's paragraphs and approximate length** (mental note)
+2. Transform the heading with Korean subtitle: `## N장. 제목 — 부제`
+3. Add "why this matters" opening if the original lacks one
+4. **Rewrite EVERY paragraph** of the original section:
    - If input is non-Korean: translate AND explain simultaneously (not translate-then-explain)
    - If input is Korean: rewrite into conversational tone
-4. Insert analogies for abstract concepts (using the system from Step 2)
-5. Explain formulas in plain language (Rule 5 pattern)
-6. Break long paragraphs into shorter ones with bullet points
-7. Add concrete examples or scenarios where helpful
-8. Bold key terms and takeaways
-9. **Save progressively** after completing each section
+   - Each original paragraph → one or more output paragraphs (NEVER skip a paragraph)
+5. Insert analogies for abstract concepts (using the system from Step 2)
+6. Explain formulas in plain language (Rule 5 pattern)
+7. Break long paragraphs into shorter ones with bullet points
+8. Add concrete examples or scenarios where helpful
+9. Bold key terms and takeaways
+10. **Self-check before saving**: Is this section's output at least as long as the original section? If not, go back and find what was missed or under-explained.
+11. **Save progressively** after completing each section
 
 ### Step 5: Rewrite Experimental Results
 - Convert raw numbers into interpreted statements
@@ -278,10 +318,31 @@ After all content sections are complete:
 - Format: `| 용어 | 쉬운 설명 |`
 - Include 10-20 key terms (more for longer/more technical papers)
 
-### Step 7: Handle References and Acknowledgements
+### Step 7: Handle References, Acknowledgements, and Appendices
+
 - **References**: Translate the section header to "## 참고문헌 (References)" but keep all reference entries in original language
 - **Acknowledgements**: Translate the section header to "## 감사의 글 (Acknowledgements)" but keep content in original language
-- **Appendix**: Translate the section header to "## 부록 (Appendix)" but keep content in original language
+
+**Appendix handling — distinguish content type:**
+
+Appendices fall into two categories. Handle them differently:
+
+| Appendix Type | Example | How to Handle |
+|--------------|---------|---------------|
+| **Content appendix** (analysis, proofs, additional experiments, ablation studies) | "A.1 GPT-3 Experiments", "B. Proof of Theorem 1", "C. Additional Ablation" | **Full rewrite** — treat like any other section (translate + explain + enrich) |
+| **Raw data appendix** (prompts, trajectories, code dumps, full example logs) | "C. Prompts" (pages of raw prompts), "D. Trajectories" (verbatim agent logs) | **Preserve as-is** in original language with a brief Korean introduction explaining what this appendix contains and why it's included |
+
+**Example for raw data appendix:**
+```markdown
+## 부록 C. 프롬프트 (Prompts)
+
+> 이 부록에는 실험에 사용된 실제 프롬프트 전문이 수록되어 있습니다.
+> 연구를 재현하거나 프롬프트 설계를 참고하실 때 활용하세요.
+
+[원문 프롬프트 내용 그대로 유지]
+```
+
+**Key principle**: If an appendix contains intellectual content that benefits from explanation, explain it. If it's reference material (raw data, verbatim logs, code), preserve it with a contextual introduction.
 
 ## File Saving Protocol
 
@@ -452,15 +513,19 @@ $$\mathcal{F}_{\mathrm{score}} = \cos(\mathbf{e}_s, \mathbf{e}_p) + \mathcal{F}_
 
 ## Quality Checks
 
-After completing the full rewrite, verify:
-- [ ] **Completeness**: Every section in the original appears in the output
+After completing the full rewrite, verify **in this priority order**:
+
+**CRITICAL (must pass — if any fails, go back and fix):**
+- [ ] **Output length >= input length**: The explained file MUST be at least as long as the source file (in lines). If shorter, content was lost — find and fix the gap. Target is 1.5x–2.5x.
+- [ ] **Section completeness**: Every section AND subsection heading in the original appears in the output (compare heading counts)
+- [ ] **Paragraph coverage**: Spot-check 3 random sections — does each original paragraph have a corresponding output paragraph?
+
+**Important (should pass):**
 - [ ] **Formula preservation**: All mathematical expressions from the original are preserved
 - [ ] **Accuracy**: No claims, data, or conclusions added that are not in the original
 - [ ] **Analogy consistency**: Same concept uses the same metaphor throughout
 - [ ] **Glossary completeness**: All technical terms defined inline appear in the glossary
 - [ ] **Natural Korean flow**: No awkward phrasing or translationese
-- [ ] **No excessive verbosity**: Explanations are rich but not repetitive
-- [ ] **Output length**: Should be >= 1.5x the input length (if shorter, content may have been lost)
 - [ ] **Image references**: All `![](images/...)` paths preserved from original
 - [ ] **Citations**: All `[1]`, `(Author et al., 2023)` formats unchanged
 - [ ] **YAML header**: Present exactly once at the top of the file
@@ -513,8 +578,11 @@ Rationale:
 ## Completion Report
 
 On task completion, report concisely:
-- Input file
-- Output file
+- Input file (with line count)
+- Output file (with line count)
+- **Ratio**: output lines / input lines (MUST be >= 1.0, target 1.5-2.5)
 - Processing mode (auto / section-safe)
-- Number of sections
+- Number of sections covered / total sections in original
 - Notable issues (missing risk / source quality problems / heavy OCR noise / etc.)
+
+**If ratio < 1.0**, explicitly note which sections or content were not covered and why.
