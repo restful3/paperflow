@@ -705,13 +705,34 @@ def get_latest_log() -> dict | None:
         return None
 
 
+def _safe_filename(filename: str) -> str | None:
+    """Accept only a single filename component. Reject traversal / absolute paths."""
+    if not filename or "\x00" in filename:
+        return None
+    if "/" in filename or "\\" in filename:
+        return None
+    if filename in {".", ".."}:
+        return None
+    # Path() with a single component leaves it intact; verify .name round-trip
+    candidate = Path(filename).name
+    if candidate != filename:
+        return None
+    return candidate
+
+
 def save_upload(filename: str, data: bytes) -> tuple[bool, str]:
+    safe = _safe_filename(filename)
+    if not safe:
+        return False, "Invalid filename."
     settings.newones_dir.mkdir(parents=True, exist_ok=True)
-    dest = settings.newones_dir / filename
+    dest = settings.newones_dir / safe
+    # Defense-in-depth: ensure dest stays under newones_dir
+    if not _is_within(settings.newones_dir, dest):
+        return False, "Invalid filename."
     if dest.exists():
-        return False, f"'{filename}' already exists in upload queue."
+        return False, f"'{safe}' already exists in upload queue."
     dest.write_bytes(data)
-    return True, f"'{filename}' uploaded."
+    return True, f"'{safe}' uploaded."
 
 
 def _extract_pdf_text(pdf_path: Path, max_pages: int = 3) -> str:

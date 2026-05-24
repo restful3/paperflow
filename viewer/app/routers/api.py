@@ -539,15 +539,18 @@ async def import_url(payload: UrlImportRequest, _user: str = Depends(get_current
 async def upload_pdf(file: UploadFile = File(...), _user: str = Depends(get_current_user_api)):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    safe = paper_svc._safe_filename(file.filename)
+    if not safe:
+        raise HTTPException(status_code=400, detail="Invalid filename")
     data = await file.read()
     if len(data) > 200 * 1024 * 1024:  # 200 MB limit
         raise HTTPException(status_code=400, detail="File too large (max 200 MB)")
-    ok, msg = paper_svc.save_upload(file.filename, data)
+    ok, msg = paper_svc.save_upload(safe, data)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
     # Check for duplicate papers (fail-open: errors return empty list)
-    pdf_path = settings.newones_dir / file.filename
+    pdf_path = settings.newones_dir / safe
     similar_papers = await paper_svc.check_duplicate_paper(pdf_path)
 
     return {"ok": True, "message": msg, "similar_papers": similar_papers}
