@@ -20,6 +20,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - OPENAI_BASE_URL=http://host.docker.internal:8317/v1
+      - PROCESS_TIMEOUT_SECONDS=${PROCESS_TIMEOUT_SECONDS:-7200}
     deploy:
       resources:
         reservations:
@@ -54,6 +55,7 @@ services:
       - MCP_PUBLIC_BASE_URL=${MCP_PUBLIC_BASE_URL:-}
       - MCP_JOB_TTL_DAYS=${MCP_JOB_TTL_DAYS:-7}
       - MCP_ALLOWED_ORIGINS=${MCP_ALLOWED_ORIGINS:-}
+      - MCP_REQUIRE_TRANSLATION=${MCP_REQUIRE_TRANSLATION:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
