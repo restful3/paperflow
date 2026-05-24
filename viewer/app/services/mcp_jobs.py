@@ -389,6 +389,41 @@ def _find_metadata_match_in_dir(base: Path, expected_filename: str) -> str | Non
     return None
 
 
+def _resolve_completed_candidate(expected_filename: str) -> tuple[str, str] | None:
+    """Locate the paper folder that should correspond to expected_filename.
+    Returns (paper_name, location) or None.
+
+    Strict 4-step priority — outputs always wins:
+      1. outputs metadata match
+      2. outputs filesystem scan (source PDF presence)
+      3. archives metadata match
+      4. archives filesystem scan
+
+    Steps 1–2 use MCP-internal helpers that ignore archives entirely, so
+    outputs always wins regardless of newest-wins sort, mtime, or whether
+    the source PDF was moved.
+    """
+    from ..config import settings
+
+    name = _find_metadata_match_in_dir(settings.outputs_dir, expected_filename)
+    if name:
+        return name, "outputs"
+
+    name = _scan_outputs_dir_only(expected_filename)
+    if name:
+        return name, "outputs"
+
+    name = _find_metadata_match_in_dir(settings.archives_dir, expected_filename)
+    if name:
+        return name, "archives"
+
+    name = _scan_archives_dir_only(expected_filename)
+    if name:
+        return name, "archives"
+
+    return None
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings

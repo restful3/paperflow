@@ -582,3 +582,65 @@ def test_find_metadata_match_rejects_symlink_escape(tmp_workspace, tmp_path):
     (external / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
     (settings.outputs_dir / "evil_link").symlink_to(external)
     assert mcp_jobs._find_metadata_match_in_dir(settings.outputs_dir, "src.pdf") is None
+
+
+def test_resolve_outputs_metadata_wins_over_archives_metadata(tmp_workspace):
+    """T22 — outputs metadata beats archives metadata, even if archives is newer."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json, os, time
+    out_dir = settings.outputs_dir / "OutPaper"
+    out_dir.mkdir()
+    (out_dir / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    # No source PDF in outputs — only metadata
+    arch_dir = settings.archives_dir / "ArchPaper"
+    arch_dir.mkdir()
+    (arch_dir / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    (arch_dir / "ArchPaper_ko.md").write_text("ko")
+    # Make archives strictly newer
+    future = time.time() + 60
+    os.utime(arch_dir, (future, future))
+    res = mcp_jobs._resolve_completed_candidate("src.pdf")
+    assert res == ("OutPaper", "outputs")
+
+
+def test_resolve_outputs_filesystem_beats_archives_metadata(tmp_workspace):
+    """T21 — outputs filesystem scan (step 2) beats archives metadata (step 3)."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json, os, time
+    out_dir = settings.outputs_dir / "OutPaper"
+    out_dir.mkdir()
+    (out_dir / "src.pdf").touch()  # filesystem only — no paper_meta
+    arch_dir = settings.archives_dir / "ArchPaper"
+    arch_dir.mkdir()
+    (arch_dir / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    future = time.time() + 60
+    os.utime(arch_dir, (future, future))
+    assert mcp_jobs._resolve_completed_candidate("src.pdf") == ("OutPaper", "outputs")
+
+
+def test_resolve_archives_metadata_when_no_outputs(tmp_workspace):
+    """T6 inverse — when outputs has nothing, archives metadata wins."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json
+    arch = settings.archives_dir / "ArchOnly"
+    arch.mkdir()
+    (arch / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    assert mcp_jobs._resolve_completed_candidate("src.pdf") == ("ArchOnly", "archives")
+
+
+def test_resolve_archives_filesystem_when_no_meta_anywhere(tmp_workspace):
+    """Step 4 fallback — archives filesystem-only."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    arch = settings.archives_dir / "ArchFS"
+    arch.mkdir()
+    (arch / "src.pdf").touch()
+    assert mcp_jobs._resolve_completed_candidate("src.pdf") == ("ArchFS", "archives")
+
+
+def test_resolve_returns_none_when_nothing_matches(tmp_workspace):
+    from app.services import mcp_jobs
+    assert mcp_jobs._resolve_completed_candidate("nope.pdf") is None
