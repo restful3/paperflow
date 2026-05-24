@@ -1,7 +1,8 @@
-# 세션 핸드오프 — PaperFlow MCP 서버 v1
+# 세션 핸드오프 — PaperFlow MCP 서버 v1 / v1.1
 _최종 갱신: 2026-05-24 (Asia/Seoul)_
 _업데이트: 2026-05-24 — **E2E 검증 완료** (arXiv 1706.03762 full pipeline + cache hit). v1 ship-ready._
 _업데이트: 2026-05-24 — **DeepSeek-V3 E2E 에서 v1 Critical 버그 3개 발견** (translation timeout + self-duplicate skip + reconcile false-positive). 상세는 § "🐛 v1 버그" 참조._
+_업데이트: 2026-05-24 — **v1.1 spec rev4 codex 4라운드 final approval** + **구현 16/16 task TDD 완료**, 96/96 tests pass, ship-ready. 무변경 제약 유지 (main_terminal.py / run_batch_watch.sh / config.json / papers.py 0줄). 상세는 § "✅ v1.1 구현 완료" 참조._
 
 ## 🎯 목표
 PaperFlow의 PDF→Markdown(+이미지)→번역 파이프라인을 MCP (Model Context Protocol) 도구로 노출. 외부 클라이언트가 PDF/URL 제출 → 비동기 처리 → zip 다운로드. **기존 PaperFlow 기능 무변경 보장** (`main_terminal.py` 0줄, `run_batch_watch.sh` 0줄, `config.json` 0줄).
@@ -119,6 +120,63 @@ claude mcp add --transport http paperflow http://localhost:8090/mcp/ \
 - `main_terminal.py` (duplicate check, lines ~3050+)
 - `viewer/app/services/mcp_jobs.py` (reconcile 로직)
 - `viewer/app/routers/mcp_router.py` (zip endpoint 검증)
+
+## ✅ v1.1 구현 완료 (2026-05-24)
+
+### 설계
+- **spec rev1 → rev4** (codex 4라운드 리뷰 끝에 `===CODEX_FINAL_APPROVAL===`)
+- 위치: `docs/superpowers/specs/2026-05-24-paperflow-mcp-v1.1-bugfixes-design.md`
+- 리뷰 기록: `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex{,-2,-3,-4}.md`
+
+### Plan
+- `docs/superpowers/plans/2026-05-24-paperflow-mcp-v1.1-bugfixes.md` (16 TDD task, 1714 줄)
+
+### 구현 (subagent-driven-development)
+- 16/16 task 완료, **96/96 tests pass** (v1 40 baseline + 56 new)
+- 17 커밋 (2d702b7 → 4c3a34b), 모두 main 브랜치, push 완료
+- 최종 Opus 4.7 review: 0 Critical + 0 Important + 4 Minor — **Ship-ready, Approved**
+
+### 무변경 제약 (재확인)
+- `main_terminal.py` — 0줄
+- `run_batch_watch.sh` — 0줄
+- `config.json` — 0줄
+- `viewer/app/services/papers.py` — 0줄 (v1.1에서 새 helper 모두 mcp_jobs.py 내부에 둠)
+
+### 주요 fix
+| Bug | Fix 위치 | 핵심 변경 |
+|-----|---------|----------|
+| #1 watch timeout 2400s 짧음 | `docker-compose.yml` | `PROCESS_TIMEOUT_SECONDS=7200` env (run_batch_watch.sh 무수정) |
+| #2/3/5 reconcile false-positive complete | `mcp_jobs.py` | `_classify_completion` 4-state verdict 도입, `reconcile_job` 양쪽 branch가 partial/missing/skip 명시 분기 |
+| #4 cancel_job smart-rename 미정리 | `mcp_jobs.py` | `_cleanup_smart_renamed_paper` outputs-only helper + cancel_job dict response shape `{job_id, status, cleanup}` |
+| #6 viewer config.json 부재 | `config.py` + compose | `MCP_REQUIRE_TRANSLATION` env (config.json mount 추가 안 함) |
+| zip endpoint stale 200 | `mcp_router.py` | `get_job` → `reconcile_job` 한 줄 |
+
+### 새 helper (모두 mcp_jobs.py 내부)
+- `_is_safe_direct_child(base, candidate)` — symlink escape 가드 (RuntimeError 포함)
+- `_paper_has_ko_md(paper_dir)` — tri-state (True/False/None)
+- `_scan_outputs_dir_only(expected_filename)` / `_scan_archives_dir_only(...)`
+- `_find_metadata_match_in_dir(base, expected_filename)` — paper_meta.json read-only
+- `_resolve_completed_candidate(expected_filename)` — strict 4-step: outputs metadata → outputs FS → archives metadata → archives FS
+- `_paper_dir_for(name, location)`
+- `_classify_completion(expected_filename, _precomputed=None)` — verdict 매트릭스
+
+### 사용자 recovery 흐름 (v1.1 정착)
+부분 처리된 잡 발견 시:
+1. `get_job_status(job_id)` → status=error + 안내 메시지
+2. `cancel_job(job_id, delete_file=true)` → outputs/{paper_dir}/ 정리 + newones/PDF 정리
+3. `submit_paper(input_type, source, force_reprocess=true)` → 깨끗한 재처리
+
+### Minor (v1.2 backlog, 비차단)
+- `_classify_completion` 반환 타입을 `Literal[...]` 로 정밀화 (현재 `str`)
+- 두 reconcile branch 의 `translation_missing` 에러 메시지 중복 — 모듈 상수로 DRY
+- `cancel_job` 의 newones PDF unlink 실패가 cleanup.warning 에 미반영
+- 사전 존재 test isolation 이슈 (`.env` 가 monkeypatch 보다 우선) — v1.1 이전부터 있음, 재현됨
+
+### 운영 환경 검증
+- `docker compose exec paperflow-converter sh -lc 'echo $PROCESS_TIMEOUT_SECONDS'` → 7200 ✓
+- `docker compose exec paperflow-viewer sh -lc 'echo $MCP_REQUIRE_TRANSLATION'` → true ✓
+- `curl -sI -H "Authorization: Bearer $MCP_KEY" http://localhost:8090/mcp/` → 200/405 (정상) ✓
+- DeepSeek-V3 retry E2E 는 다음 세션 권장 (~30-60min)
 
 ## 🧠 대화에만 있던 핵심 컨텍스트
 
