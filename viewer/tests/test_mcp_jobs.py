@@ -656,3 +656,56 @@ def test_paper_dir_for_archives(tmp_workspace):
     from app.services import mcp_jobs
     from app.config import settings
     assert mcp_jobs._paper_dir_for("Foo", "archives") == settings.archives_dir / "Foo"
+
+
+def test_classify_completion_complete_with_ko(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    pdir = settings.outputs_dir / "Done"
+    pdir.mkdir()
+    (pdir / "Done.md").write_text("en")
+    (pdir / "Done_ko.md").write_text("ko")
+    (pdir / "src.pdf").touch()
+    assert mcp_jobs._classify_completion("src.pdf") == "complete"
+
+
+def test_classify_completion_partial_when_translation_required(tmp_workspace, monkeypatch):
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "true")
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    from app.services import mcp_jobs
+    pdir = _cfg.settings.outputs_dir / "Partial"
+    pdir.mkdir()
+    (pdir / "Partial.md").write_text("en")
+    (pdir / "src.pdf").touch()
+    assert mcp_jobs._classify_completion("src.pdf") == "partial"
+
+
+def test_classify_completion_skip_when_translation_disabled(tmp_workspace, monkeypatch):
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "false")
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    from app.services import mcp_jobs
+    pdir = _cfg.settings.outputs_dir / "EnOnly"
+    pdir.mkdir()
+    (pdir / "EnOnly.md").write_text("en")
+    (pdir / "src.pdf").touch()
+    assert mcp_jobs._classify_completion("src.pdf") == "skip"
+
+
+def test_classify_completion_missing(tmp_workspace):
+    """No candidate folder anywhere → missing."""
+    from app.services import mcp_jobs
+    assert mcp_jobs._classify_completion("nope.pdf") == "missing"
+
+
+def test_classify_completion_archives_always_complete(tmp_workspace):
+    """archives are user-curated — never flagged as partial."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    arch = settings.archives_dir / "ArchEnOnly"
+    arch.mkdir()
+    (arch / "ArchEnOnly.md").write_text("en")
+    (arch / "src.pdf").touch()
+    # No _ko.md, but archives skip the partial check
+    assert mcp_jobs._classify_completion("src.pdf") == "complete"

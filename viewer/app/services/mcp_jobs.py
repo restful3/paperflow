@@ -430,6 +430,46 @@ def _paper_dir_for(name: str, location: str) -> Path:
     return base / name
 
 
+def _classify_completion(
+    expected_filename: str,
+    _precomputed: tuple[str, str] | None = None,
+) -> str:
+    """Decide the post-reconcile state for a job whose work appears finished.
+
+    Returns one of:
+      - "complete":  paper folder present AND (_ko.md present OR translation not required OR archives)
+      - "partial":   paper folder present in outputs/, translation required, _ko.md missing
+      - "missing":   no paper folder found at all (race / archived / externally deleted)
+      - "skip":      paper folder present in outputs/, translation NOT required, no _ko.md
+
+    The `_precomputed` argument lets callers reuse a candidate tuple from
+    `_resolve_completed_candidate` to avoid a second lookup.
+    """
+    from ..config import settings
+
+    if _precomputed:
+        name, location = _precomputed
+    else:
+        cand = _resolve_completed_candidate(expected_filename)
+        if not cand:
+            return "missing"
+        name, location = cand
+
+    # archives is user-curated; never flag as partial.
+    if location == "archives":
+        return "complete"
+
+    paper_dir = _paper_dir_for(name, location)
+    has_ko = _paper_has_ko_md(paper_dir)
+    if has_ko is None:
+        return "missing"  # race: folder vanished between resolve and classify
+    if has_ko:
+        return "complete"
+    if settings.MCP_REQUIRE_TRANSLATION:
+        return "partial"
+    return "skip"
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings
