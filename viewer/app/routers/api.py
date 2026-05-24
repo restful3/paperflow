@@ -151,6 +151,9 @@ async def chat_with_paper(
         - data: {"type": "error", "error": "..."}
     """
     name = unquote(name)
+    # Reject unsafe / unknown paper names early — keeps HTTP semantics consistent with other routes
+    if not paper_svc.safe_paper_dir(name):
+        raise HTTPException(status_code=404, detail="Paper not found")
 
     async def event_generator():
         try:

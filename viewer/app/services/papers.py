@@ -335,22 +335,30 @@ def list_papers(tab: str = "unread") -> list[dict]:
     last_read = get_all_last_read()
     papers = []
     for item in sorted(base.iterdir(), key=lambda p: p.name):
-        if item.is_dir() and not item.name.startswith("."):
-            info = _paper_info(item, location)
-            info["last_read_at"] = last_read.get(item.name)
-            papers.append(info)
+        if not _safe_child_dir(base, item):
+            continue
+        info = _paper_info(item, location)
+        info["last_read_at"] = last_read.get(item.name)
+        papers.append(info)
     return papers
 
 
 def get_paper_info(name: str) -> dict | None:
     """Find paper in outputs or archives and return info."""
-    for base, loc in [(settings.outputs_dir, "outputs"), (settings.archives_dir, "archives")]:
-        paper_dir = base / name
-        if paper_dir.is_dir():
-            info = _paper_info(paper_dir, loc)
-            info["last_read_at"] = get_all_last_read().get(name)
-            return info
-    return None
+    paper_dir = safe_paper_dir(name)
+    if not paper_dir:
+        return None
+    # Determine location by parent directory identity (resolved)
+    try:
+        if paper_dir.parent.resolve() == settings.archives_dir.resolve():
+            loc = "archives"
+        else:
+            loc = "outputs"
+    except (OSError, RuntimeError):
+        loc = "outputs"
+    info = _paper_info(paper_dir, loc)
+    info["last_read_at"] = get_all_last_read().get(name)
+    return info
 
 
 def find_processed_paper(original_filename: str | None = None, source_url: str | None = None) -> dict | None:
@@ -429,12 +437,68 @@ def _resolve_result(paper_dir: Path, location: str) -> dict:
     }
 
 
-def _resolve_paper_dir(name: str) -> Path | None:
+def _is_within(base: Path, candidate: Path) -> bool:
+    """True only if `candidate` resolves under `base`."""
+    try:
+        base_resolved = base.resolve()
+        cand_resolved = candidate.resolve()
+    except (OSError, RuntimeError):
+        return False
+    try:
+        cand_resolved.relative_to(base_resolved)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_safe_paper_name(name: str) -> bool:
+    """Paper names are single directory components produced by the batch pipeline."""
+    if not name or "\x00" in name:
+        return False
+    if "/" in name or "\\" in name:
+        return False
+    if name in {".", ".."}:
+        return False
+    return True
+
+
+def safe_paper_dir(name: str) -> Path | None:
+    """Resolve a paper directory under outputs/ or archives/, rejecting traversal.
+
+    Public helper — re-used by web_search and any other module that needs to
+    map a user-supplied paper name to a filesystem directory.
+    Returns None for unsafe names, unknown papers, or symlink escapes.
+    """
+    if not _is_safe_paper_name(name):
+        return None
     for base in [settings.outputs_dir, settings.archives_dir]:
         d = base / name
-        if d.is_dir():
-            return d
+        if not d.is_dir():
+            continue
+        if not _is_within(base, d):
+            return None
+        return d
     return None
+
+
+def _safe_child_dir(base: Path, item: Path) -> bool:
+    """Accept only non-hidden directories that resolve under their base.
+
+    Used by listing code paths (`list_papers`, `_get_existing_papers_summary`)
+    that take entries from `base.iterdir()` rather than user-supplied names.
+    Even though the source isn't user input, a symlink under `outputs/` or
+    `archives/` can still escape — keep the symlink-escape threat model
+    consistent across all paths.
+    """
+    if item.name.startswith("."):
+        return False
+    if not item.is_dir():
+        return False
+    return _is_within(base, item)
+
+
+# Backward-compatible alias — keep _resolve_paper_dir for any in-tree callers.
+_resolve_paper_dir = safe_paper_dir
 
 
 def get_pdf_path(name: str) -> Path | None:
@@ -557,8 +621,10 @@ def get_asset_path(name: str, filename: str) -> Path | None:
 
 
 def archive_paper(name: str) -> tuple[bool, str]:
+    if not _is_safe_paper_name(name):
+        return False, f"Invalid paper name."
     src = settings.outputs_dir / name
-    if not src.is_dir():
+    if not src.is_dir() or not _is_within(settings.outputs_dir, src):
         return False, f"Paper '{name}' not found in outputs."
     dest = settings.archives_dir / name
     if dest.exists():
@@ -569,8 +635,10 @@ def archive_paper(name: str) -> tuple[bool, str]:
 
 
 def restore_paper(name: str) -> tuple[bool, str]:
+    if not _is_safe_paper_name(name):
+        return False, f"Invalid paper name."
     src = settings.archives_dir / name
-    if not src.is_dir():
+    if not src.is_dir() or not _is_within(settings.archives_dir, src):
         return False, f"Paper '{name}' not found in archives."
     dest = settings.outputs_dir / name
     if dest.exists():
@@ -665,7 +733,7 @@ def _get_existing_papers_summary() -> list[dict]:
         if not base.exists():
             continue
         for paper_dir in base.iterdir():
-            if not paper_dir.is_dir() or paper_dir.name.startswith("."):
+            if not _safe_child_dir(base, paper_dir):
                 continue
             meta = _load_paper_metadata(paper_dir)
             if meta and meta.get("title"):

@@ -178,14 +178,9 @@ async def enrich_paper_metadata(paper_name: str) -> dict:
         - enriched_fields: list of field names that were added
         - error: str (if failed)
     """
-    # Locate paper directory
-    paper_dir = None
-    for base in [settings.outputs_dir, settings.archives_dir]:
-        candidate = base / paper_name
-        if candidate.is_dir():
-            paper_dir = candidate
-            break
-
+    # Locate paper directory (safe against traversal)
+    from .papers import safe_paper_dir
+    paper_dir = safe_paper_dir(paper_name)
     if not paper_dir:
         return {"success": False, "error": "Paper not found", "enriched_fields": []}
 
