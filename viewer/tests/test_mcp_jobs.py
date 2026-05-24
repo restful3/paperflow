@@ -443,3 +443,13 @@ def test_is_safe_direct_child_rejects_file(tmp_workspace):
     f = settings.outputs_dir / "plain.txt"
     f.write_text("hi")
     assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, f) is False
+
+
+def test_is_safe_direct_child_rejects_symlink_loop(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    a = settings.outputs_dir / "loop_a"
+    b = settings.outputs_dir / "loop_b"
+    a.symlink_to(b)
+    b.symlink_to(a)
+    assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, a) is False

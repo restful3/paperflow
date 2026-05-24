@@ -303,7 +303,7 @@ def _is_safe_direct_child(base: Path, candidate: Path) -> bool:
     try:
         base_resolved = base.resolve(strict=True)
         cand_resolved = candidate.resolve(strict=True)
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, RuntimeError):
         return False
     if cand_resolved.parent != base_resolved:
         return False
