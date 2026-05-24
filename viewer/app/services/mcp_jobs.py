@@ -484,7 +484,6 @@ def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["ou
 
 async def reconcile_job(job_id: str) -> JobRecord | None:
     """Refresh status by inspecting filesystem + processing_status.json."""
-    from . import papers as _papers
     from ..config import settings
 
     rec = await get_job(job_id)
@@ -522,19 +521,27 @@ async def reconcile_job(job_id: str) -> JobRecord | None:
                                completed_at=_now_iso())
         return await get_job(job_id)
 
-    # Primary complete lookup (metadata-backed)
-    info = _papers.find_processed_paper(original_filename=rec.expected_filename)
-    if info:
+    cand = _resolve_completed_candidate(rec.expected_filename)
+    if cand:
+        name, location = cand
+        verdict = _classify_completion(rec.expected_filename, _precomputed=(name, location))
+        if verdict == "partial":
+            await _set_job_fields(job_id, status="error",
+                error=("translation_missing — prior run was killed mid-translation. "
+                       "Call cancel_job(delete_file=true) to clear partial outputs, "
+                       "then resubmit with force_reprocess=true. "
+                       "If this deployment intentionally disables Korean translation, "
+                       "set MCP_REQUIRE_TRANSLATION=false."),
+                completed_at=_now_iso())
+            return await get_job(job_id)
+        if verdict == "missing":
+            await _set_job_fields(job_id, status="error",
+                error="paper folder no longer present (archived or deleted externally)",
+                completed_at=_now_iso())
+            return await get_job(job_id)
+        # complete or skip — both legitimate complete
         await _set_job_fields(job_id, status="complete",
-                               paper_name=info["name"], location=info["location"],
-                               completed_at=_now_iso())
-        return await get_job(job_id)
-
-    # Fallback scan
-    scan = _scan_outputs_for_filename(rec.expected_filename)
-    if scan:
-        await _set_job_fields(job_id, status="complete",
-                               paper_name=scan[0], location=scan[1],
+                               paper_name=name, location=location,
                                completed_at=_now_iso())
         return await get_job(job_id)
 

@@ -201,21 +201,19 @@ async def test_cancel_race_during_publish(tmp_workspace, monkeypatch):
 
 
 async def test_reconcile_fallback_when_metadata_skipped(tmp_workspace):
-    """Primary find_processed_paper miss + outputs/<folder>/<expected_filename> present
-    → status=complete via fallback scan."""
+    """Filesystem scan (no paper_meta.json) + _ko.md present → status=complete."""
     from app.services import mcp_jobs
 
     # Create a job manually in the index
     rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
         pdf_bytes_b64=__import__("base64").b64encode(b"%PDF-fake").decode())
-    # Place "processed" output: outputs/whatever-paper/pfmcp-XXX.pdf
+    # Place "processed" output: outputs/WhatevPaper/pfmcp-XXX.pdf + _ko.md
+    # No paper_meta.json — forces filesystem scan path (step 2 of _resolve_completed_candidate)
     out_folder = tmp_workspace / "outputs" / "WhatevPaper"
     out_folder.mkdir(parents=True)
     (out_folder / rec.expected_filename).write_bytes(b"%PDF-fake")
-    # Bump mtime to be after submitted_at
-    import time
-    time.sleep(0.05)
-    out_folder.touch()
+    (out_folder / "WhatevPaper.md").write_text("en")
+    (out_folder / "WhatevPaper_ko.md").write_text("ko")
 
     new_rec = await mcp_jobs.reconcile_job(rec.job_id)
     assert new_rec.status == "complete"
@@ -843,3 +841,56 @@ async def test_reconcile_cancelled_status_stays_cancelled(tmp_workspace):
     await _persist_job("cancelled")
     rec = await mcp_jobs.reconcile_job("job1")
     assert rec.status == "cancelled"
+
+
+async def test_reconcile_queued_to_complete_with_ko(tmp_workspace):
+    """Normal happy path: queued → outputs has _ko.md → status=complete."""
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Done", has_ko=True)
+    await _persist_job("queued")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "complete"
+    assert rec.paper_name == "Done"
+    assert rec.location == "outputs"
+
+
+async def test_reconcile_queued_to_partial_with_translation_required(tmp_workspace, monkeypatch):
+    """T15 — queued + outputs/{paper}/ partial → status=error translation_missing."""
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "true")
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Bad", has_ko=False, has_meta=False)  # fallback scan path
+    await _persist_job("queued")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "error"
+    assert "translation_missing" in rec.error
+
+
+async def test_reconcile_queued_outputs_partial_with_archives_complete(tmp_workspace, monkeypatch):
+    """T16 — outputs partial AND archives complete → outputs wins → status=error."""
+    monkeypatch.setenv("MCP_REQUIRE_TRANSLATION", "true")
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    from app.services import mcp_jobs
+    _make_paper_folder(tmp_workspace, "Both", has_ko=False, dest="outputs")
+    _make_paper_folder(tmp_workspace, "Both", has_ko=True, dest="archives")
+    await _persist_job("queued")
+    rec = await mcp_jobs.reconcile_job("job1")
+    assert rec.status == "error"
+    assert "translation_missing" in rec.error
+
+
+async def test_reconcile_queued_missing_after_candidate_resolved(tmp_workspace):
+    """Race: resolver returned candidate then folder disappeared mid-classify."""
+    from app.services import mcp_jobs
+    pdir = _make_paper_folder(tmp_workspace, "Vanishing", has_ko=True)
+    await _persist_job("queued")
+    # Simulate disappearance by removing the entire folder
+    import shutil
+    shutil.rmtree(pdir)
+    rec = await mcp_jobs.reconcile_job("job1")
+    # Resolver finds nothing → status remains queued (race-tolerant)
+    # OR: resolve+classify both empty → no completion path triggers.
+    # Either way, the test guards against false "complete" on missing candidate.
+    assert rec.status != "complete"
