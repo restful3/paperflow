@@ -27,9 +27,14 @@ def tmp_workspace(tmp_path, monkeypatch):
 
 @pytest.fixture
 def mcp_enabled_workspace(tmp_workspace, monkeypatch):
-    """tmp_workspace + MCP env vars set."""
+    """tmp_workspace + MCP env vars set. Cleans up MCP env to prevent pollution."""
     monkeypatch.setenv("MCP_API_KEY", "a" * 48)
     monkeypatch.setenv("MCP_PUBLIC_BASE_URL", "http://localhost:8090")
     from app import config as _cfg
     _cfg.settings = _cfg.Settings()
-    return tmp_workspace
+    try:
+        yield tmp_workspace
+    finally:
+        monkeypatch.delenv("MCP_API_KEY", raising=False)
+        monkeypatch.delenv("MCP_PUBLIC_BASE_URL", raising=False)
+        _cfg.settings = _cfg.Settings()
