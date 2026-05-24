@@ -264,3 +264,164 @@ async def _download_and_publish(job_id: str, url: str, expected_filename: str) -
         part_path.unlink(missing_ok=True)
         await _set_job_fields(job_id, status="error", error=str(e)[:400],
                                completed_at=_now_iso())
+
+
+# ── Reconcile ─────────────────────────────────────────────────────────────────
+def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
+    """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
+    from ..config import settings
+    for loc_name, base in (("outputs", settings.outputs_dir), ("archives", settings.archives_dir)):
+        if not base.exists():
+            continue
+        for sub in base.iterdir():
+            if sub.is_dir() and (sub / expected_filename).is_file():
+                return sub.name, loc_name
+    return None
+
+
+async def reconcile_job(job_id: str) -> JobRecord | None:
+    """Refresh status by inspecting filesystem + processing_status.json."""
+    from . import papers as _papers
+    from ..config import settings
+
+    rec = await get_job(job_id)
+    if not rec:
+        return None
+    if rec.status in ("complete", "error", "cancelled"):
+        return rec
+
+    # Downloading: bg task interrupted (viewer restart)?
+    if rec.status == "downloading" and job_id not in _active_download_tasks:
+        await _set_job_fields(job_id, status="error",
+                               error="download interrupted, retry submit",
+                               completed_at=_now_iso())
+        return await get_job(job_id)
+
+    # Primary complete lookup (metadata-backed)
+    info = _papers.find_processed_paper(original_filename=rec.expected_filename)
+    if info:
+        await _set_job_fields(job_id, status="complete",
+                               paper_name=info["name"], location=info["location"],
+                               completed_at=_now_iso())
+        return await get_job(job_id)
+
+    # Fallback scan
+    scan = _scan_outputs_for_filename(rec.expected_filename)
+    if scan:
+        await _set_job_fields(job_id, status="complete",
+                               paper_name=scan[0], location=scan[1],
+                               completed_at=_now_iso())
+        return await get_job(job_id)
+
+    # processing_status.json
+    ps_path = settings.logs_dir / "processing_status.json"
+    if ps_path.exists():
+        try:
+            ps = json.loads(ps_path.read_text(encoding="utf-8"))
+            if ps.get("current_file") == rec.expected_filename:
+                stage = ps.get("stage", "idle")
+                if stage == "error":
+                    await _set_job_fields(job_id, status="error",
+                                           error=ps.get("error") or "converter error",
+                                           completed_at=_now_iso())
+                    return await get_job(job_id)
+                if stage not in ("idle", "complete"):
+                    pct = 0
+                    try:
+                        cur = int(ps.get("current_stage", 0))
+                        tot = int(ps.get("total_stages", 1)) or 1
+                        pct = min(100, int(cur * 100 / tot))
+                    except Exception:
+                        pass
+                    await _set_job_fields(job_id, status="processing",
+                                           stage=stage, percent=pct)
+                    return await get_job(job_id)
+
+            # stalled detection: mtime > 30min + still processing
+            import time as _time
+            if rec.status == "processing":
+                age = _time.time() - ps_path.stat().st_mtime
+                if age > 30 * 60:
+                    await _set_job_fields(job_id, status="stalled")
+                    return await get_job(job_id)
+        except Exception:
+            pass
+
+    # Final fallback: file still in newones/ → queued; otherwise error
+    if (settings.newones_dir / rec.expected_filename).exists():
+        if rec.status != "queued":
+            await _set_job_fields(job_id, status="queued")
+        return await get_job(job_id)
+
+    await _set_job_fields(job_id, status="error",
+                           error="file disappeared from queue with no output",
+                           completed_at=_now_iso())
+    return await get_job(job_id)
+
+
+# ── Cancel ────────────────────────────────────────────────────────────────────
+async def cancel_job(job_id: str, delete_file: bool = True) -> JobRecord | None:
+    """Cancel job. Behavior depends on current status."""
+    from . import papers as _papers
+    from ..config import settings
+
+    rec = await get_job(job_id)
+    if not rec:
+        return None
+    if rec.status in ("complete", "error", "cancelled"):
+        return rec  # idempotent
+
+    if rec.status == "downloading":
+        task = _active_download_tasks.get(job_id)
+        if task:
+            task.cancel()
+        # cleanup .part if exists
+        part = settings.newones_dir / (rec.expected_filename + ".part")
+        part.unlink(missing_ok=True)
+        await _set_job_fields(job_id, status="cancelled",
+                               completed_at=_now_iso())
+        return await get_job(job_id)
+
+    # queued: delete file directly using our lazy settings (avoids stale settings ref in papers.py)
+    if rec.status == "queued":
+        if delete_file:
+            (settings.newones_dir / rec.expected_filename).unlink(missing_ok=True)
+        await _set_job_fields(job_id, status="cancelled", completed_at=_now_iso())
+        return await get_job(job_id)
+
+    # processing/stalled: delegate to existing helper (enqueues cancel signal for watchdog)
+    ok, msg = _papers.request_cancel_processing(rec.expected_filename,
+                                                  delete_file=delete_file, force=True)
+    await _set_job_fields(job_id, status="cancelled",
+                           error=None if ok else msg,
+                           completed_at=_now_iso())
+    return await get_job(job_id)
+
+
+# ── List ──────────────────────────────────────────────────────────────────────
+async def list_jobs(limit: int = 50, status: str | None = None) -> list[JobRecord]:
+    async with _index_lock:
+        idx = await _load_index()
+    records = [JobRecord.model_validate(v) for v in idx.values()]
+    if status:
+        records = [r for r in records if r.status == status]
+    records.sort(key=lambda r: r.submitted_at, reverse=True)
+    return records[:limit]
+
+
+async def cancel_all_active_downloads(
+    reason: Literal["shutdown", "user"] = "shutdown"
+) -> int:
+    """Cancel every active download task. Used by lifespan shutdown."""
+    count = 0
+    for job_id, task in list(_active_download_tasks.items()):
+        task.cancel()
+        if reason == "shutdown":
+            await _set_job_fields(job_id, status="error",
+                                   error="download interrupted, retry submit",
+                                   completed_at=_now_iso())
+        else:
+            await _set_job_fields(job_id, status="cancelled",
+                                   completed_at=_now_iso())
+        count += 1
+    return count

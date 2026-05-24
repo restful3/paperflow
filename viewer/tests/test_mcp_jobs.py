@@ -198,3 +198,69 @@ async def test_cancel_race_during_publish(tmp_workspace, monkeypatch):
     part = dest.with_suffix(dest.suffix + ".part")
     assert not dest.exists(), "cancelled job's PDF was published"
     assert not part.exists(), "part file leaked"
+
+
+async def test_reconcile_fallback_when_metadata_skipped(tmp_workspace):
+    """Primary find_processed_paper miss + outputs/<folder>/<expected_filename> present
+    → status=complete via fallback scan."""
+    from app.services import mcp_jobs
+
+    # Create a job manually in the index
+    rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+        pdf_bytes_b64=__import__("base64").b64encode(b"%PDF-fake").decode())
+    # Place "processed" output: outputs/whatever-paper/pfmcp-XXX.pdf
+    out_folder = tmp_workspace / "outputs" / "WhatevPaper"
+    out_folder.mkdir(parents=True)
+    (out_folder / rec.expected_filename).write_bytes(b"%PDF-fake")
+    # Bump mtime to be after submitted_at
+    import time
+    time.sleep(0.05)
+    out_folder.touch()
+
+    new_rec = await mcp_jobs.reconcile_job(rec.job_id)
+    assert new_rec.status == "complete"
+    assert new_rec.paper_name == "WhatevPaper"
+    assert new_rec.location == "outputs"
+
+
+async def test_reconcile_error_via_processing_status(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json as _json
+
+    rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+        pdf_bytes_b64=__import__("base64").b64encode(b"%PDF-fake").decode())
+    # Converter wrote error status for our file
+    (settings.logs_dir / "processing_status.json").write_text(_json.dumps({
+        "current_file": rec.expected_filename, "stage": "error", "error": "OOM",
+    }))
+    new_rec = await mcp_jobs.reconcile_job(rec.job_id)
+    assert new_rec.status == "error"
+    assert "OOM" in new_rec.error
+
+
+async def test_cancel_job_queued(tmp_workspace):
+    from app.services import mcp_jobs
+
+    rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+        pdf_bytes_b64=__import__("base64").b64encode(b"%PDF-fake").decode())
+    # File is queued (in newones/)
+    landed = tmp_workspace / "newones" / rec.expected_filename
+    assert landed.exists()
+
+    cancelled = await mcp_jobs.cancel_job(rec.job_id, delete_file=True)
+    assert cancelled.status == "cancelled"
+    # File should be removed
+    assert not landed.exists()
+
+
+async def test_list_jobs(tmp_workspace):
+    from app.services import mcp_jobs
+    import base64
+    for i in range(3):
+        await mcp_jobs.submit_job("file", f"doc{i}.pdf", mcp_jobs.JobOptions(),
+            pdf_bytes_b64=base64.b64encode(b"%PDF-fake").decode())
+    jobs = await mcp_jobs.list_jobs(limit=10)
+    assert len(jobs) == 3
+    statuses = {j.status for j in jobs}
+    assert statuses == {"queued"}
