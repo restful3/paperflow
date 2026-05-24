@@ -539,3 +539,46 @@ def test_scan_outputs_dir_only_no_outputs_dir(tmp_workspace):
     import shutil
     shutil.rmtree(settings.outputs_dir)
     assert mcp_jobs._scan_outputs_dir_only("anything.pdf") is None
+
+
+def test_find_metadata_match_in_dir_outputs_only(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json
+    sub = settings.outputs_dir / "PaperA"
+    sub.mkdir()
+    (sub / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    assert mcp_jobs._find_metadata_match_in_dir(settings.outputs_dir, "src.pdf") == "PaperA"
+    # archives/ does NOT match when outputs has the meta
+    assert mcp_jobs._find_metadata_match_in_dir(settings.archives_dir, "src.pdf") is None
+
+
+def test_find_metadata_match_ignores_corrupt_meta(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    sub = settings.outputs_dir / "Corrupt"
+    sub.mkdir()
+    (sub / "paper_meta.json").write_text("{not valid json")
+    assert mcp_jobs._find_metadata_match_in_dir(settings.outputs_dir, "src.pdf") is None
+
+
+def test_find_metadata_match_ignores_unrelated_meta(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json
+    sub = settings.outputs_dir / "Other"
+    sub.mkdir()
+    (sub / "paper_meta.json").write_text(json.dumps({"original_filename": "different.pdf"}))
+    assert mcp_jobs._find_metadata_match_in_dir(settings.outputs_dir, "src.pdf") is None
+
+
+def test_find_metadata_match_rejects_symlink_escape(tmp_workspace, tmp_path):
+    """T23 metadata path — same containment guard as scan helpers."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    import json
+    external = tmp_path / "external_paper_dir"
+    external.mkdir()
+    (external / "paper_meta.json").write_text(json.dumps({"original_filename": "src.pdf"}))
+    (settings.outputs_dir / "evil_link").symlink_to(external)
+    assert mcp_jobs._find_metadata_match_in_dir(settings.outputs_dir, "src.pdf") is None

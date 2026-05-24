@@ -363,6 +363,32 @@ def _scan_archives_dir_only(expected_filename: str) -> str | None:
     return None
 
 
+def _find_metadata_match_in_dir(base: Path, expected_filename: str) -> str | None:
+    """Scan a single directory (outputs/ XOR archives/) for a direct-child
+    folder whose paper_meta.json records original_filename == expected_filename.
+    Returns the folder name (str) or None. Read-only — never writes or follows
+    symlinks out of `base`.
+
+    rev4 R3 H#1: replaces `papers.find_processed_paper` in the MCP reconcile
+    path so outputs metadata can be discovered independently of newest-wins sort.
+    """
+    if not base.exists():
+        return None
+    for sub in base.iterdir():
+        if not _is_safe_direct_child(base, sub):
+            continue
+        meta_path = sub / "paper_meta.json"
+        if not meta_path.is_file():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if meta.get("original_filename") == expected_filename:
+            return sub.name
+    return None
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings
