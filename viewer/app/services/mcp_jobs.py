@@ -312,6 +312,26 @@ def _is_safe_direct_child(base: Path, candidate: Path) -> bool:
     return True
 
 
+def _paper_has_ko_md(paper_dir: Path) -> bool | None:
+    """Returns:
+      - True  if paper_dir exists and contains *_ko.md (excluding _ko_explained.md)
+      - False if paper_dir exists but has no qualifying *_ko.md
+      - None  if paper_dir does not exist or is inaccessible (race / external cleanup)
+    """
+    try:
+        if not paper_dir.is_dir():
+            return None
+        for p in paper_dir.iterdir():
+            name = p.name
+            if (name.endswith("_ko.md")
+                    and not name.endswith("_ko_explained.md")
+                    and p.is_file()):
+                return True
+        return False
+    except (PermissionError, OSError):
+        return None
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings

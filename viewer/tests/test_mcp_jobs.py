@@ -453,3 +453,40 @@ def test_is_safe_direct_child_rejects_symlink_loop(tmp_workspace):
     a.symlink_to(b)
     b.symlink_to(a)
     assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, a) is False
+
+
+def test_paper_has_ko_md_with_ko(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    pdir = settings.outputs_dir / "WithKo"
+    pdir.mkdir()
+    (pdir / "WithKo.md").write_text("en")
+    (pdir / "WithKo_ko.md").write_text("ko")
+    assert mcp_jobs._paper_has_ko_md(pdir) is True
+
+
+def test_paper_has_ko_md_without_ko(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    pdir = settings.outputs_dir / "NoKo"
+    pdir.mkdir()
+    (pdir / "NoKo.md").write_text("en only")
+    assert mcp_jobs._paper_has_ko_md(pdir) is False
+
+
+def test_paper_has_ko_md_missing_folder(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    pdir = settings.outputs_dir / "DoesNotExist"
+    assert mcp_jobs._paper_has_ko_md(pdir) is None
+
+
+def test_paper_has_ko_md_only_ko_explained(tmp_workspace):
+    """*_ko_explained.md must NOT satisfy the _ko.md requirement."""
+    from app.services import mcp_jobs
+    from app.config import settings
+    pdir = settings.outputs_dir / "OnlyExplained"
+    pdir.mkdir()
+    (pdir / "OnlyExplained.md").write_text("en")
+    (pdir / "OnlyExplained_ko_explained.md").write_text("ko_explained")
+    assert mcp_jobs._paper_has_ko_md(pdir) is False
