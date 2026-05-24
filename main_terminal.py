@@ -10,6 +10,8 @@ import base64
 from datetime import datetime
 import shutil
 import sys
+import urllib.request
+from html.parser import HTMLParser
 
 # Marker-pdf imports
 MARKER_AVAILABLE = False
@@ -85,6 +87,156 @@ def _count_active_stages(pipeline):
     if pipeline.get("translate_to_korean", False):
         count += 1
     return max(count, 1)
+
+
+def _find_source_url_sidecar(pdf_path):
+    """Find imported source URL sidecar for a PDF file.
+
+    Returns URL string or None.
+    """
+    pdf_name = os.path.basename(pdf_path)
+    candidates = [
+        os.path.join("newones", ".meta", f"{pdf_name}.url.txt"),
+        os.path.join("newones", f"{pdf_name}.url.txt"),
+    ]
+    for c in candidates:
+        try:
+            if os.path.isfile(c):
+                with open(c, "r", encoding="utf-8") as f:
+                    u = f.read().strip()
+                if u.startswith(("http://", "https://")):
+                    return u
+        except Exception:
+            continue
+    return None
+
+
+class _SimpleHTMLTextExtractor(HTMLParser):
+    """Very lightweight HTML → text extractor with basic block separation."""
+
+    BLOCK_TAGS = {"p", "div", "section", "article", "main", "h1", "h2", "h3", "h4", "h5", "h6", "li", "pre", "blockquote"}
+    SKIP_TAGS = {"script", "style", "noscript", "svg", "nav", "footer", "header", "aside"}
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        t = (tag or "").lower()
+        if t in self.SKIP_TAGS:
+            self._skip_depth += 1
+        if self._skip_depth == 0 and t in self.BLOCK_TAGS:
+            self.parts.append("\n\n")
+
+    def handle_endtag(self, tag):
+        t = (tag or "").lower()
+        if t in self.SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+        if self._skip_depth == 0 and t in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if self._skip_depth > 0:
+            return
+        s = (data or "").strip()
+        if not s:
+            return
+        self.parts.append(s + " ")
+
+    def get_text(self):
+        txt = "".join(self.parts)
+        txt = re.sub(r"\n{3,}", "\n\n", txt)
+        txt = re.sub(r"[ \t]{2,}", " ", txt)
+        return txt.strip()
+
+
+def _url_to_markdown_html_first(source_url, output_dir, base_name, timeout=20):
+    """Try URL-first extraction and write markdown.
+
+    Returns (md_path, info_dict) or (None, info_dict on failure)
+    """
+    info = {"stage": "html_primary", "url": source_url, "ok": False, "reason": ""}
+    try:
+        req = urllib.request.Request(source_url, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122 Safari/537.36"
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            raw = resp.read()
+        if "html" not in ctype and not source_url.lower().startswith(("http://", "https://")):
+            info["reason"] = f"non-html content-type: {ctype}"
+            return None, info
+
+        html = raw.decode("utf-8", errors="ignore")
+        parser = _SimpleHTMLTextExtractor()
+        parser.feed(html)
+        text = parser.get_text()
+
+        # Basic quality floor for HTML extraction
+        if len(text) < 1200:
+            info["reason"] = f"too-short extracted text ({len(text)} chars)"
+            return None, info
+
+        # Build simple markdown body
+        title_m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
+        title = re.sub(r"\s+", " ", title_m.group(1)).strip() if title_m else base_name
+        md_path = os.path.join(output_dir, f"{base_name}.md")
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(f"# {title}\n\n")
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
+
+        info["ok"] = True
+        info["chars"] = len(text)
+        return md_path, info
+    except Exception as e:
+        info["reason"] = str(e)
+        return None, info
+
+
+def _url_to_markdown_browser_fallback(source_url, output_dir, base_name, timeout=25):
+    """Fallback extractor for JS-heavy pages.
+
+    Uses jina AI readability mirror as a browser-like rendered-text fallback.
+    Returns (md_path, info_dict) or (None, info_dict).
+    """
+    info = {"stage": "browser_fallback", "url": source_url, "ok": False, "reason": ""}
+    try:
+        mirror_url = f"https://r.jina.ai/http://{source_url.replace('https://', '').replace('http://', '')}"
+        req = urllib.request.Request(mirror_url, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122 Safari/537.36"
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+
+        text = raw.decode("utf-8", errors="ignore").strip()
+        # mirror preamble cleanup
+        text = re.sub(r"^Title:\s*.*?\n+", "", text, flags=re.I)
+        text = re.sub(r"^URL Source:\s*.*?\n+", "", text, flags=re.I)
+        text = re.sub(r"^Markdown Content:\s*\n+", "", text, flags=re.I)
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+        if len(text) < 1200:
+            info["reason"] = f"too-short fallback text ({len(text)} chars)"
+            return None, info
+
+        md_path = os.path.join(output_dir, f"{base_name}.md")
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(f"# {base_name}\n\n")
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
+
+        info["ok"] = True
+        info["chars"] = len(text)
+        info["mirror"] = "r.jina.ai"
+        return md_path, info
+    except Exception as e:
+        info["reason"] = str(e)
+        return None, info
+
 
 def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None, detail=None, sub_progress=None):
     """Write processing status to shared JSON file for viewer polling."""
@@ -1638,6 +1790,205 @@ def normalize_heading_levels(text):
     return normalized
 
 
+def _markdown_preflight_for_translation(text):
+    """Preflight markdown cleanup before translation.
+
+    Goal: stabilize fence/code structure in EN markdown so KO translation doesn't
+    inherit malformed markdown (nested fences, unclosed fences, mixed fence styles).
+
+    Returns:
+        (cleaned_text, report_dict)
+    """
+    lines = text.splitlines()
+    out = []
+    report = {
+        "tilde_to_backtick": 0,
+        "collapsed_duplicate_fence": 0,
+        "added_closing_fence": 0,
+        "unbalanced_fences_before": 0,
+        "removed_cookie_blocks": 0,
+        "removed_cookie_lines": 0,
+        "removed_short_noise_lines": 0,
+    }
+
+    fence_open = False
+    fence_stack = []
+
+    for ln in lines:
+        m = re.match(r'^(\s*)(`{3,}|~{3,})([^`]*)$', ln)
+        if m:
+            indent, fence, rest = m.group(1), m.group(2), m.group(3)
+            # Normalize ~~~ to ``` for consistency
+            if fence.startswith('~'):
+                report["tilde_to_backtick"] += 1
+                fence = '```'
+            else:
+                fence = '```'
+
+            norm_line = f"{indent}{fence}{rest.rstrip()}".rstrip()
+
+            # Collapse immediate duplicate fence lines (common OCR/convert artifact)
+            if out and out[-1].strip() == '```' and norm_line.strip() == '```':
+                report["collapsed_duplicate_fence"] += 1
+                continue
+
+            if not fence_open:
+                fence_open = True
+                fence_stack.append('```')
+            else:
+                # closing fence
+                fence_open = False
+                if fence_stack:
+                    fence_stack.pop()
+
+            out.append(norm_line)
+            continue
+
+        out.append(ln)
+
+    if fence_stack:
+        report["unbalanced_fences_before"] = len(fence_stack)
+        while fence_stack:
+            out.append('```')
+            fence_stack.pop()
+            report["added_closing_fence"] += 1
+
+    cleaned = "\n".join(out)
+
+    # Remove common web boilerplate sections that poison translation quality
+    # (cookie banners/policies duplicated in captured web PDFs)
+    cookie_block_patterns = [
+        r'(?ims)^#{1,6}\s*Cookie Policy\s*$.*?(?=^#{1,6}\s|\Z)',
+        r'(?ims)^#{1,6}\s*쿠키 정책.*?$.*?(?=^#{1,6}\s|\Z)',
+    ]
+    for pat in cookie_block_patterns:
+        matches = list(re.finditer(pat, cleaned))
+        if matches:
+            report["removed_cookie_blocks"] += len(matches)
+            cleaned = re.sub(pat, '', cleaned)
+
+    cookie_line_patterns = [
+        r'(?im)^We use cookies to improve your experience.*$',
+        r'(?im)^You can accept, reject, or manage your preferences.*$',
+        r'(?im)^See our privacy policy\.?$',
+        r'(?im)^사람들이 어떻게 투표하는지 확인할 수 있습니다\.?\s*더 알아보기\s*$',
+    ]
+    for pat in cookie_line_patterns:
+        matches = list(re.finditer(pat, cleaned))
+        if matches:
+            report["removed_cookie_lines"] += len(matches)
+            cleaned = re.sub(pat, '', cleaned)
+
+    # Remove obviously broken tiny noise lines that often come from OCR/page chrome
+    before_lines = cleaned.splitlines()
+    kept = []
+    for ln in before_lines:
+        s = ln.strip()
+        if re.match(r'^[가-힣]{1,2}$', s):
+            report["removed_short_noise_lines"] += 1
+            continue
+        if re.match(r'^[A-Za-z]{1,3}$', s):
+            report["removed_short_noise_lines"] += 1
+            continue
+        kept.append(ln)
+    cleaned = "\n".join(kept)
+
+    # Normalize excessive blank lines introduced by removals
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip() + "\n"
+
+    return cleaned, report
+
+
+def compute_quality_signals(text, source_type="unknown"):
+    """Compute lightweight text-quality signals for routing/gating.
+
+    Phase 1 stub: metric collection only (no hard fail).
+    """
+    lines = text.splitlines()
+    total = max(1, len(lines))
+
+    boilerplate_patterns = [
+        r'(?i)we use cookies',
+        r'쿠키를 사용합니다',
+        r'쿠키 정책',
+        r'설정으로 이동하여 원하는 대로 변경할 수 있습니다',
+        r'자세한 정보는 .*정책',
+        r'(?i)^privacy policy$',
+        r'(?i)^cookie policy$',
+    ]
+    ocr_patterns = [
+        r'\bOpenAl\b',
+        r'\bfi\s+rst\b',
+        r'\bconfi\s+g\b',
+        r'\bobservability\s*\(observability\)\b',
+    ]
+
+    boilerplate_lines = 0
+    ocr_artifacts = 0
+    short_noise = 0
+    mixed_language = 0
+
+    for ln in lines:
+        s = ln.strip()
+        if not s:
+            continue
+        if any(re.search(p, s) for p in boilerplate_patterns):
+            boilerplate_lines += 1
+        if any(re.search(p, s) for p in ocr_patterns):
+            ocr_artifacts += 1
+        if re.match(r'^[A-Za-z가-힣]{1,3}$', s):
+            short_noise += 1
+        if re.search(r'[가-힣]', s) and re.search(r'[A-Za-z]{4,}', s):
+            mixed_language += 1
+
+    return {
+        "source_type": source_type,
+        "total_lines": total,
+        "boilerplate_lines": boilerplate_lines,
+        "boilerplate_ratio": round(boilerplate_lines / total, 4),
+        "ocr_artifacts": ocr_artifacts,
+        "short_noise_lines": short_noise,
+        "short_noise_ratio": round(short_noise / total, 4),
+        "mixed_language_lines": mixed_language,
+        "mixed_language_ratio": round(mixed_language / total, 4),
+    }
+
+
+def should_fallback_by_quality(signals, quality_cfg=None):
+    """Evaluate quality thresholds and return (should_fail_or_fallback, reason)."""
+    quality_cfg = quality_cfg or {}
+    max_boiler = quality_cfg.get("max_boilerplate_lines", 8)
+    max_noise_ratio = quality_cfg.get("max_short_noise_ratio", 0.03)
+    max_ocr = quality_cfg.get("max_ocr_artifacts", 5)
+    max_mixed = quality_cfg.get("max_mixed_language_ratio", 0.35)
+
+    if signals.get("boilerplate_lines", 0) > max_boiler:
+        return True, f"boilerplate_lines>{max_boiler}"
+    if signals.get("short_noise_ratio", 0.0) > max_noise_ratio:
+        return True, f"short_noise_ratio>{max_noise_ratio}"
+    if signals.get("ocr_artifacts", 0) > max_ocr:
+        return True, f"ocr_artifacts>{max_ocr}"
+    if signals.get("mixed_language_ratio", 0.0) > max_mixed:
+        return True, f"mixed_language_ratio>{max_mixed}"
+    return False, "ok"
+
+
+def _code_fence_count(text):
+    return len(re.findall(r'^\s*```', text, re.MULTILINE))
+
+
+def _verify_code_block_integrity(source_text, translated_text):
+    """Verify code fence integrity between source and translated markdown."""
+    src = _code_fence_count(source_text)
+    dst = _code_fence_count(translated_text)
+
+    if src != dst:
+        return False, f"code fence count mismatch ({dst}/{src})"
+    if dst % 2 != 0:
+        return False, "odd number of code fences"
+    return True, "ok"
+
+
 def protect_special_blocks(text):
     """Replace code blocks with placeholders before translation.
 
@@ -2175,7 +2526,7 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
     from dotenv import load_dotenv
 
     try:
-        load_dotenv()
+        load_dotenv(override=True)
 
         api_base = os.getenv("OPENAI_BASE_URL")
         api_key = os.getenv("OPENAI_API_KEY")
@@ -2211,7 +2562,26 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
         body = clean_ocr_math(body)
         print_success("OCR artifacts cleaned (including math)")
 
-        # Save body before protection for spurious heading detection later
+        # Step 2.5: Markdown preflight (code fence/structure cleanup)
+        body, preflight_report = _markdown_preflight_for_translation(body)
+        preflight_changes = sum(preflight_report.values())
+        if preflight_changes > 0:
+            print_info(f"Markdown preflight applied: {preflight_report}")
+
+        # Phase 1 quality signals (measurement-only)
+        quality_cfg = config.get("quality", {})
+        pre_quality = compute_quality_signals(body, source_type="translated_md")
+        should_fb, fb_reason = should_fallback_by_quality(pre_quality, quality_cfg)
+        print_info(f"Quality(pre): {pre_quality}")
+        quality_gate_enabled = quality_cfg.get("enable_gate", False)
+        allow_warn_save = quality_cfg.get("allow_warn_save", True)
+        if should_fb:
+            if quality_gate_enabled and not allow_warn_save:
+                print_error(f"Quality gate(pre) failed: {fb_reason}")
+                return None
+            print_warning(f"Quality gate(pre) warning: {fb_reason}")
+
+        # Save body before protection for integrity checks later
         body_before_protection = body
 
         # Step 3: Protect code blocks (math is left for LLM to fix OCR artifacts)
@@ -2380,6 +2750,18 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
         # Step 6.5: Strip spurious headings inserted by AI
         final_body = _strip_spurious_headings(body_before_protection, final_body)
 
+        # Step 6.6: Code block integrity gate (source vs translated)
+        code_ok, code_reason = _verify_code_block_integrity(body_before_protection, final_body)
+        if not code_ok:
+            print_warning(f"Code-block integrity check failed: {code_reason}")
+            # Best-effort auto-fix: close dangling fence if odd
+            if _code_fence_count(final_body) % 2 != 0:
+                final_body = final_body.rstrip() + "\n\n```\n"
+                print_info("Auto-fixed dangling code fence by appending closing ```")
+                code_ok2, code_reason2 = _verify_code_block_integrity(body_before_protection, final_body)
+                if not code_ok2:
+                    print_warning(f"Code-block integrity still mismatched: {code_reason2}")
+
         # Step 7: Write output with header.yaml
         base_name = os.path.basename(md_path).replace('.md', '')
         ko_md_path = os.path.join(output_dir, f"{base_name}_ko.md")
@@ -2400,7 +2782,55 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
             f.write('\n')
             f.write(final_body)
 
-        print_success(f"Translation saved: {ko_md_path}")
+        # Save markdown quality/preflight report for UI and debugging
+        try:
+            post_quality = compute_quality_signals(final_body, source_type="translated_md_ko")
+            post_fail, post_reason = should_fallback_by_quality(post_quality, quality_cfg)
+            gate_status = "PASS"
+            if post_fail:
+                if quality_gate_enabled and not allow_warn_save:
+                    gate_status = "FAIL"
+                else:
+                    gate_status = "WARN"
+
+            lint_report = {
+                "source_md": md_path,
+                "output_md": ko_md_path,
+                "preflight": preflight_report,
+                "preflight_changes": preflight_changes,
+                "quality": {
+                    "pre": pre_quality,
+                    "post": post_quality,
+                    "gate_enabled": bool(quality_gate_enabled),
+                    "allow_warn_save": bool(allow_warn_save),
+                    "status": gate_status,
+                    "reason": post_reason if post_fail else "ok",
+                },
+                "code_block_integrity": {
+                    "ok": bool(code_ok),
+                    "reason": code_reason,
+                    "source_fences": _code_fence_count(body_before_protection),
+                    "translated_fences": _code_fence_count(final_body),
+                },
+                "generated_at": datetime.now().isoformat(),
+            }
+            lint_path = os.path.join(output_dir, f"{base_name}_mdlint_report.json")
+            with open(lint_path, 'w', encoding='utf-8') as rf:
+                json.dump(lint_report, rf, ensure_ascii=False, indent=2)
+            print_info(f"Markdown quality report saved: {lint_path}")
+        except Exception as e:
+            print_warning(f"Failed to save markdown quality report: {e}")
+
+        if quality_gate_enabled and gate_status == "FAIL":
+            print_error(f"Quality gate(post) failed: {post_reason}")
+            try:
+                os.remove(ko_md_path)
+                print_warning("Removed output due to hard quality gate failure")
+            except Exception:
+                pass
+            return None
+
+        print_success(f"Translation saved: {ko_md_path} (quality={gate_status})")
         return ko_md_path
 
     except Exception as e:
@@ -2451,6 +2881,7 @@ def process_single_pdf(pdf_path, config, prompt):
             "metadata": None,
             "translation": None,
         }
+        metadata = None
         duplicate_found = False
 
         # Step 1: PDF to MD (conditional)
@@ -2461,7 +2892,32 @@ def process_single_pdf(pdf_path, config, prompt):
             print_info(f"Step 1: Converting PDF to Markdown...")
             try:
                 status_info = {"pdf_name": pdf_name, "stage_num": current_stage, "total_stages": total_stages}
-                md_path = convert_pdf_to_md_dispatch(pdf_path, output_dir, config, status_info=status_info)
+
+                # URL-first path (Phase 2): for imported web PDFs, try HTML extraction first.
+                used_url_first = False
+                source_url = _find_source_url_sidecar(pdf_path)
+                if pipeline.get("url_html_first", False) and source_url:
+                    print_info(f"URL-first enabled, trying HTML extraction: {source_url}")
+                    md_path, html_info = _url_to_markdown_html_first(source_url, output_dir, base_name)
+                    if md_path:
+                        used_url_first = True
+                        print_success(f"URL-first extraction complete ({html_info.get('chars', 0)} chars): {md_path}")
+                    else:
+                        print_warning(f"URL-first extraction failed: {html_info.get('reason', 'unknown')}")
+
+                        # Stage B fallback for JS-heavy pages
+                        if pipeline.get("browser_fallback", True):
+                            print_info("Trying browser fallback extraction...")
+                            md_path, binfo = _url_to_markdown_browser_fallback(source_url, output_dir, base_name)
+                            if md_path:
+                                used_url_first = True
+                                print_success(f"Browser fallback extraction complete ({binfo.get('chars', 0)} chars): {md_path}")
+                            else:
+                                print_warning(f"Browser fallback failed: {binfo.get('reason', 'unknown')} -> fallback to PDF converter")
+
+                if not used_url_first:
+                    md_path = convert_pdf_to_md_dispatch(pdf_path, output_dir, config, status_info=status_info)
+
                 if md_path:
                     print_success(f"Markdown conversion complete: {md_path}")
                     results["markdown"] = "success"
@@ -2683,6 +3139,47 @@ def process_single_pdf(pdf_path, config, prompt):
         write_processing_status(pdf_name, "error", 0, 0, "Error", error=str(e))
         return False
 
+def _check_translation_api_health(config):
+    """Preflight check for translation API/model when Korean translation is enabled."""
+    pipeline = config.get("processing_pipeline", {})
+    if not pipeline.get("translate_to_korean", False):
+        return True
+
+    api_base = os.getenv("OPENAI_BASE_URL", "").strip()
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    model = os.getenv("TRANSLATION_MODEL", "gemini-claude-sonnet-4-5").strip()
+
+    if not api_base or not api_key:
+        print_error("Translation precheck failed: OPENAI_BASE_URL / OPENAI_API_KEY missing")
+        return False
+
+    print_info(f"Translation precheck: model={model}, base={api_base}")
+
+    # Quick live probe (best-effort). Default strict to prevent surprise EN-only output.
+    strict = os.getenv("STRICT_TRANSLATION_HEALTHCHECK", "1") == "1"
+    try:
+        from openai import OpenAI
+        client = OpenAI(base_url=api_base, api_key=api_key)
+        client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "healthcheck"},
+                {"role": "user", "content": "ok"}
+            ],
+            max_tokens=1,
+            timeout=15,
+            temperature=0,
+        )
+        print_success("Translation API/model healthcheck passed")
+        return True
+    except Exception as e:
+        if strict:
+            print_error(f"Translation API/model healthcheck failed: {e}")
+            return False
+        print_warning(f"Translation API/model healthcheck warning (non-strict): {e}")
+        return True
+
+
 def check_services(config):
     """Check if external services are reachable"""
     print_info("Checking dependencies...")
@@ -2703,10 +3200,21 @@ def check_services(config):
             return False
         print_success("marker-pdf library is installed")
 
+    if not _check_translation_api_health(config):
+        return False
+
     return True
 
 def main():
     """Main function"""
+    # Ensure .env values take precedence over inherited shell env
+    # (prevents accidental OPENAI_API_KEY mismatch from parent process).
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
+    except Exception:
+        pass
+
     # Setup logging to file
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
@@ -2758,16 +3266,25 @@ def main():
         print_warning("No PDF files found in 'newones' directory")
         return
 
-    print_info(f"Found {len(pdf_files)} PDF file(s) to process")
+    target_pdf = os.getenv("PAPERFLOW_TARGET_PDF", "").strip()
+    if target_pdf:
+        target_path = Path(target_pdf)
+        if not target_path.is_absolute():
+            target_path = (newones_dir / target_path.name).resolve()
+        if not target_path.exists() or target_path.suffix.lower() != ".pdf":
+            print_error(f"Target PDF not found/invalid: {target_pdf}")
+            return 1
+        process_list = [target_path]
+        print_info(f"Target mode: processing only {target_path.name}")
+    else:
+        # Default behavior: process first item only (watch mode iterates one-by-one)
+        process_list = [sorted(pdf_files, key=lambda p: p.name)[0]]
+        print_info(f"Found {len(pdf_files)} PDF file(s) in queue; processing first: {process_list[0].name}")
 
-    # Process only the first PDF to avoid CUDA context pollution
-    # Watch mode script will call this program multiple times for multiple PDFs
     success_count = 0
     fail_count = 0
 
-    # Process first PDF only
-    if pdf_files:
-        pdf_path = pdf_files[0]
+    for pdf_path in process_list:
         if process_single_pdf(str(pdf_path), config, prompt):
             success_count += 1
         else:
@@ -2790,4 +3307,6 @@ def main():
     sys.stdout = original_stdout
 
 if __name__ == "__main__":
-    main()
+    import sys as _sys
+    rc = main()
+    _sys.exit(0 if rc is None else rc)

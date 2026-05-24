@@ -5,7 +5,10 @@
     "extract_metadata": true,
     "enrich_with_web_search": true,
     "check_duplicate": true,
-    "translate_to_korean": true
+    "translate_to_korean": true,
+    "url_html_first": true,
+    "browser_fallback": true,
+    "pdf_ocr_fallback": true
   },
   "converter": {
     "mineru": {
@@ -33,5 +36,13 @@
     "enable_parallel_translation": true,
     "parallel_max_workers": 3,
     "parallel_min_chunks": 2
+  },
+  "quality": {
+    "enable_gate": true,
+    "max_boilerplate_lines": 8,
+    "max_short_noise_ratio": 0.03,
+    "max_ocr_artifacts": 5,
+    "max_mixed_language_ratio": 0.35,
+    "allow_warn_save": false
   }
 }
