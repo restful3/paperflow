@@ -292,6 +292,26 @@ async def _download_and_publish(job_id: str, url: str, expected_filename: str) -
 
 
 # ── Reconcile ─────────────────────────────────────────────────────────────────
+def _is_safe_direct_child(base: Path, candidate: Path) -> bool:
+    """True iff `candidate` is a direct child of `base` and resolves within `base`
+    (symlink-resolved). Prevents scan helpers from following symlinks that
+    escape outputs/ or archives/.
+
+    Mirrors `papers._safe_child_dir` containment logic without depending on
+    papers.py internals (v1.1 keeps papers.py untouched).
+    """
+    try:
+        base_resolved = base.resolve(strict=True)
+        cand_resolved = candidate.resolve(strict=True)
+    except (FileNotFoundError, OSError):
+        return False
+    if cand_resolved.parent != base_resolved:
+        return False
+    if not cand_resolved.is_dir():
+        return False
+    return True
+
+
 def _scan_outputs_for_filename(expected_filename: str) -> tuple[str, Literal["outputs", "archives"]] | None:
     """Fallback: scan outputs/ and archives/ for any folder containing expected_filename."""
     from ..config import settings

@@ -400,3 +400,46 @@ async def test_force_reprocess_skips_cache(tmp_workspace, monkeypatch):
     rec = await mcp_jobs.submit_job("url", "https://arxiv.org/abs/0000.00000",
                                      mcp_jobs.JobOptions(force_reprocess=True))
     assert rec.status == "downloading"  # cache bypassed
+
+
+def test_is_safe_direct_child_accepts_direct_subdir(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    sub = settings.outputs_dir / "real_dir"
+    sub.mkdir()
+    assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, sub) is True
+
+
+def test_is_safe_direct_child_rejects_nested(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    nested = settings.outputs_dir / "a" / "b"
+    nested.mkdir(parents=True)
+    # nested is a grandchild — not a direct child
+    assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, nested) is False
+
+
+def test_is_safe_direct_child_rejects_symlink_escape(tmp_workspace, tmp_path):
+    from app.services import mcp_jobs
+    from app.config import settings
+    external = tmp_path / "external_target"
+    external.mkdir()
+    link = settings.outputs_dir / "evil_link"
+    link.symlink_to(external)
+    # symlink target is outside outputs_dir
+    assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, link) is False
+
+
+def test_is_safe_direct_child_rejects_missing(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    missing = settings.outputs_dir / "does_not_exist"
+    assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, missing) is False
+
+
+def test_is_safe_direct_child_rejects_file(tmp_workspace):
+    from app.services import mcp_jobs
+    from app.config import settings
+    f = settings.outputs_dir / "plain.txt"
+    f.write_text("hi")
+    assert mcp_jobs._is_safe_direct_child(settings.outputs_dir, f) is False
