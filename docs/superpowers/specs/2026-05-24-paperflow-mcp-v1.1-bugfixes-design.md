@@ -1,15 +1,27 @@
 # PaperFlow MCP — v1.1 Bug Fixes Design Spec
 
-**Version**: v1.1 (spec rev 2)
+**Version**: v1.1 (spec rev 3)
 **Date**: 2026-05-24
-**Status**: Draft (pre-implementation, awaiting user sign-off + codex Round 2)
+**Status**: Draft (pre-implementation, awaiting codex Round 3)
 **Owner**: restful3
 **Predecessor**: `2026-05-24-paperflow-mcp-server-design.md` (v1, rev5)
 **Prior reviews**:
-- `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex.md` (Round 1 — 3 Critical, 4 High, 5 Medium)
+- `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex.md` (Round 1 — 3 Critical, 4 High, 5 Medium — all closed in rev2)
+- `docs/reviews/2026-05-24-paperflow-mcp-v1.1-bugfixes-codex-2.md` (Round 2 — 0 Critical, 3 High, 3 Medium — addressed in rev3)
 **Trigger**: DeepSeek-V3 (arXiv 2412.19437) E2E surfaced 3 Critical bugs not caught by v1 codex Round 1–5 review. See `HANDOFF.md` § "🐛 v1 버그 — DeepSeek-V3 E2E 발견" for the incident log.
 
 ---
+
+## Change Log (rev3 vs rev2 — addresses Round 2 codex review)
+
+| 변경 | 이유 (Round 2 항목) |
+|------|---------------------|
+| `_scan_outputs_for_filename` (기존 함수, 실제로 outputs+archives 둘 다 스캔) 사용 중단. 새 outputs-only helper `_scan_outputs_dir_only` 와 archives-only helper `_scan_archives_dir_only` 도입. | High #1 — 기존 함수가 이름과 달리 archives 도 포함하므로 `_resolve_completed_candidate` 가 `"outputs"` 라벨로 강제 반환하면 archives hit 를 outputs 로 오인. |
+| `_resolve_completed_candidate` 우선순위 명시: (1) outputs metadata match, (2) outputs filesystem scan, (3) archives metadata match, (4) archives filesystem scan. `find_processed_paper` 의 newest-wins 결과에 의존하지 않음. | High #2 — outputs vs archives 동시 매치 시 outputs 가 mtime 으로 늦어도 outputs 가 먼저 검사되어야 함. |
+| `reconcile_job` 의 queued/processing 완료-발견 branch 가 `verdict == "missing"` 을 명시적으로 `status="error", error="paper folder no longer present..."` 로 처리. fall-through 제거. | High #3 — 기존 spec rev2 branch 는 `"partial"` 만 분기 처리하고 나머지를 complete 로 묶어 race race에서 false complete. |
+| `translation_missing` error 메시지에 "If this deployment intentionally disables Korean translation, set MCP_REQUIRE_TRANSLATION=false." 한 줄 추가. | Medium #2 — operator mismatch 시 잘못된 안내로 반복 delete/resubmit 루프 유도 위험. |
+| §5.3.2 `mcp_jobs.cancel_job()` 반환 타입 변경의 테스트 영향 명시 추가. 기존 `test_mcp_jobs.py:265-266` 의 `cancelled.status` 사용은 dict 접근 (`cancelled["status"]`) 로 업데이트 필요 — §6 와 §7 step 4 에 명시. | Medium #1 — service-level breaking change 의 가시화. |
+| 새 unit test T20: `_classify_completion()` 의 4-state direct verification (outputs+ko / outputs-no-ko+require / outputs-no-ko+not-require / missing / archives). | Medium #3 — verdict 분기 누락을 helper 단위에서 빠르게 잡기 위함. |
 
 ## Change Log (rev2 vs rev1 — addresses Round 1 codex review)
 
@@ -127,29 +139,71 @@ def _paper_has_ko_md(paper_dir: Path) -> bool | None:
         return None
 
 
+def _scan_outputs_dir_only(expected_filename: str) -> str | None:
+    """Scan outputs/ ONLY for a folder containing expected_filename.
+    Returns the folder name (str) or None. archives is never touched.
+
+    Note: separate from the existing `_scan_outputs_for_filename` (which despite
+    its name scans both outputs AND archives — rev3 deprecates that for the
+    rev2 use cases below; existing v1 use sites for that function remain unless
+    they also benefit from this split).
+    """
+    from ..config import settings
+    base = settings.outputs_dir
+    if not base.exists():
+        return None
+    for sub in base.iterdir():
+        if sub.is_dir() and (sub / expected_filename).is_file():
+            return sub.name
+    return None
+
+
+def _scan_archives_dir_only(expected_filename: str) -> str | None:
+    """Same as _scan_outputs_dir_only but for archives/."""
+    from ..config import settings
+    base = settings.archives_dir
+    if not base.exists():
+        return None
+    for sub in base.iterdir():
+        if sub.is_dir() and (sub / expected_filename).is_file():
+            return sub.name
+    return None
+
+
 def _resolve_completed_candidate(expected_filename: str) -> tuple[str, str] | None:
     """Locate the paper folder that should correspond to expected_filename.
     Returns (paper_name, location) or None.
 
-    Outputs is preferred over archives — if BOTH match, outputs wins so that
-    partial-detection / cleanup operates on the active folder.
+    Outputs is strictly preferred over archives. The lookup order is:
+      1. outputs metadata match (via find_processed_paper, filtered to location='outputs')
+      2. outputs filesystem scan (source PDF presence)
+      3. archives metadata match
+      4. archives filesystem scan
+
+    Steps 1–2 ensure outputs wins even when find_processed_paper's newest-wins
+    sort returns an archives copy (e.g., when archive mtime > outputs mtime).
     """
     from . import papers as _papers
-    from ..config import settings
 
-    # Primary: metadata-backed
     info = _papers.find_processed_paper(original_filename=expected_filename)
+
+    # 1. outputs metadata
     if info and info["location"] == "outputs":
         return info["name"], "outputs"
 
-    # Outputs-side fallback scan (paper_meta missing / corrupt)
-    scan = _scan_outputs_for_filename(expected_filename)
-    if scan:
-        return scan[0], "outputs"
+    # 2. outputs filesystem (paper_meta missing/corrupt or stale metadata)
+    name_out = _scan_outputs_dir_only(expected_filename)
+    if name_out:
+        return name_out, "outputs"
 
-    # No outputs match — fall back to whatever primary found (may be archives)
-    if info:
-        return info["name"], info["location"]
+    # 3. archives metadata
+    if info and info["location"] == "archives":
+        return info["name"], "archives"
+
+    # 4. archives filesystem
+    name_arch = _scan_archives_dir_only(expected_filename)
+    if name_arch:
+        return name_arch, "archives"
 
     return None
 
@@ -160,7 +214,7 @@ def _paper_dir_for(name: str, location: str) -> Path:
     return base / name
 ```
 
-`_scan_outputs_for_filename` already exists in `mcp_jobs.py` (v1 line 295-304); rev2 reuses it.
+The legacy `_scan_outputs_for_filename` (lines 295-304) has exactly one caller — `reconcile_job` line 334, the v1 fallback scan branch — which rev3 replaces with `_resolve_completed_candidate`. After rev3, the legacy function is dead code. Implementation step 1 should `grep -n "_scan_outputs_for_filename"` after wiring the new helpers and remove the legacy function if the only remaining occurrence is its definition.
 
 #### 5.2.3 `reconcile_job` modified flow
 
@@ -189,7 +243,9 @@ async def reconcile_job(job_id: str) -> JobRecord | None:
             await _set_job_fields(job_id, status="error",
                 error=("translation_missing — prior run was killed mid-translation. "
                        "Call cancel_job(delete_file=true) to clear partial outputs, "
-                       "then resubmit with force_reprocess=true."),
+                       "then resubmit with force_reprocess=true. "
+                       "If this deployment intentionally disables Korean translation, "
+                       "set MCP_REQUIRE_TRANSLATION=false."),
                 completed_at=_now_iso())
             return await get_job(job_id)
         if verdict == "missing":
@@ -216,7 +272,15 @@ async def reconcile_job(job_id: str) -> JobRecord | None:
             await _set_job_fields(job_id, status="error",
                 error=("translation_missing — prior run was killed mid-translation. "
                        "Call cancel_job(delete_file=true) to clear partial outputs, "
-                       "then resubmit with force_reprocess=true."),
+                       "then resubmit with force_reprocess=true. "
+                       "If this deployment intentionally disables Korean translation, "
+                       "set MCP_REQUIRE_TRANSLATION=false."),
+                completed_at=_now_iso())
+            return await get_job(job_id)
+        if verdict == "missing":
+            # candidate found at lookup time but paper_dir disappeared mid-classification (race)
+            await _set_job_fields(job_id, status="error",
+                error="paper folder no longer present (archived or deleted externally)",
                 completed_at=_now_iso())
             return await get_job(job_id)
         # complete or skip (translation not required) — both legitimate complete
@@ -416,15 +480,19 @@ TDD. New test cases in `viewer/tests/test_mcp_jobs.py` (extending existing modul
 | T17 | `test_reconcile_paper_folder_missing_after_complete` | Job persisted complete, outputs/{paper_dir}/ deleted between reconcile calls (race) | status="error", error contains "no longer present" — NOT translation_missing |
 | T18 | `test_cancel_job_response_shape` | Various cancel scenarios | Response always has shape `{job_id, status, cleanup: {attempted, deleted_path, warning}}` |
 | T19 | `test_get_job_result_rejects_error_after_reconcile_downgrade` | Job persisted complete, partial fs state. Call get_job_result. | reconcile downgrades to error; get_job_result raises (FastMCP tool error response) |
+| T20 | `test_classify_completion_four_states_direct` | Helper unit test: (a) outputs+ko_md → "complete"; (b) outputs only Title.md + REQUIRE=true → "partial"; (c) outputs only Title.md + REQUIRE=false → "skip"; (d) candidate name resolved but paper_dir absent → "missing"; (e) archives-only → "complete" | Four-state verdict matrix exhaustive |
+| T21 | `test_resolve_completed_candidate_outputs_filesystem_beats_archives_metadata` | outputs/{paper_dir}/ contains source PDF but no paper_meta; archives/{paper_dir}/ has matching paper_meta + _ko.md; archives mtime > outputs mtime | Resolver returns (name, "outputs") — outputs filesystem step (#2) wins over archives metadata step (#3) |
+
+**Test update** (existing): `test_mcp_jobs.py:265-266` currently reads `cancelled.status` from a `JobRecord`. With the rev3 `cancel_job() -> dict | None` change, update to `cancelled["status"]`. T18 (response shape) is the primary regression guard; mention in implementation step 4.
 
 Regression sweep: existing 40 tests must still pass.
 
 ## 7. Implementation order (for plan)
 
-1. **T5, T6, T7 (helpers)** → implement `_paper_has_ko_md`, `_resolve_completed_candidate`, `_paper_dir_for` → green
-2. **T15 (fallback partial detection)** → implement `_classify_completion` → green
-3. **T1–T4, T13, T14, T16, T17 (reconcile policy)** → modify `reconcile_job` per §5.2.3 → green + regression
-4. **T18 (cancel response shape), T8–T12 (cancel cleanup)** → modify `cancel_job` + add `_cleanup_smart_renamed_paper` per §5.3 → green + regression
+1. **T5, T6, T7, T20, T21 (helpers)** → implement `_paper_has_ko_md`, `_scan_outputs_dir_only`, `_scan_archives_dir_only`, `_resolve_completed_candidate`, `_paper_dir_for`, `_classify_completion` → green
+2. **T15 (fallback partial detection)** → already covered by `_classify_completion` from step 1 — verify regression
+3. **T1–T4, T13, T14, T16, T17 (reconcile policy)** → modify `reconcile_job` per §5.2.3 (both complete branch AND queued/processing branch handle partial/missing/skip explicitly) → green + regression
+4. **T18 (cancel response shape), T8–T12 (cancel cleanup)** → modify `cancel_job` + add `_cleanup_smart_renamed_paper` per §5.3 → green + regression. Update existing `test_mcp_jobs.py:265-266` from `cancelled.status` (JobRecord) to `cancelled["status"]` (dict) — see "Test update" note in §6.
 5. **T19 (zip + get_job_result downstream)** → modify zip endpoint per §5.2.4 + add test → green
 6. **docker-compose.yml** → add `PROCESS_TIMEOUT_SECONDS=7200` (converter) and `MCP_REQUIRE_TRANSLATION=${MCP_REQUIRE_TRANSLATION:-true}` (viewer)
 7. **config.py** → add `MCP_REQUIRE_TRANSLATION: bool = True`
@@ -441,7 +509,7 @@ Regression sweep: existing 40 tests must still pass.
 
 ## 9. Codex review plan
 
-Round 1 returned 3 Critical + 4 High + 5 Medium (all valid, all addressed in rev2). Round 2 expected — submit rev2, request approval. If high-severity findings remain, Round 3. Hard cap at 3 (was 2 in rev1; relaxed because rev1 scope expansion warranted).
+Round 1 returned 3 Critical + 4 High + 5 Medium (all valid, all addressed in rev2). Round 2 returned 0 Critical + 3 High + 3 Medium (all valid, all addressed in rev3). Round 3 expected — submit rev3, request `===CODEX_FINAL_APPROVAL===`. If high-severity findings remain, Round 4. Hard cap at 4 (originally 2 in rev1, relaxed to 3 in rev2, +1 here because each round is producing diminishing-severity findings — pattern matches v1's 5-round cycle).
 
 ## 10. Open questions
 
