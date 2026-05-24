@@ -206,7 +206,8 @@ CHATBOT_MODEL                     # e.g., gpt-4o (RAG chatbot)
 TRANSLATION_MAX_TOKENS, TRANSLATION_TEMPERATURE
 BRAVE_SEARCH_API_KEY              # Web search enrichment (optional)
 LOGIN_ID, LOGIN_PASSWORD          # Viewer auth
-JWT_SECRET_KEY                    # JWT signing
+JWT_SECRET_KEY                    # JWT signing (required, no default — startup rejects empty/short/placeholder substrings)
+COOKIE_SECURE                     # true on HTTPS deployments, false for local HTTP (default false)
 ```
 
 ### config.json
