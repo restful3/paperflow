@@ -79,6 +79,9 @@ model_cache/
 # Playwright MCP screenshots
 .playwright-mcp/
 
+# Local agent home/cache/logs
+.claude-home/
+
 # Translation outputs
 translations/
 sample_pdf/

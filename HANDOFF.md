@@ -1,8 +1,9 @@
 # 세션 핸드오프 — PaperFlow MCP 서버 v1 / v1.1
-_최종 갱신: 2026-05-24 19:47 KST_
+_최종 갱신: 2026-05-25 (세션 종료 시점)_
 _업데이트: 2026-05-24 — **E2E 검증 완료** (arXiv 1706.03762 full pipeline + cache hit). v1 ship-ready._
 _업데이트: 2026-05-24 — **DeepSeek-V3 E2E 에서 v1 Critical 버그 3개 발견** (translation timeout + self-duplicate skip + reconcile false-positive). 상세는 § "🐛 v1 버그" 참조._
 _업데이트: 2026-05-24 — **v1.1 spec rev4 codex 4라운드 final approval** + **구현 16/16 task TDD 완료**, 96/96 tests pass, ship-ready. 무변경 제약 유지 (main_terminal.py / run_batch_watch.sh / config.json / papers.py 0줄). 상세는 § "✅ v1.1 구현 완료" 참조._
+_업데이트: 2026-05-25 — **v1.1 실전 E2E 검증 완료** (DeepSeek-V3 2412.19437 60분 처리, fix #1\~#6 모두 검증, zip 에 `_ko.md` 162KB 포함). MCP 서버화 **already-shipped**. 사이드 작업: Attention/DeepSeek-V3 한국어 해설판 + HTML 변환. 상세는 § "✅ v1.1 실전 E2E (2026-05-25)" 참조._
 
 ## 🎯 목표
 PaperFlow의 PDF→Markdown(+이미지)→번역 파이프라인을 MCP (Model Context Protocol) 도구로 노출. 외부 클라이언트가 PDF/URL 제출 → 비동기 처리 → zip 다운로드. **기존 PaperFlow 기능 무변경 보장** (`main_terminal.py` 0줄, `run_batch_watch.sh` 0줄, `config.json` 0줄).
@@ -176,7 +177,54 @@ claude mcp add --transport http paperflow http://localhost:8090/mcp/ \
 - `docker compose exec paperflow-converter sh -lc 'echo $PROCESS_TIMEOUT_SECONDS'` → 7200 ✓
 - `docker compose exec paperflow-viewer sh -lc 'echo $MCP_REQUIRE_TRANSLATION'` → true ✓
 - `curl -sI -H "Authorization: Bearer $MCP_KEY" http://localhost:8090/mcp/` → 200/405 (정상) ✓
-- DeepSeek-V3 retry E2E 는 다음 세션 권장 (~30-60min)
+- DeepSeek-V3 retry E2E → **2026-05-25 완료** (아래 § "✅ v1.1 실전 E2E" 참조)
+
+## ✅ v1.1 실전 E2E (2026-05-25) — DeepSeek-V3 retry
+
+arXiv `2412.19437` (DeepSeek-V3 Technical Report, 50p / 72 sections) 를 MCP recovery flow 로 재처리. v1.1 모든 fix 가 실전에서 검증됨.
+
+### Recovery flow (사용자 가이드 확인용)
+1. `get_job_status(8bea5129)` → `status=error: paper folder no longer present (archived or deleted externally)` ⇒ **v1.1 reconcile 정상 동작** (v1 의 false-positive complete 를 재분류) ✅
+2. `cancel_job(8bea5129, delete_file=true)` → `{job_id, status=error, cleanup:{attempted=false, deleted_path=null, warning=null}}` (폴더 부재로 cleanup 불필요) ✅
+3. `submit_paper(url=https://arxiv.org/abs/2412.19437, force_reprocess=true)` → `job_id=afa87423-c843-44e2-8900-ab9889f4a80d`, status=downloading 즉시 반환 ✅
+
+### 처리 결과
+| 항목 | 값 |
+|---|---|
+| 처리 시간 | **60분** (11:56:13 → 12:56:24 UTC), SIGKILL 없음 |
+| 최종 status | `complete` (false-positive 아님 — v1.1 reconcile 검증) |
+| `_ko.md` | 162,457 bytes / 1,134 lines / 74 headers / 한글 OK |
+| `_en.md` | 147,532 bytes |
+| zip | HTTP 200, 2.87 MB, 43 files (md_en + md_ko + 38 img + meta + README) |
+| `include_pdf=false` | 준수 |
+| `files.md_ko` (get_job_result) | `true` |
+
+### v1.1 fix 실전 검증 매트릭스
+| Fix | 실전 검증 결과 |
+|-----|---|
+| **#1** `PROCESS_TIMEOUT_SECONDS=7200` | 60분 처리에도 SIGKILL 없음 — v1 의 2400s 한계 돌파 ✅ |
+| **#2/3/5** `_classify_completion` + reconcile 4-state | stale job `8bea5129` 의 폴더 부재를 `status=error` 로 정확히 재분류 ✅ |
+| **#4** `cancel_job` dict response + outputs-only cleanup | `{job_id, status, cleanup}` dict 반환, 폴더 부재시 `attempted=false` ✅ |
+| **#6** `MCP_REQUIRE_TRANSLATION=true` env | translation 정상 완료 후 complete 진입, `files.md_ko=true` ✅ |
+| zip endpoint `get_job → reconcile_job` | 200 + 모든 예상 파일 + README.txt 옵션 명기 ✅ |
+
+### 사이드 작업 (이번 세션, MCP 와 별개)
+- **한국어 해설판 작성** (`paper-explainer-korean` 스킬 호출):
+  - `outputs/Attention Is All You Need/Attention Is All You Need_ko_explained.md` (67 KB / 816 lines / 56 headers, 1.42× 원문)
+  - `outputs/DeepSeek-V3 Technical Report/DeepSeek-V3 Technical Report_ko_explained.md` (165 KB / 2,396 lines / 201 headers, 1.02× 원문)
+  - 비유 시스템: 도서관 사서(Attention), 종합병원 전문의 풀(MoE), 도서관 카탈로그 카드(MLA), 양방향 컨베이어(DualPipe), 시계바늘(Positional Encoding) 등
+  - 원문의 모든 절·소절·수식·표·이미지·참고문헌 보존, 풀이만 보강
+- **HTML 변환** (`md-to-html` 스킬 호출, Quarto):
+  - `*_ko_explained.html` 두 편 (2.4 MB / 4.7 MB) — self-contained, 이미지 base64 임베드, cosmo theme, KaTeX 수식
+- 파일들은 모두 `outputs/` (gitignored) 에 보존, git 노이즈 없음
+
+### 실측된 MCP 사용 패턴 (사용자가 향후 참고용으로 확인된 사실)
+- **submit_paper 입력**: `url` (arXiv·일반 URL, HTML 페이지는 chromium fallback 으로 PDF 변환) 또는 `file` (base64 PDF). HTML 로컬 파일은 직접 지원 없음 — URL 화 또는 PDF 선변환 필요.
+- **실측 처리 시간**:
+  - Attention Is All You Need (15p) ≈ 27분
+  - DeepSeek-V3 (50p / 72 sections) ≈ 60분
+  - 대부분 시간은 번역 단계 (config.json 의 `translate_to_korean=true` 일 때).
+- **MCP 서버 등록 (Claude Code)**: `claude mcp list` → `paperflow: http://localhost:8090/mcp/ (HTTP) - ✓ Connected`. 같은 세션에서 5개 tool 모두 직접 호출 확인됨 (`list_jobs`, `get_job_status`, `submit_paper`, `cancel_job`, `get_job_result`).
 
 ## 🧠 대화에만 있던 핵심 컨텍스트
 
@@ -210,20 +258,23 @@ claude mcp add --transport http paperflow http://localhost:8090/mcp/ \
 - Codex 리뷰 워크플로우 (5라운드, `===CODEX_FINAL_APPROVAL===` 토큰): 매우 효과적. critical 5개 + high 11개 + medium 다수 발견, 모두 진짜 버그/약점. 향후 다른 spec 작업 시 동일 패턴 권장.
 - subagent-driven-development 패턴 (implementer → spec reviewer → quality reviewer → fix → re-review) 도 효과적. fixture isolation 패턴 같은 미묘한 버그가 review 단계에서 잡힘.
 
-## ⚠️ 클리어 전 주의 (2026-05-24 19:47 KST 기준)
+## ⚠️ 클리어 전 주의 (2026-05-25 세션 종료 시점)
 
-- **커밋 안 됨**: 추가 코드 변경 0건. v1.1 작업물 모두 main 에 커밋 + push 완료 (`4ae6cb3` → `825d039`, 18 commits, origin 동기화). 미트래킹 2건은 이번 세션 무관 (이전부터 존재):
-  - `REPORT_EXPLAINER_BACKFILL_2026-02-24.md`
-  - `scripts/quality_baseline_report.py`
-  - `.claude-home/` 의 cache/log 잡음 — 무시 가능
+- **커밋 안 됨**: 이번 세션 **코드 변경 0줄** (MCP 서버는 이미 ship 됨). 새 산출물은 모두 `outputs/` (gitignored) 안:
+  - `outputs/Attention Is All You Need/Attention Is All You Need_ko_explained.md` + `.html`
+  - `outputs/DeepSeek-V3 Technical Report/DeepSeek-V3 Technical Report_ko_explained.md` + `.html`
+  - 영문/한국어 원본 md, paper_meta.json, images, json, pdf 등도 outputs/ 안
+  - 미트래킹 2건은 이전부터 존재 (이번 세션 무관): `REPORT_EXPLAINER_BACKFILL_2026-02-24.md`, `scripts/quality_baseline_report.py`
+  - `.claude-home/` cache/log 잡음 — 무시
+  - **unpushed commits: 0** (HEAD `3039ae2` origin/main 동기화)
 - **백그라운드**:
-  - **Docker 컨테이너 2개 실행 중** (26분 전 v1.1 env 로 재시작됨):
-    - `paperflow_viewer` (포트 8090→8000, MCP 활성, `MCP_REQUIRE_TRANSLATION=true` 적용)
-    - `paperflow_converter` (`PROCESS_TIMEOUT_SECONDS=7200` 적용)
+  - **Docker 컨테이너 2개 실행 중** (`Up 19 hours`):
+    - `paperflow_viewer` (포트 8090→8000, MCP 활성, `MCP_REQUIRE_TRANSLATION=true`)
+    - `paperflow_converter` (`PROCESS_TIMEOUT_SECONDS=7200`)
     - 그대로 두면 됨 — 다음 세션에서 그대로 사용 가능
-  - **tmux 윈도우**: `claude` (active), `codex` (idle, 4라운드 리뷰 후 정지). `tmux kill-window -t paperflow:codex` 또는 그대로 둬도 OK
-  - **백그라운드 Bash/Monitor task**: 모두 종료됨 (Monitor 5개, codex polling 4개)
-- **미완료 todo**: 없음. v1.1 Plan task 16/16 완료. Spec / Plan / Implementation / Final Review 모두 종결.
+    - 끄려면: `cd /media/restful3/data/workspace/paperflow && docker compose down`
+  - **백그라운드 Bash/Monitor task**: 모두 종료됨 (이번 세션의 Monitor `be2220758` 자연 종료)
+- **미완료 todo**: 없음. 이번 세션의 task #1\~#5 모두 completed (현재 task list 비어 있음).
 
 ## 📂 관련 파일
 

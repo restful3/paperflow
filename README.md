@@ -1,4 +1,4 @@
-# PaperFlow v2.7
+# PaperFlow v2.8
 
 <div align="center">
 
@@ -6,11 +6,12 @@
 ![Platform](https://img.shields.io/badge/Platform-Linux-lightgrey)
 ![GPU](https://img.shields.io/badge/GPU-CUDA%20Required-green)
 ![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-Enabled-purple)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-**GPU 가속 학술 논문 PDF → Markdown 변환 + AI 번역 + 웹 뷰어**
+**GPU 가속 학술 논문 PDF → Markdown 변환 + AI 번역 + 웹 뷰어 + MCP 자동화 서버**
 
-[개요](#-프로젝트-개요) | [파이프라인](#-처리-파이프라인) | [특징](#-주요-특징) | [시작하기](#-빠른-시작) | [아키텍처](#%EF%B8%8F-아키텍처) | [설정](#%EF%B8%8F-설정) | [문제해결](#-문제-해결)
+[개요](#-프로젝트-개요) | [파이프라인](#-처리-파이프라인) | [특징](#-주요-특징) | [MCP](#-mcp-서버) | [시작하기](#-빠른-시작) | [아키텍처](#%EF%B8%8F-아키텍처) | [설정](#%EF%B8%8F-설정) | [문제해결](#-문제-해결)
 
 </div>
 
@@ -18,29 +19,34 @@
 
 ## 프로젝트 개요
 
-PaperFlow는 학술 논문 PDF를 구조화된 Markdown으로 변환하고, AI로 메타데이터 추출 및 한국어 번역을 수행하는 로컬 자동화 시스템입니다. 웹 뷰어에서 클라이언트 사이드 렌더링(marked.js + KaTeX)으로 논문을 열람합니다.
+PaperFlow는 학술 논문 PDF와 논문 URL을 구조화된 Markdown으로 변환하고, AI로 메타데이터 추출 및 한국어 번역을 수행하는 로컬 자동화 시스템입니다. 웹 뷰어에서 클라이언트 사이드 렌더링(marked.js + KaTeX)으로 논문을 열람하고, MCP(Model Context Protocol) 서버를 통해 외부 에이전트가 논문 제출, 상태 조회, 결과 다운로드를 자동화할 수 있습니다.
 
 ### 핵심 컴포넌트
 
 ```mermaid
 graph LR
     A[PDF Files] -->|Watch Mode| B[Batch Processor]
+    M[MCP Client] -->|URL/File Submit| N[FastMCP Server]
+    N -->|Queue PDF| A
     B -->|marker-pdf<br/>or MinerU| C[Markdown]
     C -->|AI| D[Metadata + Web Search]
     D -->|AI| E[Korean Translation]
     E --> F[FastAPI Viewer]
     F -->|RAG Chatbot| G[User]
+    N -->|Job Status + Zip| M
 
     style B fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
     style D fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
     style E fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
     style F fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style N fill:#673AB7,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 | 컴포넌트 | 파일 | 역할 |
 |----------|------|------|
 | **Batch Processor** | `main_terminal.py` | PDF → MD → 메타데이터 추출 → 웹 검색 보강 → 한국어 번역 |
 | **Web Viewer** | `viewer/` | FastAPI + Alpine.js 뷰어 + RAG 챗봇 |
+| **MCP Server** | `viewer/app/routers/mcp_router.py`, `viewer/app/services/mcp_jobs.py` | 외부 클라이언트용 URL/PDF 제출, 비동기 작업 추적, zip 결과 다운로드 |
 
 ### 기술 스택
 
@@ -56,20 +62,37 @@ graph LR
 - **Alpine.js + TailwindCSS** - 경량 리액티브 프론트엔드 (CDN, 빌드 불필요)
 - **marked.js + KaTeX** - 클라이언트 사이드 Markdown + 수식 렌더링
 - **JWT** - HTTPOnly 쿠키 기반 인증
+- **FastMCP** - `/mcp` streamable HTTP 도구 서버
 
 **AI 기능**:
 - **RAG 챗봇** - 논문별 AI 챗봇 (BM25 검색 + OpenAI API + SSE 스트리밍)
 - **웹 검색 보강** - Brave Search로 RAG 컨텍스트 및 메타데이터 보강
 
-### v2.7 주요 변경사항
+### v2.8 주요 변경사항
 
-| 항목 | v2.6 | v2.7 (Current) |
+| 항목 | v2.7 | v2.8 (Current) |
+|------|------|----------------|
+| **MCP 서버** | - | **FastMCP 기반 `/mcp` 서버**: `submit_paper`, `get_job_status`, `get_job_result`, `cancel_job`, `list_jobs` |
+| **외부 제출** | 웹 업로드/`newones/` 감시 | **URL 또는 base64 PDF 제출**: arXiv/일반 URL PDF resolve, HTML fallback 지원 |
+| **작업 추적** | 처리 상태 파일 중심 | **`logs/mcp_jobs.json` JobRecord 인덱스**: downloading/queued/processing/complete/error/cancelled/stalled |
+| **결과 배포** | 웹 뷰어 열람 | **zip 다운로드 API**: PDF/번역 포함 여부 옵션, 이미지/메타데이터 포함 |
+| **운영 안정성** | 수동 확인 | **v1.1 reconcile**: 번역 누락/폴더 부재/partial output을 complete로 오판하지 않음 |
+| **장문 논문 처리** | 2400초 watch timeout | **7200초 timeout**: DeepSeek-V3 50p/72 sections 60분 E2E 검증 |
+| **보안** | JWT 웹 로그인 | **MCP Bearer 인증 + Origin allowlist**, JWT secret 강도 검증 |
+| **검증** | 수동/기능 테스트 | **MCP pytest 세트** + 품질 baseline 리포트 스크립트 |
+
+<details>
+<summary>v2.7 변경사항 (v2.6 대비)</summary>
+
+| 항목 | v2.6 | v2.7 |
 |------|------|----------------|
 | **마크다운 편집기** | - | **인라인 편집** (textarea + 실시간 프리뷰, Ctrl+S 저장, 타임스탬프 백업) |
 | **해설판 보기** | - | **Easy 토글** (`_ko_explained.md` / `_explained.md` 파일 지원) |
 | **Easy 버튼** | - | **3상태 UX**: 회색(비활성) → 검은색(활성화 가능) → 앰버(해설판 보기 중) |
 | **편집 백업** | - | **자동 백업**: 저장 시 `_backup_YYYYMMDD_HHMMSS.md` 생성 |
 | **RAG 캐시** | 수동 관리 | **편집 저장 시 자동 무효화** (chat_chunks.json 삭제) |
+
+</details>
 
 <details>
 <summary>v2.6 변경사항 (v2.5 대비)</summary>
@@ -246,6 +269,17 @@ flowchart TD
 - **토스트 알림**: 성공/에러/경고 자동 소멸 메시지
 - **Docker 최적화**: 경량 이미지 (python:3.12-slim), GPU 불필요
 
+### MCP Server
+
+- **5개 MCP 도구**: `submit_paper`, `get_job_status`, `get_job_result`, `cancel_job`, `list_jobs`
+- **URL/PDF 제출**: arXiv URL, 직접 PDF URL, 일반 HTML URL fallback, base64 PDF 업로드 지원
+- **즉시 반환**: URL 다운로드는 백그라운드 task로 처리하고 `job_id`를 먼저 반환
+- **상태 재조정**: 파일시스템과 `processing_status.json`을 검사해 queued/processing/complete/error/stalled를 갱신
+- **번역 완료 요구**: `MCP_REQUIRE_TRANSLATION=true`이면 `_ko.md` 누락 결과를 error로 재분류
+- **안전한 취소/정리**: smart-renamed outputs 폴더는 정리하되 archives는 삭제하지 않음
+- **zip export**: `include_pdf`, `include_translation` 옵션으로 결과 패키징
+- **보안 기본값**: Bearer token, Origin allowlist, opt-in mount (`MCP_API_KEY` + `MCP_PUBLIC_BASE_URL`)
+
 ---
 
 ## RAG 챗봇 아키텍처
@@ -311,6 +345,62 @@ outputs/Paper Title/
 
 ---
 
+## MCP 서버
+
+MCP 서버는 웹 뷰어 프로세스에 opt-in으로 마운트됩니다. `.env`에 32자 이상 `MCP_API_KEY`와 `MCP_PUBLIC_BASE_URL`을 설정하면 `/mcp`와 `/api/mcp/jobs/{job_id}/zip`이 활성화됩니다.
+
+### 도구
+
+| Tool | 입력 | 설명 |
+|------|------|------|
+| `submit_paper` | `input_type`, `source`, `file_base64?`, `force_reprocess?` | URL 또는 PDF 파일을 제출하고 `job_id`를 즉시 반환 |
+| `get_job_status` | `job_id` | 현재 상태, stage, percent, error 조회 |
+| `get_job_result` | `job_id`, `include_pdf`, `include_translation` | 완료된 작업의 논문 메타데이터와 zip 다운로드 URL 반환 |
+| `cancel_job` | `job_id`, `delete_file` | 작업 취소, queue 파일/partial outputs 정리 |
+| `list_jobs` | `limit`, `status?` | 최근 작업 목록 조회 |
+
+### 상태 모델
+
+| Status | 의미 |
+|--------|------|
+| `downloading` | URL을 PDF로 resolve/download 중 |
+| `queued` | `newones/`에 PDF가 게시되어 converter 감시 대상 |
+| `processing` | converter가 현재 파일을 처리 중 |
+| `complete` | outputs 또는 archives에서 결과 확인 완료 |
+| `error` | 다운로드/변환/번역/검증 실패 |
+| `cancelled` | 사용자가 취소 |
+| `stalled` | converter가 해당 작업을 오래 떠난 상태 |
+
+### HTTP 엔드포인트
+
+```bash
+# MCP streamable HTTP endpoint
+curl -H "Authorization: Bearer $MCP_API_KEY" http://localhost:8090/mcp/
+
+# 완료된 작업 zip 다운로드
+curl -L \
+  -H "Authorization: Bearer $MCP_API_KEY" \
+  "http://localhost:8090/api/mcp/jobs/$JOB_ID/zip?include_pdf=false&include_translation=true" \
+  -o paperflow-result.zip
+```
+
+### Claude Code 등록 예시
+
+```bash
+MCP_KEY=$(grep ^MCP_API_KEY= .env | cut -d= -f2)
+claude mcp add --transport http paperflow http://localhost:8090/mcp/ \
+  --header "Authorization: Bearer $MCP_KEY"
+claude mcp list
+```
+
+### v1.1 E2E 검증 기록
+
+- arXiv `1706.03762`(Attention Is All You Need): full pipeline + cache hit 검증
+- arXiv `2412.19437`(DeepSeek-V3 Technical Report): 50p/72 sections, 약 60분 처리, `_ko.md` 162KB 포함 zip export 검증
+- stale complete, translation missing, deleted folder, cancel cleanup, zip re-reconcile 케이스를 pytest와 실전 처리로 확인
+
+---
+
 ## 요구사항
 
 ### 필수
@@ -346,6 +436,9 @@ pydantic-settings>=2.0.0 # 환경변수 관리
 sse-starlette==2.1.0     # SSE 스트리밍 (챗봇)
 openai>=1.0.0            # RAG 챗봇
 httpx>=0.27.0            # Brave Search API
+mcp>=1.27,<2             # MCP 도구 서버
+pytest>=8                # viewer/MCP 테스트
+pytest-asyncio>=0.23
 ```
 
 ---
@@ -363,6 +456,9 @@ cp .env.example .env
 vi .env
 # PDF_CONVERTER=marker  (기본값, 빠른 변환)
 # PDF_CONVERTER=mineru  (수식/테이블 인식 강화)
+# JWT_SECRET_KEY=<32자 이상 난수>
+# MCP_API_KEY=<32자 이상 난수>              # MCP 사용 시
+# MCP_PUBLIC_BASE_URL=http://localhost:8090 # MCP 사용 시
 
 # 빌드 및 실행 (선택한 엔진만 설치됨)
 docker compose build && docker compose up -d
@@ -371,6 +467,9 @@ docker compose build && docker compose up -d
 cp your_paper.pdf newones/
 
 # 브라우저에서 http://localhost:8090 접속
+
+# MCP 사용 시
+curl -H "Authorization: Bearer $MCP_API_KEY" http://localhost:8090/mcp/
 ```
 
 > **엔진 변경 시**: `.env`에서 `PDF_CONVERTER` 값을 변경한 뒤 `docker compose build && docker compose up -d`로 재빌드가 필요합니다. Docker 빌드 시 선택된 엔진의 패키지만 설치되므로 이미지 크기가 최적화됩니다.
@@ -391,6 +490,18 @@ uvicorn app.main:app --reload --port 8090   # 터미널 2
 
 # PDF 추가
 cp your_paper.pdf newones/    # 터미널 3
+```
+
+### 3. 품질/회귀 확인
+
+```bash
+# Viewer + MCP 테스트
+cd viewer
+pytest
+
+# 처리 결과 품질 baseline 리포트
+cd ..
+python scripts/quality_baseline_report.py --outputs outputs --save logs/quality_baseline_latest.json
 ```
 
 ### 출력 구조
@@ -521,7 +632,18 @@ BRAVE_SEARCH_API_KEY=your-brave-api-key
 # 로그인 인증
 LOGIN_ID=admin
 LOGIN_PASSWORD=password
-JWT_SECRET_KEY=your-random-secret-key
+JWT_SECRET_KEY=replace-with-strong-random-secret-at-least-32-chars
+COOKIE_SECURE=false
+
+# MCP 서버 (선택, 둘 다 설정해야 활성화)
+MCP_API_KEY=replace-with-random-token-at-least-32-chars
+MCP_PUBLIC_BASE_URL=http://localhost:8090
+MCP_JOB_TTL_DAYS=7
+MCP_ALLOWED_ORIGINS=                 # 비우면 base URL + localhost/127.0.0.1 허용
+MCP_REQUIRE_TRANSLATION=true         # true면 _ko.md 누락 결과를 error로 처리
+
+# Converter watch timeout (장문 논문 번역 보호)
+PROCESS_TIMEOUT_SECONDS=7200
 ```
 
 ### prompt.md (선택)
@@ -538,6 +660,19 @@ JWT_SECRET_KEY=your-random-secret-key
 graph TB
     subgraph "Input"
         PDF[newones/<br/>PDF Files]
+    end
+
+    subgraph "External Automation"
+        Agent[MCP Client / Agent]
+        MCP[FastMCP Server<br/>/mcp]
+        Jobs[logs/mcp_jobs.json<br/>JobRecord Index]
+        Zip[Zip Download<br/>/api/mcp/jobs/:id/zip]
+
+        Agent -->|submit_paper| MCP
+        MCP --> Jobs
+        MCP -->|publish PDF| PDF
+        MCP --> Zip
+        Zip --> Agent
     end
 
     subgraph "Batch Processor (main_terminal.py)"
@@ -571,6 +706,8 @@ graph TB
 
     PDF -->|Auto-detect| Watch
     S3 -->|Save| Outputs
+    Outputs -->|reconcile/result| MCP
+    Archives -->|reconcile/result| MCP
     Outputs <-->|Manage| List
     Archives <-->|Restore| List
     Upload -->|Save| PDF
@@ -580,6 +717,7 @@ graph TB
     style S3 fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
     style Auth fill:#FF9800,stroke:#333,stroke-width:2px
     style Chat fill:#00BCD4,stroke:#333,stroke-width:2px,color:#fff
+    style MCP fill:#673AB7,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ### GPU 메모리 관리
@@ -633,6 +771,18 @@ sequenceDiagram
 | `POST` | `/api/upload` | PDF 업로드 |
 | `GET` | `/api/stats` | 논문 통계 |
 | `GET` | `/api/logs/latest` | 최신 로그 |
+| `ANY` | `/mcp/` | FastMCP streamable HTTP endpoint (Bearer 인증) |
+| `GET` | `/api/mcp/jobs/{job_id}/zip` | MCP 작업 결과 zip 다운로드 |
+
+### MCP Tool API
+
+| Tool | 반환 핵심 필드 |
+|------|---------------|
+| `submit_paper` | `job_id`, `status`, `cached`, `expected_filename` |
+| `get_job_status` | `status`, `stage`, `percent`, `error`, `expires_at` |
+| `get_job_result` | `paper_name`, `paper_meta`, `files`, `download_url` |
+| `cancel_job` | `job_id`, `status`, `cleanup` |
+| `list_jobs` | `jobs[]` |
 
 ---
 
@@ -650,6 +800,7 @@ PaperFlow/
 ├── run_batch.sh             # 일회성 배치 처리
 ├── run_batch_watch.sh       # Watch 모드 (연속 처리)
 ├── setup_venv.sh            # 설치 스크립트
+├── REPORT_EXPLAINER_BACKFILL_2026-02-24.md # 해설판 backfill 실행 기록
 │
 ├── viewer/                  # Web Viewer (FastAPI)
 │   ├── app/
@@ -659,12 +810,15 @@ PaperFlow/
 │   │   ├── dependencies.py  #   인증 의존성 주입
 │   │   ├── routers/
 │   │   │   ├── api.py       #   JSON API (챗봇, 검색 보강 포함)
-│   │   │   └── pages.py     #   HTML 페이지 라우트
+│   │   │   ├── pages.py     #   HTML 페이지 라우트
+│   │   │   └── mcp_router.py#   FastMCP tools + zip endpoint
 │   │   ├── services/
 │   │   │   ├── papers.py    #   논문 관리 비즈니스 로직
 │   │   │   ├── rag.py       #   RAG 파이프라인 (청킹/검색/생성/웹검색)
 │   │   │   ├── chat.py      #   챗봇 대화 기록 관리
-│   │   │   └── web_search.py#   Brave Search 메타데이터 보강
+│   │   │   ├── web_search.py#   Brave Search 메타데이터 보강
+│   │   │   ├── mcp_jobs.py  #   MCP 작업 인덱스/submit/reconcile/cancel
+│   │   │   └── mcp_zip.py   #   MCP zip stream builder
 │   │   ├── models/
 │   │   │   └── chat.py      #   챗봇 데이터 모델 (Pydantic)
 │   │   └── templates/       #   Jinja2 HTML 템플릿
@@ -672,8 +826,16 @@ PaperFlow/
 │   │       ├── login.html   #     로그인 페이지
 │   │       ├── papers.html  #     논문 목록 (검색/업로드/로그)
 │   │       └── viewer.html  #     논문 뷰어 (MD/PDF/챗봇)
+│   ├── tests/               #   viewer/API/MCP pytest
+│   ├── pytest.ini           #   pytest-asyncio 설정
 │   ├── Dockerfile           #   python:3.12-slim
-│   └── requirements.txt     #   FastAPI, JWT, OpenAI, httpx
+│   └── requirements.txt     #   FastAPI, JWT, OpenAI, httpx, mcp
+│
+├── scripts/
+│   ├── backfill_doc_type.py
+│   ├── fix_ocr_math_batch.py
+│   ├── migrate_sidecars_to_meta.py
+│   └── quality_baseline_report.py # outputs 품질 baseline 집계
 │
 ├── Dockerfile               # Processor Docker 이미지 (CUDA)
 ├── docker-compose.yml       # 서비스 구성 (converter + viewer)
@@ -701,6 +863,7 @@ graph LR
     Vols[Shared Volumes<br/>newones/ outputs/ archives/ logs/]
     API[OpenAI 호환 API]
     Brave[Brave Search API]
+    Agent[MCP Client]
 
     Conv -.->|API 호출| API
     View -.->|RAG + 검색| API
@@ -709,23 +872,26 @@ graph LR
     View <--> Vols
 
     Browser[Browser] -->|http://localhost:8090| View
+    Agent -->|Bearer /mcp| View
 
     style Conv fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
     style View fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style Agent fill:#673AB7,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 | 서비스 | 컨테이너 | 포트 | GPU | 역할 |
 |--------|----------|------|-----|------|
 | `paperflow-converter` | `paperflow_converter` | - | 필수 | PDF 변환 (Watch 모드, marker-pdf 또는 MinerU) |
-| `paperflow-viewer` | `paperflow_viewer` | 8090 | 불필요 | 웹 뷰어 (FastAPI) |
+| `paperflow-viewer` | `paperflow_viewer` | 8090 | 불필요 | 웹 뷰어 + MCP 서버 (FastAPI/FastMCP) |
 
-> Converter 이미지는 `.env`의 `PDF_CONVERTER` 값에 따라 빌드됩니다. `docker compose build` 시 `--build-arg PDF_CONVERTER=mineru`가 자동 전달되어 선택한 엔진의 패키지만 설치됩니다.
+> Converter 이미지는 `.env`의 `PDF_CONVERTER` 값에 따라 빌드됩니다. `docker compose build` 시 `--build-arg PDF_CONVERTER=mineru`가 자동 전달되어 선택한 엔진의 패키지만 설치됩니다. Viewer의 MCP 서버는 `MCP_API_KEY`와 `MCP_PUBLIC_BASE_URL`이 모두 설정될 때만 마운트됩니다.
 
 ### 실행
 
 ```bash
 # 1. .env 파일 설정 (위 "빠른 시작" 참조)
 #    PDF_CONVERTER=marker 또는 PDF_CONVERTER=mineru
+#    MCP_API_KEY / MCP_PUBLIC_BASE_URL 설정 시 MCP 활성화
 
 # 2. Docker Compose 빌드 및 실행 (선택한 엔진만 설치)
 docker compose build && docker compose up -d
@@ -752,6 +918,17 @@ docker compose build && docker compose up -d
 | `logs/` | `/app/logs`, `/data/logs` | 처리 로그 |
 | `model_cache/` | `/root/.cache` (converter) | marker-pdf / MinerU 모델 캐시 |
 
+### 주요 Docker 환경변수
+
+| 변수 | 기본값 | 서비스 | 설명 |
+|------|--------|--------|------|
+| `PDF_CONVERTER` | `marker` | converter build | `marker` 또는 `mineru` |
+| `PROCESS_TIMEOUT_SECONDS` | `7200` | converter | watch 처리 timeout |
+| `MCP_API_KEY` | empty | viewer | 32자 이상이면 MCP 활성화 후보 |
+| `MCP_PUBLIC_BASE_URL` | empty | viewer | MCP zip URL 생성용 base URL, MCP 활성화 시 필수 |
+| `MCP_ALLOWED_ORIGINS` | empty | viewer | CSV Origin allowlist, empty면 base URL + localhost |
+| `MCP_REQUIRE_TRANSLATION` | `true` | viewer | `_ko.md` 누락 완료 결과를 error로 재분류 |
+
 ---
 
 ## 문제 해결
@@ -771,7 +948,7 @@ kill <PID>
 
 ```bash
 # 실시간 로그 확인
-docker compose logs -f batch
+docker compose logs -f paperflow-converter
 
 # 또는 로그 파일 직접 확인
 tail -f logs/paperflow_*.log
@@ -829,6 +1006,40 @@ docker compose logs -f paperflow-converter
 2. `OPENAI_API_KEY` 설정 확인
 3. 로그 확인: `grep "Translation" logs/paperflow_*.log`
 
+### MCP 서버가 보이지 않음
+
+1. `.env`에 `MCP_API_KEY`가 32자 이상인지 확인
+2. `.env`에 `MCP_PUBLIC_BASE_URL=http://localhost:8090`이 있는지 확인
+3. 컨테이너 재시작: `docker compose up -d --force-recreate paperflow-viewer`
+4. 인증 확인:
+
+```bash
+curl -i -H "Authorization: Bearer $MCP_API_KEY" http://localhost:8090/mcp/
+```
+
+### MCP 작업이 complete인데 zip이 404
+
+v1.1부터 zip endpoint가 다운로드 직전에 `reconcile_job()`을 다시 호출합니다. `_ko.md`가 없거나 결과 폴더가 사라진 stale job은 `error`로 재분류되고 404가 반환됩니다.
+
+```bash
+# 상태와 에러 확인
+python -m json.tool logs/mcp_jobs.json | less
+
+# partial outputs 정리 후 재처리
+# MCP tool: cancel_job(job_id, delete_file=true)
+# MCP tool: submit_paper(..., force_reprocess=true)
+```
+
+### 테스트 실패
+
+```bash
+cd viewer
+pytest -q
+
+# MCP 관련 테스트만
+pytest -q tests/test_mcp_jobs.py tests/test_mcp_router.py tests/test_mcp_zip.py tests/test_config_mcp.py
+```
+
 ---
 
 ## 라이선스
@@ -847,6 +1058,7 @@ MIT License
 - [marked.js](https://marked.js.org/) - Markdown 렌더링
 - [KaTeX](https://katex.org/) - 수식 렌더링
 - [Brave Search API](https://brave.com/search/api/) - 웹 검색
+- [Model Context Protocol](https://modelcontextprotocol.io/) - 외부 도구 자동화 인터페이스
 
 ---
 
@@ -854,6 +1066,6 @@ MIT License
 
 **Made with care for researchers and paper readers**
 
-[맨 위로](#paperflow-v27)
+[맨 위로](#paperflow-v28)
 
 </div>
