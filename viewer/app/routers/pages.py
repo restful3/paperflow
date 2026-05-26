@@ -23,14 +23,14 @@ async def index(request: Request, user: str | None = Depends(get_current_user_pa
 async def login_page(request: Request, user: str | None = Depends(get_current_user_page)):
     if user:
         return RedirectResponse("/papers", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="login.html", context={})
 
 
 @router.get("/papers", response_class=HTMLResponse)
 async def papers_page(request: Request, user: str | None = Depends(get_current_user_page)):
     if not user:
         return RedirectResponse("/login", status_code=302)
-    return templates.TemplateResponse("papers.html", {"request": request, "username": user})
+    return templates.TemplateResponse(request=request, name="papers.html", context={"username": user})
 
 
 @router.get("/viewer/{paper_name:path}", response_class=HTMLResponse)
@@ -75,8 +75,7 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     all_progress = paper_svc.get_all_progress()
     server_progress = all_progress.get(name, 0)
 
-    return templates.TemplateResponse("viewer.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="viewer.html", context={
         "paper_name": name,
         "paper_name_encoded": quote(name, safe=""),
         "paper_title": paper_title,

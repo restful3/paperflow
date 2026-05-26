@@ -81,6 +81,8 @@ graph LR
 | **보안** | JWT 웹 로그인 | **MCP Bearer 인증 + Origin allowlist**, JWT secret 강도 검증 |
 | **검증** | 수동/기능 테스트 | **MCP pytest 세트** + 품질 baseline 리포트 스크립트 |
 
+> **하우스키핑**: `viewer/app/routers/pages.py`의 `TemplateResponse` 호출을 Starlette 최신 시그니처(`TemplateResponse(request=request, name=..., context=...)`)로 마이그레이션. 동작은 동일하며 향후 Starlette 버전의 deprecation 경고를 사전 차단.
+
 <details>
 <summary>v2.7 변경사항 (v2.6 대비)</summary>
 
@@ -383,6 +385,28 @@ curl -L \
   "http://localhost:8090/api/mcp/jobs/$JOB_ID/zip?include_pdf=false&include_translation=true" \
   -o paperflow-result.zip
 ```
+
+### URL 제출 워크플로우
+
+블로그 / 일반 웹페이지 URL을 제출할 때 권장 절차:
+
+1. `submit_paper(input_type="url", source="https://...")` 호출 → `job_id` + `expected_filename` 즉시 반환, status는 `downloading`
+2. **3\~10초 대기 후** `get_job_status` 폴링 — 헤드리스 Chrome으로 URL → PDF 캡처 중이라 즉시 폴링하면 `.part` 파일만 존재하는 시점에 reconcile이 잘못 `error: "file disappeared from queue with no output"`로 마킹할 수 있음
+3. status가 `queued` → `processing` → `complete`로 전이될 때까지 폴링 (수십 초\~수 분, 컨버터 큐 상태에 따라 달라짐)
+4. 완료 후 `get_job_result(job_id)` 호출 → 메타데이터 + zip 다운로드 URL 수신
+
+```bash
+# 예: blog.jupyter.org 글 제출
+# submit_paper → {"job_id": "f99e98d0-...", "status": "downloading", "expected_filename": "pfmcp-f99e98d0f309-blog.jupyter.org.pdf"}
+sleep 8  # download가 newones/에 published될 때까지 대기
+# get_job_status → status: "queued"
+# (컨버터 큐 비면 자동 픽업 → "processing" → "complete")
+```
+
+지원 URL 유형:
+- **arXiv / springer / nature 등 학술 호스트**: `_site_transform_pdf_urls`로 직접 PDF URL 생성
+- **DOI 링크**: redirect resolve → 사이트 변환 시도
+- **일반 HTML 페이지**: 헤드리스 Chromium `--print-to-pdf` 캡처 (`html_fallback`), 봇 차단/에러 페이지 자동 감지하여 거부
 
 ### Claude Code 등록 예시
 
@@ -1005,6 +1029,49 @@ docker compose logs -f paperflow-converter
 1. `config.json`에서 `translate_to_korean: true` 확인
 2. `OPENAI_API_KEY` 설정 확인
 3. 로그 확인: `grep "Translation" logs/paperflow_*.log`
+
+### cli-proxy-api / 번역 API timeout 진단
+
+`OPENAI_BASE_URL`이 `cli-proxy-api` 같은 로컬 라우팅 프록시를 가리킬 때, **업스트림 모델 서비스가 간헐적으로 hang**하면 paperflow 컨버터에서 다음 증상이 나타남:
+
+- 단계가 `Translating to Korean (N/M, %)`에서 멈춘 채 진행률 갱신 안 됨
+- 번역 로그에 `Calling API... (attempt 1/3, timeout=300s)`만 남고 응답 안 옴
+- 짧은 prompt(\~20자)인데도 응답까지 정확히 5분(`5m0s`) 걸림
+
+**진단 절차:**
+
+```bash
+# 1) cli-proxy-api 컨테이너 alive 여부
+docker ps | grep cli-proxy-api
+
+# 2) 모델 목록 응답 시간 (정상이면 ms 단위)
+source .env
+curl -s -m 5 -H "Authorization: Bearer $OPENAI_API_KEY" \
+  "$OPENAI_BASE_URL/models" -w "\nHTTP=%{http_code} time=%{time_total}s\n" | tail -3
+
+# 3) 짧은 chat completion 호출 (반복 5\~10회, 5m0s 패턴 있는지 확인)
+for i in 1 2 3 4 5; do
+  curl -s -m 90 -o /dev/null -w "Call $i: HTTP=%{http_code} time=%{time_total}s\n" \
+    -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+    "$OPENAI_BASE_URL/chat/completions" \
+    -d '{"model":"'$TRANSLATION_MODEL'","messages":[{"role":"user","content":"Reply OK."}],"max_tokens":10}'
+done
+
+# 4) cli-proxy-api 자체 로그에서 5m0s / 500 패턴 검색
+docker logs --tail=200 cli-proxy-api 2>&1 | grep -E "(5m0s|1m0s|500 \|)"
+```
+
+**해석:**
+
+- `time=5m0s` (200 또는 500) 응답이 반복적으로 찍히면 → cli-proxy-api 5분 cutoff에 걸린 hang. 업스트림 라우팅(모델 백엔드) 문제
+- 첫 1\~2회만 90초 timeout이고 이후 정상 → 프록시 워밍업(인증/토큰 갱신) 슬로우 스타트. 무시 가능
+- 모든 호출이 정상이면 → 번역 모델 자체보다는 paperflow 컨버터 측 timeout 설정 점검
+
+**대응:**
+
+- 라우팅 프록시 재로그인 + 컨테이너 재시작
+- `.env`의 `TRANSLATION_MODEL`을 같은 프록시에서 더 안정적인 모델로 교체
+- 일시적 우회: `config.json`의 `processing_pipeline.translate_to_korean: false`로 한국어 번역 단계만 비활성화 (영어 MD까지는 정상 생성)
 
 ### MCP 서버가 보이지 않음
 
