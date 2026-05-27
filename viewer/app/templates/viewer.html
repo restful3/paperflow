@@ -5,6 +5,9 @@
 {% block head %}
 <!-- Marked.js for markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<!-- Syntax highlighting for fenced code blocks -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
 <!-- KaTeX for math rendering -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -36,14 +39,14 @@
   .markdown-container h3 { font-size: calc(1.25rem * var(--font-scale)); }
   .markdown-container p { margin-bottom: 1rem; line-height: 1.6; font-size: calc(1rem * var(--font-scale)); }
   .markdown-container pre {
-    background-color: #f3f4f6;
+    background-color: #0d1117;
     padding: 1rem;
     border-radius: 0.5rem;
     overflow-x: auto;
     margin-bottom: 1rem;
   }
   .markdown-container.dark pre {
-    background-color: #1e293b;
+    background-color: #0d1117;
   }
   .markdown-container code {
     background-color: #f3f4f6;
@@ -56,6 +59,10 @@
   }
   .markdown-container pre code {
     background-color: transparent;
+    padding: 0;
+  }
+  .markdown-container pre code.hljs {
+    background: transparent;
     padding: 0;
   }
   .markdown-container a { color: #3b82f6; text-decoration: underline; }
@@ -1705,6 +1712,15 @@ function viewerApp() {
       return html;
     },
 
+    highlightCodeBlocks(root) {
+      if (!window.hljs) return;
+      const scope = root || document;
+      scope.querySelectorAll('.markdown-container pre code').forEach((block) => {
+        if (block.dataset.highlighted === 'yes') return;
+        window.hljs.highlightElement(block);
+      });
+    },
+
     async loadMdForCurrentLang() {
       const wantKo = this.$store.lang.ko;
 
@@ -1823,6 +1839,7 @@ function viewerApp() {
           this[contentMap[type] || 'mdEnContent'] = html;
           // Extract TOC items, setup scroll spy, restore scroll position
           this.$nextTick(() => {
+            this.highlightCodeBlocks();
             this.extractTocItems();
             this.setupTocObserver();
             this.restoreScrollPosition('md');
@@ -2233,7 +2250,11 @@ function viewerApp() {
       if (cacheEmpty) {
         const mdType = wasType === 'ko' ? 'md-ko' : 'md-en';
         this.loadMarkdown(mdType).then(() => {
-          this.$nextTick(() => { this.extractTocItems(); this.setupTocObserver(); });
+          this.$nextTick(() => {
+            this.highlightCodeBlocks();
+            this.extractTocItems();
+            this.setupTocObserver();
+          });
         });
       }
     },
@@ -2267,6 +2288,7 @@ function viewerApp() {
       let html = marked.parse(safeText);
       html = this.restoreMath(html, placeholders);
       this.editPreviewHtml = html;
+      this.$nextTick(() => this.highlightCodeBlocks());
     },
 
     async saveEdit() {

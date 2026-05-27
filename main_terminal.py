@@ -112,7 +112,7 @@ def _find_source_url_sidecar(pdf_path):
 
 
 class _SimpleHTMLTextExtractor(HTMLParser):
-    """Very lightweight HTML → text extractor with basic block separation."""
+    """Very lightweight HTML → Markdown extractor with basic block separation."""
 
     BLOCK_TAGS = {"p", "div", "section", "article", "main", "h1", "h2", "h3", "h4", "h5", "h6", "li", "pre", "blockquote"}
     SKIP_TAGS = {"script", "style", "noscript", "svg", "nav", "footer", "header", "aside"}
@@ -121,23 +121,53 @@ class _SimpleHTMLTextExtractor(HTMLParser):
         super().__init__()
         self.parts = []
         self._skip_depth = 0
+        self._pre_depth = 0
+        self._inline_code_depth = 0
 
     def handle_starttag(self, tag, attrs):
         t = (tag or "").lower()
         if t in self.SKIP_TAGS:
             self._skip_depth += 1
-        if self._skip_depth == 0 and t in self.BLOCK_TAGS:
+        if self._skip_depth > 0:
+            return
+        if t == "pre":
+            self._pre_depth += 1
+            self.parts.append("\n\n```\n")
+        elif t == "code":
+            if self._pre_depth == 0:
+                self._inline_code_depth += 1
+                self.parts.append("`")
+        elif re.fullmatch(r"h[1-6]", t):
+            self.parts.append("\n\n" + ("#" * int(t[1])) + " ")
+        elif t == "li":
+            self.parts.append("\n- ")
+        elif t in self.BLOCK_TAGS:
             self.parts.append("\n\n")
 
     def handle_endtag(self, tag):
         t = (tag or "").lower()
         if t in self.SKIP_TAGS and self._skip_depth > 0:
             self._skip_depth -= 1
-        if self._skip_depth == 0 and t in self.BLOCK_TAGS:
+            return
+        if self._skip_depth > 0:
+            return
+        if t == "pre" and self._pre_depth > 0:
+            self._pre_depth -= 1
+            self.parts.append("\n```\n")
+        elif t == "code" and self._pre_depth == 0 and self._inline_code_depth > 0:
+            self._inline_code_depth -= 1
+            self.parts.append("`")
+        elif t in self.BLOCK_TAGS:
             self.parts.append("\n")
 
     def handle_data(self, data):
         if self._skip_depth > 0:
+            return
+        if self._pre_depth > 0:
+            self.parts.append(data or "")
+            return
+        if self._inline_code_depth > 0:
+            self.parts.append((data or "").strip())
             return
         s = (data or "").strip()
         if not s:
@@ -147,7 +177,12 @@ class _SimpleHTMLTextExtractor(HTMLParser):
     def get_text(self):
         txt = "".join(self.parts)
         txt = re.sub(r"\n{3,}", "\n\n", txt)
-        txt = re.sub(r"[ \t]{2,}", " ", txt)
+        segments = re.split(r'(```[\s\S]*?```)', txt)
+        for idx, segment in enumerate(segments):
+            if segment.startswith("```"):
+                continue
+            segments[idx] = re.sub(r"[ \t]{2,}", " ", segment)
+        txt = "".join(segments)
         return txt.strip()
 
 
@@ -181,6 +216,7 @@ def _url_to_markdown_html_first(source_url, output_dir, base_name, timeout=20):
         # Build simple markdown body
         title_m = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
         title = re.sub(r"\s+", " ", title_m.group(1)).strip() if title_m else base_name
+        text, fence_report = normalize_code_fence_languages(text)
         md_path = os.path.join(output_dir, f"{base_name}.md")
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(f"# {title}\n\n")
@@ -190,6 +226,7 @@ def _url_to_markdown_html_first(source_url, output_dir, base_name, timeout=20):
 
         info["ok"] = True
         info["chars"] = len(text)
+        info["code_fence_normalization"] = fence_report
         return md_path, info
     except Exception as e:
         info["reason"] = str(e)
@@ -217,6 +254,7 @@ def _url_to_markdown_browser_fallback(source_url, output_dir, base_name, timeout
         text = re.sub(r"^URL Source:\s*.*?\n+", "", text, flags=re.I)
         text = re.sub(r"^Markdown Content:\s*\n+", "", text, flags=re.I)
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
+        text, fence_report = normalize_code_fence_languages(text)
 
         if len(text) < 1200:
             info["reason"] = f"too-short fallback text ({len(text)} chars)"
@@ -232,6 +270,7 @@ def _url_to_markdown_browser_fallback(source_url, output_dir, base_name, timeout
         info["ok"] = True
         info["chars"] = len(text)
         info["mirror"] = "r.jina.ai"
+        info["code_fence_normalization"] = fence_report
         return md_path, info
     except Exception as e:
         info["reason"] = str(e)
@@ -455,6 +494,143 @@ def fix_author_code_blocks(markdown_text):
     return fixed_text
 
 
+_CODE_LANG_ALIASES = {
+    "sh": "bash",
+    "shell": "bash",
+    "zsh": "bash",
+    "py": "python",
+    "python3": "python",
+    "js": "javascript",
+    "ts": "typescript",
+    "yml": "yaml",
+}
+
+
+def _normalize_code_language(lang):
+    lang = (lang or "").strip().lower()
+    return _CODE_LANG_ALIASES.get(lang, lang)
+
+
+def _infer_code_language(block_text):
+    """Infer a useful Markdown code fence language from block content."""
+    import json as _json
+
+    raw_lines = block_text.splitlines()
+    lines = [ln.rstrip() for ln in raw_lines]
+    nonempty = [ln.strip() for ln in lines if ln.strip()]
+    if not nonempty:
+        return "", block_text, False
+
+    first = nonempty[0].strip().strip('"\'`').lower()
+    known_langs = {
+        "bash", "sh", "shell", "python", "python3", "py", "javascript", "js",
+        "typescript", "ts", "json", "yaml", "yml", "sql", "html", "xml",
+        "go", "golang", "java", "cpp", "c++", "c", "rust", "toml",
+        "markdown", "md", "text",
+    }
+
+    removed_lang_line = False
+    if first in known_langs and len(nonempty) > 1:
+        # marker/LLM outputs occasionally place a quoted language marker as
+        # the first content line of an otherwise unlabeled fence.
+        for idx, ln in enumerate(lines):
+            if ln.strip():
+                del lines[idx]
+                removed_lang_line = True
+                break
+        block_text = "\n".join(lines)
+        return _normalize_code_language(first), block_text, removed_lang_line
+
+    sample = "\n".join(nonempty[:40])
+
+    if sample.startswith(("{", "[")):
+        try:
+            _json.loads(sample)
+            return "json", block_text, False
+        except Exception:
+            pass
+
+    if re.search(r'^\s*(def|class|async\s+def)\s+\w+|^\s*(from|import)\s+\w+|if\s+__name__\s*==', sample, re.M):
+        return "python", block_text, False
+    if re.search(r'^\s*package\s+main\b|^\s*func\s+\w+\s*\(', sample, re.M):
+        return "go", block_text, False
+    if re.search(r'^\s*(const|let|var)\s+\w+\s*=|^\s*(export|import)\s+|^\s*interface\s+\w+|=>', sample, re.M):
+        return "typescript", block_text, False
+    if re.search(r'^\s*(SELECT|WITH|INSERT|UPDATE|DELETE)\b|^\s*FROM\s+\w+', sample, re.I | re.M):
+        return "sql", block_text, False
+    if re.search(r'^\s*(curl|wget|pip|uv|npm|pnpm|yarn|docker|git|python|pytest)\b|\$\s+\w+', sample, re.M):
+        return "bash", block_text, False
+    if re.search(r'^\s*#include\s+<|^\s*(int|void|auto)\s+\w+\s*\(', sample, re.M):
+        return "cpp", block_text, False
+    if re.search(r'<\/?[A-Za-z][^>]*>', sample):
+        return "html", block_text, False
+    if re.search(r'^\s*[A-Za-z0-9_.-]+:\s+.+$', sample, re.M) and not re.search(r'[;{}]', sample):
+        return "yaml", block_text, False
+    if re.search(r'[├└│─→↓←↑]|^\s*\[[^\]]+\]\s+', sample, re.M):
+        return "text", block_text, False
+
+    return "", block_text, False
+
+
+def normalize_code_fence_languages(markdown_text):
+    """Normalize fenced code blocks and add language hints where obvious.
+
+    Returns:
+        (normalized_markdown, report_dict)
+    """
+    lines = markdown_text.splitlines()
+    out = []
+    report = {
+        "normalized_tilde_fences": 0,
+        "inferred_code_languages": 0,
+        "removed_stray_language_lines": 0,
+        "unlabeled_code_fences": 0,
+    }
+    i = 0
+    while i < len(lines):
+        m = re.match(r'^(\s*)(`{3,}|~{3,})([^`]*)$', lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+
+        indent, fence, info = m.group(1), m.group(2), m.group(3).strip()
+        if fence.startswith("~"):
+            report["normalized_tilde_fences"] += 1
+
+        block_lines = []
+        i += 1
+        closed = False
+        while i < len(lines):
+            if re.match(r'^\s*(`{3,}|~{3,})\s*$', lines[i]):
+                closed = True
+                i += 1
+                break
+            block_lines.append(lines[i])
+            i += 1
+
+        block_text = "\n".join(block_lines)
+        lang = _normalize_code_language(info.split()[0]) if info else ""
+        if not lang:
+            lang, block_text, removed_lang_line = _infer_code_language(block_text)
+            if lang:
+                report["inferred_code_languages"] += 1
+            else:
+                report["unlabeled_code_fences"] += 1
+            if removed_lang_line:
+                report["removed_stray_language_lines"] += 1
+
+        opener = f"{indent}```{lang}" if lang else f"{indent}```"
+        out.append(opener)
+        if block_text:
+            out.extend(block_text.splitlines())
+        if closed:
+            out.append(f"{indent}```")
+
+    trailing_newline = "\n" if markdown_text.endswith("\n") else ""
+    return "\n".join(out) + trailing_newline, report
+
+
 def convert_pdf_to_md(pdf_path, output_dir):
     """Convert PDF to MD using Marker-pdf library"""
     if not MARKER_AVAILABLE:
@@ -530,6 +706,9 @@ def convert_pdf_to_md(pdf_path, output_dir):
         # Fix author sections wrapped in code blocks
         print_info("Post-processing markdown (removing code blocks around author sections)...")
         full_text = fix_author_code_blocks(full_text)
+        full_text, fence_report = normalize_code_fence_languages(full_text)
+        if sum(fence_report.values()) > 0:
+            print_info(f"Code fence normalization applied: {fence_report}")
 
         # Save markdown
         md_path = os.path.join(output_dir, os.path.basename(pdf_path).replace('.pdf', '.md'))
@@ -854,6 +1033,16 @@ def convert_pdf_to_md_mineru(pdf_path, output_dir, config, status_info=None):
         # 1) Move markdown file to output_dir
         target_md = os.path.join(output_dir, f"{pdf_stem}.md")
         shutil.move(mineru_md, target_md)
+        try:
+            with open(target_md, "r", encoding="utf-8") as f:
+                md_text = f.read()
+            md_text, fence_report = normalize_code_fence_languages(md_text)
+            if sum(fence_report.values()) > 0:
+                with open(target_md, "w", encoding="utf-8") as f:
+                    f.write(md_text)
+                print_info(f"Code fence normalization applied: {fence_report}")
+        except Exception as e:
+            print_warning(f"Code fence normalization skipped: {e}")
 
         # 2) Move images/ folder to output_dir/images/
         mineru_images = os.path.join(mineru_out, "images")
@@ -1809,6 +1998,9 @@ def _markdown_preflight_for_translation(text):
         "removed_cookie_blocks": 0,
         "removed_cookie_lines": 0,
         "removed_short_noise_lines": 0,
+        "inferred_code_languages": 0,
+        "unlabeled_code_fences": 0,
+        "removed_stray_language_lines": 0,
     }
 
     fence_open = False
@@ -1895,6 +2087,10 @@ def _markdown_preflight_for_translation(text):
 
     # Normalize excessive blank lines introduced by removals
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip() + "\n"
+    cleaned, fence_report = normalize_code_fence_languages(cleaned)
+    report["inferred_code_languages"] += fence_report.get("inferred_code_languages", 0)
+    report["unlabeled_code_fences"] += fence_report.get("unlabeled_code_fences", 0)
+    report["removed_stray_language_lines"] += fence_report.get("removed_stray_language_lines", 0)
 
     return cleaned, report
 
@@ -2564,7 +2760,10 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
 
         # Step 2.5: Markdown preflight (code fence/structure cleanup)
         body, preflight_report = _markdown_preflight_for_translation(body)
-        preflight_changes = sum(preflight_report.values())
+        preflight_changes = sum(
+            v for k, v in preflight_report.items()
+            if k != "unlabeled_code_fences"
+        )
         if preflight_changes > 0:
             print_info(f"Markdown preflight applied: {preflight_report}")
 

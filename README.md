@@ -19,7 +19,7 @@
 
 ## 프로젝트 개요
 
-PaperFlow는 학술 논문 PDF와 논문 URL을 구조화된 Markdown으로 변환하고, AI로 메타데이터 추출 및 한국어 번역을 수행하는 로컬 자동화 시스템입니다. 웹 뷰어에서 클라이언트 사이드 렌더링(marked.js + KaTeX)으로 논문을 열람하고, MCP(Model Context Protocol) 서버를 통해 외부 에이전트가 논문 제출, 상태 조회, 결과 다운로드를 자동화할 수 있습니다.
+PaperFlow는 학술 논문 PDF와 논문 URL을 구조화된 Markdown으로 변환하고, AI로 메타데이터 추출 및 한국어 번역을 수행하는 로컬 자동화 시스템입니다. 웹 뷰어에서 클라이언트 사이드 렌더링(marked.js + KaTeX + highlight.js)으로 논문을 열람하고, MCP(Model Context Protocol) 서버를 통해 외부 에이전트가 논문 제출, 상태 조회, 결과 다운로드를 자동화할 수 있습니다.
 
 ### 핵심 컴포넌트
 
@@ -60,7 +60,7 @@ graph LR
 **웹 뷰어**:
 - **FastAPI** - 비동기 웹 프레임워크
 - **Alpine.js + TailwindCSS** - 경량 리액티브 프론트엔드 (CDN, 빌드 불필요)
-- **marked.js + KaTeX** - 클라이언트 사이드 Markdown + 수식 렌더링
+- **marked.js + KaTeX + highlight.js** - 클라이언트 사이드 Markdown + 수식 + 코드 하이라이트 렌더링
 - **JWT** - HTTPOnly 쿠키 기반 인증
 - **FastMCP** - `/mcp` streamable HTTP 도구 서버
 
@@ -116,7 +116,7 @@ graph LR
 | 항목 | v2.0 | v2.5 |
 |------|------|------|
 | **파이프라인** | PDF → MD → Metadata → Translation → HTML (4단계) | PDF → MD → Normalize → Metadata + Web Search → Translation (3단계) |
-| **렌더링** | Quarto HTML (서버 사이드) | marked.js + KaTeX (클라이언트 사이드) |
+| **렌더링** | Quarto HTML (서버 사이드) | marked.js + KaTeX + highlight.js (클라이언트 사이드) |
 | **뷰어 모드** | HTML/PDF/Split | MD-KO/MD-EN/PDF/Split |
 | **메타데이터** | AI 추출만 | AI 추출 + Brave Search 보강 (venue, DOI, year, URL) |
 | **헤딩 정규화** | 없음 | OCR 헤딩 레벨 자동 교정 |
@@ -195,6 +195,7 @@ flowchart TD
 - **처리**:
   - **marker-pdf**: 단일 호출로 텍스트/이미지(JPEG)/메타데이터(JSON) 추출
   - **MinerU**: Layout Predict → Formula Detection → OCR → Post-processing 단계별 실행, 실시간 진행률 표시
+  - **Markdown 후보정**: 코드 fence 정규화, 언어 태그 추론(`python`, `bash`, `json`, `yaml`, `sql`, `html`, `go`, `cpp`, `text` 등), stray 언어 라인 보정
   - **헤딩 정규화**: OCR 결과의 불일치 헤딩 레벨 자동 교정
 - **출력**: `*.md`, `*.json`, 이미지 (marker: `*.jpeg`, MinerU: `images/*.jpg`)
 - **GPU 메모리**: 변환 후 `torch.cuda.empty_cache()`로 VRAM 해제
@@ -218,14 +219,15 @@ flowchart TD
 **함수**: `translate_md_to_korean_openai()`
 
 - **입력**: `*.md` (영문 마크다운)
-- **7단계 번역 파이프라인**:
+- **8단계 번역 파이프라인**:
   1. YAML 헤더 분리
   2. OCR 아티팩트 정리 (페이지 번호, 하이픈, 저작권)
-  3. 특수 블록 보호 (코드/수식) → 플레이스홀더
-  4. 섹션 분류 (본문 번역, References/Appendix 건너뜀)
-  5. 섹션별 번역 (컨텍스트 보존: 이전 200자 전달)
-  6. 보호 블록 복원
-  7. 한국어 마크다운 작성
+  3. Markdown preflight (코드 fence 구조 안정화 + 언어 태그 후보정)
+  4. 특수 블록 보호 (코드/수식) → 플레이스홀더
+  5. 섹션 분류 (본문 번역, References/Appendix 건너뜀)
+  6. 섹션별 번역 (컨텍스트 보존: 이전 200자 전달)
+  7. 보호 블록 복원
+  8. 한국어 마크다운 작성
 - **병렬 처리**: 긴 섹션(3000자+) → AsyncOpenAI로 동시 번역 (최대 3 워커)
 - **품질 검증**: 길이 비율, 헤딩/단락 개수 → 실패 시 재시도 (최대 3회)
 - **출력**: `*_ko.md`
@@ -238,9 +240,10 @@ flowchart TD
 
 - **AI 메타데이터 추출**: 제목/저자/초록/카테고리/연도 자동 추출
 - **웹 검색 보강**: Brave Search로 venue, DOI, 발행 연도, 논문 URL 보강 (URL 도메인 우선 판별)
+- **Markdown 후보정**: 변환/번역 단계에서 코드 블록 fence와 언어 태그를 자동 보정
 - **헤딩 정규화**: OCR 헤딩 레벨 불일치 자동 교정
 - **스마트 폴더 명명**: PDF 파일명 → 논문 제목으로 자동 변경
-- **한국어 번역**: 7단계 번역 파이프라인 (병렬 처리, 2-4x 빠름)
+- **한국어 번역**: 8단계 번역 파이프라인 (병렬 처리, 2-4x 빠름)
 - **품질 검증**: 자동 번역 검증 + 재시도 로직 (최대 3회)
 - **GPU 메모리 최적화**: 명시적 VRAM 정리로 연속 배치 처리 지원
 - **Watch 모드**: `newones/` 디렉토리 자동 감시 (5초 폴링)
@@ -248,7 +251,7 @@ flowchart TD
 
 ### Web Viewer (FastAPI)
 
-- **클라이언트 사이드 렌더링**: marked.js + KaTeX로 Markdown + 수식 렌더링
+- **클라이언트 사이드 렌더링**: marked.js + KaTeX + highlight.js로 Markdown, 수식, 코드 하이라이트 렌더링
 - **멀티 뷰어**: MD-KO / MD-EN / PDF / Split 보기 모드
 - **RAG 챗봇**: 논문별 AI 챗봇 (BM25 검색 + 조건부 웹 검색 보강)
 - **실시간 스트리밍**: SSE로 AI 응답 실시간 출력 (Markdown 렌더링)
@@ -313,7 +316,7 @@ flowchart LR
     end
 
     subgraph "4. 렌더링"
-        Response --> Marked[Marked.js + KaTeX<br/>클라이언트 사이드]
+        Response --> Marked[marked.js + KaTeX + highlight.js<br/>클라이언트 사이드]
         Marked --> Display[HTML 출력]
     end
 
@@ -333,7 +336,7 @@ flowchart LR
 - **조건부 웹 검색**: 외부 정보가 필요한 질문 자동 감지 (비교, 최신 연구 등)
 - **컨텍스트 보존**: 이전 대화 2턴 포함 (용어 일관성 유지)
 - **SSE 스트리밍**: 실시간 AI 응답 출력
-- **Markdown 렌더링**: Marked.js + KaTeX로 코드 블록, 수식, 목록 등 렌더링
+- **Markdown 렌더링**: marked.js + KaTeX + highlight.js로 코드 블록, 수식, 목록 등 렌더링
 - **대화 기록**: 자동 저장/로드 (최대 100 메시지)
 
 ### 챗봇 파일 구조
@@ -718,7 +721,7 @@ graph TB
     subgraph "Web Viewer (FastAPI + Alpine.js)"
         Auth[JWT Auth]
         List[Papers List<br/>Search/Sort/Filter]
-        Viewer[MD Viewer<br/>marked.js + KaTeX]
+        Viewer[MD Viewer<br/>marked.js + KaTeX + highlight.js]
         Chat[RAG Chatbot<br/>BM25 + Web Search]
         Upload[PDF Upload]
 
@@ -1124,6 +1127,7 @@ MIT License
 - [Alpine.js](https://alpinejs.dev/) - 경량 JS 프레임워크
 - [marked.js](https://marked.js.org/) - Markdown 렌더링
 - [KaTeX](https://katex.org/) - 수식 렌더링
+- [highlight.js](https://highlightjs.org/) - 코드 블록 syntax highlighting
 - [Brave Search API](https://brave.com/search/api/) - 웹 검색
 - [Model Context Protocol](https://modelcontextprotocol.io/) - 외부 도구 자동화 인터페이스
 
