@@ -281,6 +281,28 @@ async def test_list_jobs(tmp_workspace):
     assert statuses == {"queued"}
 
 
+async def test_list_jobs_reconciles_before_return(tmp_workspace):
+    from app.services import mcp_jobs
+    import base64
+
+    rec = await mcp_jobs.submit_job("file", "doc.pdf", mcp_jobs.JobOptions(),
+        pdf_bytes_b64=base64.b64encode(b"%PDF-fake").decode())
+
+    out_folder = tmp_workspace / "outputs" / "Done"
+    out_folder.mkdir(parents=True)
+    (out_folder / rec.expected_filename).write_bytes(b"%PDF-fake")
+    (out_folder / "Done.md").write_text("en")
+    (out_folder / "Done_ko.md").write_text("ko")
+
+    jobs = await mcp_jobs.list_jobs(limit=10)
+    assert len(jobs) == 1
+    assert jobs[0].status == "complete"
+    assert jobs[0].paper_name == "Done"
+
+    queued = await mcp_jobs.list_jobs(limit=10, status="queued")
+    assert queued == []
+
+
 async def test_reconcile_stalled_when_converter_moved_on(tmp_workspace):
     """Status=processing + processing_status references different file with old mtime → stalled."""
     from app.services import mcp_jobs

@@ -668,10 +668,18 @@ async def list_jobs(limit: int = 50, status: str | None = None) -> list[JobRecor
             records.append(JobRecord.model_validate(v))
         except Exception:
             pass  # skip malformed entry
-    if status:
-        records = [r for r in records if r.status == status]
     records.sort(key=lambda r: r.submitted_at, reverse=True)
-    return records[:limit]
+
+    reconciled = []
+    for rec in records:
+        refreshed = await reconcile_job(rec.job_id)
+        if refreshed:
+            reconciled.append(refreshed)
+
+    if status:
+        reconciled = [r for r in reconciled if r.status == status]
+    reconciled.sort(key=lambda r: r.submitted_at, reverse=True)
+    return reconciled[:limit]
 
 
 async def cancel_all_active_downloads(
