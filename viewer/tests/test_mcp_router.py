@@ -269,3 +269,158 @@ async def test_get_job_result_viewer_url_quotes_spaces_and_korean(mcp_enabled_wo
     # The encoded segment must round-trip back to the original paper_name
     encoded_segment = viewer_url.split("/viewer/", 1)[1]
     assert unquote(encoded_segment) == pname
+
+
+# ── T23–T25: zip endpoint + get_job_result honor rec.location ────────────────
+
+
+@pytest.mark.asyncio
+async def test_zip_endpoint_honors_archives_location(mcp_enabled_workspace):
+    """T23 — when rec.location == 'archives' and outputs/<paper_name> also
+    exists (collision), the zip endpoint must read the archives copy, not the
+    outputs duplicate that safe_paper_dir() would otherwise prefer."""
+    import io
+    import zipfile
+    import importlib
+    from fastapi.testclient import TestClient
+    from app import config as _cfg, main as _main
+    _cfg.settings = _cfg.Settings()
+    importlib.reload(_main)
+    _rebind_module_settings()
+    from app.services import mcp_jobs
+
+    pname = "Paper Conflict"
+    expected = "pfmcp-arch01abcdef-example.com.pdf"
+
+    # Outputs has the same paper_name but its PDF is unrelated to expected_filename
+    out_dir = _cfg.settings.outputs_dir / pname
+    out_dir.mkdir()
+    (out_dir / "marker_outputs.md").write_text("outputs marker")
+    (out_dir / f"{pname}.md").write_text("en")
+    (out_dir / f"{pname}_ko.md").write_text("ko")
+    (out_dir / "some_other.pdf").touch()
+
+    # Archives has the matching expected_filename PDF + a distinct marker file
+    arc_dir = _cfg.settings.archives_dir / pname
+    arc_dir.mkdir()
+    (arc_dir / "marker_archives.md").write_text("archives marker")
+    (arc_dir / f"{pname}.md").write_text("en")
+    (arc_dir / f"{pname}_ko.md").write_text("ko")
+    (arc_dir / expected).touch()
+
+    rec = mcp_jobs.JobRecord(
+        job_id="job-arch-1", input_type="url",
+        source="https://example.com/x",
+        expected_filename=expected,
+        import_method="direct_pdf",
+        options=mcp_jobs.JobOptions(force_reprocess=False),
+        status="complete", stage=None, percent=100,
+        paper_name=pname, location="archives",
+        error=None, submitted_at="2026-05-28T10:00:00",
+        completed_at="2026-05-28T10:01:00", expires_at="2026-06-04T10:00:00",
+    )
+    await _seed_complete_job(rec)
+
+    client = TestClient(_main.app)
+    r = client.get(f"/api/mcp/jobs/{rec.job_id}/zip",
+                   headers={"Authorization": f"Bearer {_cfg.settings.MCP_API_KEY}"})
+    assert r.status_code == 200, r.text
+
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    names = zf.namelist()
+    assert "marker_archives.md" in names, (
+        f"zip built from wrong location; expected archives marker, got {names}"
+    )
+    assert "marker_outputs.md" not in names, (
+        f"outputs duplicate leaked into archives job zip; names={names}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_job_result_honors_archives_location(mcp_enabled_workspace):
+    """T24 — get_job_result must read archives/<paper_name>/paper_meta.json
+    when rec.location == 'archives', not the outputs duplicate."""
+    import json as _json
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    _rebind_module_settings()
+    from app.services import mcp_jobs
+    from app.routers.mcp_router import get_job_result
+
+    pname = "Paper Conflict Meta"
+    expected = "pfmcp-archmeta01-example.com.pdf"
+
+    out_dir = _cfg.settings.outputs_dir / pname
+    out_dir.mkdir()
+    (out_dir / f"{pname}.md").write_text("en")
+    (out_dir / f"{pname}_ko.md").write_text("ko")
+    (out_dir / "some_other.pdf").touch()
+    (out_dir / "paper_meta.json").write_text(
+        _json.dumps({"title": "OUTPUTS_TITLE"})
+    )
+
+    arc_dir = _cfg.settings.archives_dir / pname
+    arc_dir.mkdir()
+    (arc_dir / f"{pname}.md").write_text("en")
+    (arc_dir / f"{pname}_ko.md").write_text("ko")
+    (arc_dir / expected).touch()
+    (arc_dir / "paper_meta.json").write_text(
+        _json.dumps({"title": "ARCHIVES_TITLE"})
+    )
+
+    rec = mcp_jobs.JobRecord(
+        job_id="job-archmeta-1", input_type="url",
+        source="https://example.com/y",
+        expected_filename=expected,
+        import_method="direct_pdf",
+        options=mcp_jobs.JobOptions(force_reprocess=False),
+        status="complete", stage=None, percent=100,
+        paper_name=pname, location="archives",
+        error=None, submitted_at="2026-05-28T10:00:00",
+        completed_at="2026-05-28T10:01:00", expires_at="2026-06-04T10:00:00",
+    )
+    await _seed_complete_job(rec)
+
+    result = await get_job_result(job_id=rec.job_id)
+    assert result["location"] == "archives"
+    assert result["paper_meta"]["title"] == "ARCHIVES_TITLE", (
+        f"get_job_result read outputs paper_meta instead of archives; got {result['paper_meta']!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_job_result_falls_back_when_location_is_none(mcp_enabled_workspace):
+    """T25 — legacy jobs persisted without a location field must still resolve
+    via the outputs-first fallback that safe_paper_dir() provides."""
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    _rebind_module_settings()
+    from app.services import mcp_jobs
+    from app.routers.mcp_router import get_job_result
+
+    pname = "Legacy Paper"
+    expected = "pfmcp-legacy01-example.com.pdf"
+
+    out_dir = _cfg.settings.outputs_dir / pname
+    out_dir.mkdir()
+    (out_dir / f"{pname}.md").write_text("en")
+    (out_dir / f"{pname}_ko.md").write_text("ko")
+    (out_dir / expected).touch()
+
+    rec = mcp_jobs.JobRecord(
+        job_id="job-legacy-1", input_type="url",
+        source="https://example.com/z",
+        expected_filename=expected,
+        import_method="direct_pdf",
+        options=mcp_jobs.JobOptions(force_reprocess=False),
+        status="complete", stage=None, percent=100,
+        paper_name=pname, location=None,
+        error=None, submitted_at="2026-05-28T10:00:00",
+        completed_at="2026-05-28T10:01:00", expires_at="2026-06-04T10:00:00",
+    )
+    await _seed_complete_job(rec)
+
+    result = await get_job_result(job_id=rec.job_id)
+    assert result["paper_name"] == pname
+    assert "viewer_url" in result
+    assert result["files"]["md_ko"] is True

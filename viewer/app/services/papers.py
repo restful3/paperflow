@@ -738,6 +738,35 @@ def safe_paper_dir(name: str) -> Path | None:
     return None
 
 
+def safe_paper_dir_at_location(name: str, location: str | None) -> Path | None:
+    """Like safe_paper_dir but pinned to the location the caller recorded.
+
+    Used by MCP code paths where a JobRecord remembers whether the paper was
+    completed under outputs/ or archives/. Resolving via that recorded location
+    avoids collisions when both directories happen to hold a folder with the
+    same paper_name (e.g. outputs reuse of an archived title).
+
+    - location="outputs"  → only look in settings.outputs_dir
+    - location="archives" → only look in settings.archives_dir
+    - location=None       → fall back to safe_paper_dir (outputs-first scan),
+                            preserving behavior for legacy records persisted
+                            before the location field existed
+    """
+    if location is None:
+        return safe_paper_dir(name)
+    if location not in ("outputs", "archives"):
+        return None
+    if not _is_safe_paper_name(name):
+        return None
+    base = settings.outputs_dir if location == "outputs" else settings.archives_dir
+    d = base / name
+    if not d.is_dir():
+        return None
+    if not _is_within(base, d):
+        return None
+    return d
+
+
 def _safe_child_dir(base: Path, item: Path) -> bool:
     """Accept only non-hidden directories that resolve under their base.
 

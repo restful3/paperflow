@@ -82,7 +82,7 @@ async def get_job_result(
     if rec.status != "complete":
         raise ValueError(f"job not complete (status={rec.status})")
 
-    paper_dir = paper_svc.safe_paper_dir(rec.paper_name)
+    paper_dir = paper_svc.safe_paper_dir_at_location(rec.paper_name, rec.location)
     if not paper_dir:
         raise ValueError("paper folder no longer exists")
 
@@ -228,7 +228,7 @@ async def download_zip(
     rec = await mcp_jobs.reconcile_job(job_id)
     if not rec or rec.status != "complete":
         raise HTTPException(status_code=404, detail="Job not complete or not found")
-    paper_dir = paper_svc.safe_paper_dir(rec.paper_name)
+    paper_dir = paper_svc.safe_paper_dir_at_location(rec.paper_name, rec.location)
     if not paper_dir:
         raise HTTPException(status_code=410, detail="Paper folder no longer exists")
     stream = mcp_zip.build_zip_stream(
