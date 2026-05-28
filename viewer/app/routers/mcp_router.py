@@ -92,9 +92,14 @@ async def get_job_result(
       paper_meta            — title / authors / abstract / venue / year / doi /
                               categories from the paper's paper_meta.json
       files                 — {md_en, md_ko, pdf, images_count} availability
-      viewer_url            — {base}/viewer/{quote(paper_name)} convenience
-                              link. AUTH-REQUIRED: anonymous clicks redirect
-                              to /login. Host-local only when base is localhost
+      viewer_url            — {base}/viewer/by-id/{paperflow_source_id} stable
+                              link. Survives folder rename / archive because it
+                              resolves by durable source_id, not paper_name.
+                              OPAQUE — consumers must NOT parse paper_name out of
+                              it, and reaching the viewer requires following the
+                              302 redirect. AUTH-REQUIRED: anonymous clicks
+                              redirect to /login. Host-local only when base is
+                              localhost.
       download_url          — zip endpoint. AUTH-REQUIRED: caller must send
                               Authorization: Bearer <MCP_API_KEY>. Agent-only
                               retrieval URL — do NOT embed in human reports
@@ -148,7 +153,7 @@ async def get_job_result(
         f"?include_pdf={'true' if include_pdf else 'false'}"
         f"&include_translation={'true' if include_translation else 'false'}"
     )
-    viewer_url = f"{base}/viewer/{quote(rec.paper_name, safe='')}"
+    viewer_url = f"{base}/viewer/by-id/{quote(rec.expected_filename, safe='')}"
     source_url = rec.source if rec.input_type == "url" else None
     submitted_source = _sanitize_submitted_source(rec.input_type, rec.source)
 

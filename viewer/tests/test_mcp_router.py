@@ -176,7 +176,7 @@ async def test_get_job_result_url_input_exposes_link_contract(mcp_enabled_worksp
     assert result["source_url"] == "https://example.com/paper.pdf"
     assert result["submitted_source"] == "https://example.com/paper.pdf"
     assert result["paperflow_source_id"] == "pfmcp-abcdef123456-example.com.pdf"
-    assert result["viewer_url"] == "http://localhost:8090/viewer/Sample%20Paper"
+    assert result["viewer_url"] == "http://localhost:8090/viewer/by-id/pfmcp-abcdef123456-example.com.pdf"
 
     # Existing fields preserved
     assert result["job_id"] == "job-url-1"
@@ -229,10 +229,10 @@ async def test_get_job_result_file_input_redacts_local_path(mcp_enabled_workspac
 
 
 @pytest.mark.asyncio
-async def test_get_job_result_viewer_url_quotes_spaces_and_korean(mcp_enabled_workspace):
-    """T22 — viewer_url must be URL-quoted so paper_name with spaces / Korean
-    yields a single path segment that the viewer route can resolve."""
-    from urllib.parse import unquote
+async def test_get_job_result_viewer_url_is_by_id_not_paper_name(mcp_enabled_workspace):
+    """T22 (updated) — viewer_url is now based on paperflow_source_id
+    (expected_filename), NOT paper_name. A paper_name with spaces / Korean
+    must no longer leak into viewer_url."""
     from app import config as _cfg
     _cfg.settings = _cfg.Settings()
     _rebind_module_settings()
@@ -240,16 +240,17 @@ async def test_get_job_result_viewer_url_quotes_spaces_and_korean(mcp_enabled_wo
     from app.routers.mcp_router import get_job_result
 
     pname = "한글 제목 With Spaces"
+    sid = "pfmcp-koreantest1-example.com.pdf"
     pdir = _cfg.settings.outputs_dir / pname
     pdir.mkdir()
     (pdir / f"{pname}.md").write_text("en")
     (pdir / f"{pname}_ko.md").write_text("ko")
-    (pdir / "pfmcp-koreantest1-example.com.pdf").touch()
+    (pdir / sid).touch()
 
     rec = mcp_jobs.JobRecord(
         job_id="job-kr-1", input_type="url",
         source="https://example.com/x",
-        expected_filename="pfmcp-koreantest1-example.com.pdf",
+        expected_filename=sid,
         import_method="direct_pdf",
         options=mcp_jobs.JobOptions(force_reprocess=False),
         status="complete", stage=None, percent=100,
@@ -262,13 +263,45 @@ async def test_get_job_result_viewer_url_quotes_spaces_and_korean(mcp_enabled_wo
     result = await get_job_result(job_id="job-kr-1")
 
     viewer_url = result["viewer_url"]
-    assert viewer_url.startswith("http://localhost:8090/viewer/")
-    # No raw spaces or non-ASCII characters in the URL
+    assert viewer_url == f"http://localhost:8090/viewer/by-id/{sid}"
+    # paper_name (spaces / Korean) must NOT appear in viewer_url anymore
     assert " " not in viewer_url
     assert "한" not in viewer_url
-    # The encoded segment must round-trip back to the original paper_name
-    encoded_segment = viewer_url.split("/viewer/", 1)[1]
-    assert unquote(encoded_segment) == pname
+    assert pname not in viewer_url
+
+
+@pytest.mark.asyncio
+async def test_get_job_result_viewer_url_quotes_source_id(mcp_enabled_workspace):
+    """T9 — viewer_url uses quote() on expected_filename for path safety."""
+    from urllib.parse import quote
+    from app import config as _cfg
+    _cfg.settings = _cfg.Settings()
+    _rebind_module_settings()
+    from app.services import mcp_jobs
+    from app.routers.mcp_router import get_job_result
+
+    pname = "Plain Paper"
+    sid = "pfmcp-abcdef123456-example.com.pdf"
+    pdir = _cfg.settings.outputs_dir / pname
+    pdir.mkdir()
+    (pdir / f"{pname}.md").write_text("en")
+    (pdir / f"{pname}_ko.md").write_text("ko")
+    (pdir / sid).touch()
+
+    rec = mcp_jobs.JobRecord(
+        job_id="job-q-1", input_type="url",
+        source="https://example.com/x",
+        expected_filename=sid, import_method="direct_pdf",
+        options=mcp_jobs.JobOptions(force_reprocess=False),
+        status="complete", stage=None, percent=100,
+        paper_name=pname, location="outputs",
+        error=None, submitted_at="2026-05-28T10:00:00",
+        completed_at="2026-05-28T10:01:00", expires_at="2026-06-04T10:00:00",
+    )
+    await _seed_complete_job(rec)
+
+    result = await get_job_result(job_id="job-q-1")
+    assert result["viewer_url"] == f"http://localhost:8090/viewer/by-id/{quote(sid, safe='')}"
 
 
 # ── T23–T25: zip endpoint + get_job_result honor rec.location ────────────────
