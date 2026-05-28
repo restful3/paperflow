@@ -1,8 +1,10 @@
 import datetime as _dt
+import ipaddress
 import json as _json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
@@ -211,6 +213,82 @@ _STRICT_PDF_DOMAINS = (
 )
 
 
+_PRIVATE_HOSTNAMES = frozenset({
+    "localhost",
+    "ip6-localhost",
+    "ip6-loopback",
+})
+
+
+def _is_safe_public_host(url: str) -> tuple[bool, str | None]:
+    """Validate that a URL points to a public http(s) host.
+
+    Returns (ok, reason). ``reason`` is None on success and a short operator
+    string when blocked.
+
+    Defense-in-depth SSRF guard. Rejects:
+      - non-http(s) schemes (file:, data:, ftp:, javascript:, ...)
+      - missing/empty host
+      - obvious local hostnames (localhost, *.local, bare single-label) —
+        no DNS call needed
+      - every DNS-resolved IP that is loopback / private (RFC1918) /
+        link-local (incl. cloud metadata 169.254.169.254) / unspecified /
+        reserved / multicast — IPv4 and IPv6, including IPv4-mapped IPv6
+        wrappers like ::ffff:127.0.0.1
+
+    Caveat: this is a snapshot check, not DNS-rebinding-proof. A second
+    resolution at fetch time can still differ; callers that follow
+    redirects must re-validate every effective URL with this helper.
+    """
+    if not url:
+        return False, "empty URL"
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        return False, f"scheme {scheme!r} not allowed (http/https only)"
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False, "URL has no host"
+
+    # Cheap hostname-pattern denial (no DNS lookup)
+    if host in _PRIVATE_HOSTNAMES:
+        return False, f"host {host!r} is non-public"
+    if host.endswith(".local"):
+        return False, f"host {host!r} is mDNS-local"
+    # Bare single-label name (no dot, not an IPv6 literal which urlparse
+    # already stripped of brackets but still contains ':')
+    if "." not in host and ":" not in host:
+        return False, f"host {host!r} is a single-label name"
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError as e:
+        return False, f"host {host!r} could not be resolved (DNS: {e})"
+    if not infos:
+        return False, f"host {host!r} resolved to no addresses"
+
+    for _fam, _stype, _proto, _canon, sockaddr in infos:
+        raw = sockaddr[0]
+        # Strip IPv6 zone identifier (fe80::1%eth0 → fe80::1)
+        ip_str = raw.split("%", 1)[0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False, f"resolved address {ip_str!r} is not a valid IP"
+        # Unwrap IPv4-mapped IPv6 so private/loopback hidden behind ::ffff:
+        # is caught (e.g. ::ffff:127.0.0.1, ::ffff:a9fe:a9fe)
+        if isinstance(ip_obj, ipaddress.IPv6Address):
+            mapped = ip_obj.ipv4_mapped
+            if mapped is not None:
+                ip_obj = mapped
+        if (ip_obj.is_loopback or ip_obj.is_private or ip_obj.is_link_local
+                or ip_obj.is_unspecified or ip_obj.is_reserved
+                or ip_obj.is_multicast):
+            return False, f"host {host!r} resolves to non-public {ip_obj}"
+
+    return True, None
+
+
 def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
     """Resolve URL to PDF bytes. Used by import_url_as_paper and mcp_jobs.
 
@@ -218,18 +296,22 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
       import_method in {"site_transform", "direct_pdf", "html_fallback"}
     Raises: ValueError with concrete reason on failure.
     """
-    # A. URL validation
-    if not url or not url.startswith(("http://", "https://")):
-        raise ValueError("Invalid URL. Use http(s) URL.")
+    # A. URL validation — scheme + SSRF allow policy
+    ok, reason = _is_safe_public_host(url)
+    if not ok:
+        raise ValueError(f"Rejected URL: {reason}.")
     host = (urlparse(url).netloc or "").lower()
     if not host:
         raise ValueError("Invalid URL host.")
 
-    # B. DOI pre-resolve
+    # B. DOI pre-resolve — re-validate the resolved target (SSRF defense in depth)
     effective_url = url
     if "doi.org/" in url:
         resolved = _resolve_doi_redirect(url)
         if resolved:
+            ok, reason = _is_safe_public_host(resolved)
+            if not ok:
+                raise ValueError(f"DOI redirected to non-public URL: {reason}.")
             effective_url = resolved
 
     download_errors: list[str] = []
@@ -249,8 +331,11 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
     except Exception:
         pass
 
-    # If redirect discovered a new URL, re-apply site transformer
+    # If redirect discovered a new URL, re-validate then re-apply site transformer
     if final_url and final_url != effective_url:
+        ok, reason = _is_safe_public_host(final_url)
+        if not ok:
+            raise ValueError(f"Redirect target rejected: {reason}.")
         effective_url = final_url
         for cand in _site_transform_pdf_urls(final_url):
             try:

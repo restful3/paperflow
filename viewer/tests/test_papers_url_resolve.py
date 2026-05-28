@@ -5,13 +5,13 @@ from unittest.mock import patch
 
 def test_invalid_url_raises_value_error(tmp_workspace):
     from app.services import papers
-    with pytest.raises(ValueError, match="Invalid URL"):
+    with pytest.raises(ValueError, match="Rejected URL"):
         papers._resolve_url_to_pdf_bytes("not-a-url")
 
 
 def test_invalid_scheme_raises_value_error(tmp_workspace):
     from app.services import papers
-    with pytest.raises(ValueError, match="Invalid URL"):
+    with pytest.raises(ValueError, match="Rejected URL"):
         papers._resolve_url_to_pdf_bytes("ftp://example.com/foo.pdf")
 
 
