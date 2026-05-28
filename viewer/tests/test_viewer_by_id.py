@@ -95,8 +95,8 @@ def test_by_id_encoded_slash_not_processed_by_resolver(page_app, tmp_workspace, 
 
     client = _authed_client(page_app)
     r = client.get("/viewer/by-id/a%2Fb.pdf")
-    # by-id resolver must never receive a slashed multi-segment value
-    assert all("/" not in s for s in spy["called_with"])
+    # catch-all absorbs the slashed path → by-id resolver is never invoked
+    assert spy["called_with"] == []
     assert r.status_code == 302
     assert r.headers["location"] == "/papers"
 

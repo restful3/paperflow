@@ -41,7 +41,7 @@ def _by_id_redirect(target: str) -> RedirectResponse:
 
 
 @router.get("/viewer/by-id/{source_id}", response_class=HTMLResponse)
-async def viewer_by_id(source_id: str, request: Request,
+async def viewer_by_id(source_id: str,
                        user: str | None = Depends(get_current_user_page)):
     if not user:
         return _by_id_redirect("/login")
