@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import json
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -15,6 +16,16 @@ from mcp.server.fastmcp import FastMCP
 from ..config import settings
 from ..services import mcp_jobs, mcp_zip
 from ..services import papers as paper_svc
+
+
+def _sanitize_submitted_source(input_type: str, source: str) -> str:
+    """Public-safe label for the request that produced the job.
+    - URL input: the URL itself (already public).
+    - File input: basename only — never leak the caller's local directory layout.
+    """
+    if input_type == "url":
+        return source
+    return source.replace("\\", "/").rsplit("/", 1)[-1] or source
 
 
 # ── FastMCP server ────────────────────────────────────────────────────────────
@@ -104,9 +115,16 @@ async def get_job_result(
         f"?include_pdf={'true' if include_pdf else 'false'}"
         f"&include_translation={'true' if include_translation else 'false'}"
     )
+    viewer_url = f"{base}/viewer/{quote(rec.paper_name, safe='')}"
+    source_url = rec.source if rec.input_type == "url" else None
+    submitted_source = _sanitize_submitted_source(rec.input_type, rec.source)
 
     return {
         "job_id": job_id,
+        "paperflow_source_id": rec.expected_filename,
+        "input_type": rec.input_type,
+        "submitted_source": submitted_source,
+        "source_url": source_url,
         "paper_name": rec.paper_name,
         "location": rec.location,
         "paper_meta": {
@@ -119,6 +137,7 @@ async def get_job_result(
             "categories": meta.get("categories"),
         },
         "files": files,
+        "viewer_url": viewer_url,
         "download_url": download_url,
         "expires_at": rec.expires_at,
     }
