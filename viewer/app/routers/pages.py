@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from ..dependencies import get_current_user_page
+from ..services import mcp_jobs
 from ..services import papers as paper_svc
 
 router = APIRouter(tags=["pages"])
@@ -31,6 +32,24 @@ async def papers_page(request: Request, user: str | None = Depends(get_current_u
     if not user:
         return RedirectResponse("/login", status_code=302)
     return templates.TemplateResponse(request=request, name="papers.html", context={"username": user})
+
+
+def _by_id_redirect(target: str) -> RedirectResponse:
+    resp = RedirectResponse(target, status_code=302)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@router.get("/viewer/by-id/{source_id}", response_class=HTMLResponse)
+async def viewer_by_id(source_id: str, request: Request,
+                       user: str | None = Depends(get_current_user_page)):
+    if not user:
+        return _by_id_redirect("/login")
+    resolved = mcp_jobs.resolve_paper_by_source_id(source_id)
+    if not resolved:
+        return _by_id_redirect("/papers")
+    paper_name, _location = resolved
+    return _by_id_redirect(f"/viewer/{quote(paper_name, safe='')}")
 
 
 @router.get("/viewer/{paper_name:path}", response_class=HTMLResponse)
