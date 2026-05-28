@@ -292,7 +292,7 @@ flowchart TD
 | 필드 | 용도 | 외부 보고서에 박아도 되나? |
 |---|---|---|
 | `source_url` | 원본 영구 URL (URL 입력만) | ✅ Primary — PaperFlow와 무관하게 살아남음 |
-| `viewer_url` | `/viewer/{quote(paper_name)}` 사내 편의 링크 | ⚠️ PaperFlow 로그인 필요, 비로그인은 `/login` 리다이렉트. `localhost` base면 host-local only |
+| `viewer_url` | `/viewer/by-id/{source_id}` 안정 링크 → 302 → 현재 `/viewer/{paper_name}` (rename/archive 에도 유지) | ⚠️ opaque(paper_name 파싱 금지)·redirect-follow 필요·PaperFlow 로그인 필요(비로그인 `/login`)·`localhost` base면 host-local only |
 | `download_url` | zip 다운로드 endpoint | ❌ `Authorization: Bearer <MCP_API_KEY>` 필수, 브라우저 클릭만으로는 401. agent-only retrieval URL — zip을 내려받아 자체 아티팩트 저장소(Paperclip 등)로 옮긴 뒤 그 링크를 보고서에 박을 것 |
 | `paperflow_source_id` | 처리 산출물 식별자 | ✅ `paper_name` rename에 영향 없는 durable key. `location`과 함께 기록 |
 | `paper_name` | 폴더명 (편의 키) | ⚠️ rename/archive로 변경 가능, 영속 보장 X |
