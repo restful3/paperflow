@@ -1003,3 +1003,85 @@ async def test_cancel_job_not_found_returns_none(tmp_workspace):
     from app.services import mcp_jobs
     res = await mcp_jobs.cancel_job("does_not_exist")
     assert res is None
+
+
+# ── T5a/T5b/T7: by-id source_id validation + resolution ──────────────────────
+
+def test_is_safe_source_id_accepts_valid_pfmcp():
+    from app.services.mcp_jobs import _is_safe_source_id
+    assert _is_safe_source_id("pfmcp-abcdef123456-example.com.pdf") is True
+    assert _is_safe_source_id("pfmcp-0-doc.pdf") is True
+
+
+def test_is_safe_source_id_rejects_traversal_and_contract_violations():
+    from app.services.mcp_jobs import _is_safe_source_id
+    bad = [
+        "",                         # empty
+        ".", "..",                  # dot segments
+        "../etc/passwd",            # traversal
+        "a/b.pdf", "a\\b.pdf",      # separators
+        "pfmcp-\x00-x.pdf",         # NUL
+        "pfmcp-" + "a" * 200 + ".pdf",  # over length
+        "paper_meta.json",          # contract: no pfmcp- prefix / .pdf suffix
+        "foo.pdf",                  # contract: no pfmcp- prefix
+        ".hidden",                  # contract
+        "pfmcp-abc-x.txt",          # contract: wrong suffix
+        "pfmcp-abc x.pdf",          # whitespace
+        "pfmcp-abc%2e.pdf",         # percent char
+    ]
+    for s in bad:
+        assert _is_safe_source_id(s) is False, s
+
+
+@pytest.mark.asyncio
+async def test_resolve_paper_by_source_id_rejects_unsafe_without_fs_access(tmp_workspace, monkeypatch):
+    """Unsafe input returns None and never touches the filesystem scan."""
+    from app.services import mcp_jobs
+    called = {"n": 0}
+    def _boom(*a, **k):
+        called["n"] += 1
+        return None
+    monkeypatch.setattr(mcp_jobs, "_resolve_completed_candidate", _boom)
+    assert mcp_jobs.resolve_paper_by_source_id("../etc") is None
+    assert mcp_jobs.resolve_paper_by_source_id("foo.pdf") is None
+    assert called["n"] == 0  # validation rejected before resolver call
+
+
+@pytest.mark.asyncio
+async def test_resolve_paper_by_source_id_outputs_scan(tmp_workspace):
+    """Valid source_id present as source PDF in outputs/ resolves to (name, 'outputs')."""
+    from app.services import mcp_jobs
+    sid = "pfmcp-aaaaaaaaaaaa-doc.pdf"
+    out = tmp_workspace / "outputs" / "Some Paper"
+    out.mkdir()
+    (out / sid).touch()
+    assert mcp_jobs.resolve_paper_by_source_id(sid) == ("Some Paper", "outputs")
+
+
+@pytest.mark.asyncio
+async def test_resolve_paper_by_source_id_archives_only(tmp_workspace):
+    """Source PDF only in archives/ → resolves to (name, 'archives')."""
+    from app.services import mcp_jobs
+    sid = "pfmcp-bbbbbbbbbbbb-doc.pdf"
+    arc = tmp_workspace / "archives" / "Archived Paper"
+    arc.mkdir()
+    (arc / sid).touch()
+    assert mcp_jobs.resolve_paper_by_source_id(sid) == ("Archived Paper", "archives")
+
+
+@pytest.mark.asyncio
+async def test_resolve_paper_by_source_id_outputs_wins_over_archives(tmp_workspace):
+    """4-step priority: outputs match wins even when archives also has it."""
+    from app.services import mcp_jobs
+    sid = "pfmcp-cccccccccccc-doc.pdf"
+    (tmp_workspace / "outputs" / "P").mkdir()
+    (tmp_workspace / "outputs" / "P" / sid).touch()
+    (tmp_workspace / "archives" / "P").mkdir()
+    (tmp_workspace / "archives" / "P" / sid).touch()
+    assert mcp_jobs.resolve_paper_by_source_id(sid) == ("P", "outputs")
+
+
+@pytest.mark.asyncio
+async def test_resolve_paper_by_source_id_not_found(tmp_workspace):
+    from app.services import mcp_jobs
+    assert mcp_jobs.resolve_paper_by_source_id("pfmcp-dddddddddddd-missing.pdf") is None

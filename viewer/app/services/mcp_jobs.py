@@ -90,6 +90,11 @@ async def _atomic_write_index(jobs: dict[str, dict]) -> None:
 # ── Filename helper ───────────────────────────────────────────────────────────
 _FILENAME_SAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
+# by-id route: source_id == paperflow_source_id == expected_filename,
+# 형식이 항상 pfmcp-{job_id[:12]}-{slug[:40]}.pdf 로 고정 (_build_expected_filename).
+# contract 까지 검증해 임의 안전 파일명(paper_meta.json, foo.pdf, .hidden) probing 차단.
+_SOURCE_ID_SAFE_RE = re.compile(r"^pfmcp-[A-Za-z0-9._-]{1,120}\.pdf$")
+
 
 def _build_expected_filename(job_id: str, slug_source: str) -> str:
     """pfmcp-{job_id[:12]}-{safe_slug[:40]}.pdf — guaranteed unique per job_id."""
@@ -422,6 +427,30 @@ def _resolve_completed_candidate(expected_filename: str) -> tuple[str, str] | No
         return name, "archives"
 
     return None
+
+
+def _is_safe_source_id(source_id: str) -> bool:
+    """Validate a by-id route source_id before any filesystem access.
+
+    Rejects path traversal (separators, dot segments, NUL) and non-contract
+    filenames. Accepts only the pfmcp-...pdf shape that MCP jobs produce.
+    """
+    if not source_id or source_id in (".", ".."):
+        return False
+    if "/" in source_id or "\\" in source_id or "\x00" in source_id:
+        return False
+    return bool(_SOURCE_ID_SAFE_RE.match(source_id))
+
+
+def resolve_paper_by_source_id(source_id: str) -> tuple[str, str] | None:
+    """Map a durable paperflow_source_id (== expected_filename) to
+    (paper_name, location). Validates source_id against path traversal + the
+    pfmcp-...pdf contract, then reuses the 4-step _resolve_completed_candidate
+    priority. Disk-based — works beyond the MCP job-index TTL.
+    """
+    if not _is_safe_source_id(source_id):
+        return None
+    return _resolve_completed_candidate(source_id)
 
 
 def _paper_dir_for(name: str, location: str) -> Path:
