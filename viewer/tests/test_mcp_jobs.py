@@ -1028,6 +1028,7 @@ def test_is_safe_source_id_rejects_traversal_and_contract_violations():
         "pfmcp-abc-x.txt",          # contract: wrong suffix
         "pfmcp-abc x.pdf",          # whitespace
         "pfmcp-abc%2e.pdf",         # percent char
+        "pfmcp-abc.pdf\n",          # trailing newline (re $ vs fullmatch)
     ]
     for s in bad:
         assert _is_safe_source_id(s) is False, s

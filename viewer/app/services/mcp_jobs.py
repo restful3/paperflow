@@ -439,7 +439,7 @@ def _is_safe_source_id(source_id: str) -> bool:
         return False
     if "/" in source_id or "\\" in source_id or "\x00" in source_id:
         return False
-    return bool(_SOURCE_ID_SAFE_RE.match(source_id))
+    return bool(_SOURCE_ID_SAFE_RE.fullmatch(source_id))
 
 
 def resolve_paper_by_source_id(source_id: str) -> tuple[str, str] | None:
