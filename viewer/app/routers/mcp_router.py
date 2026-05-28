@@ -73,7 +73,40 @@ async def get_job_result(
     include_pdf: bool = False,
     include_translation: bool = True,
 ) -> dict:
-    """Get processed paper metadata + download URL. Only valid when status=complete."""
+    """Return the link-contract dict for a completed job.
+
+    Only valid when status==complete; raises ValueError otherwise.
+
+    Response fields:
+      job_id                — short-lived MCP debug key (subject to TTL cleanup)
+      paperflow_source_id   — durable per-job identifier (== expected_filename)
+      input_type            — "url" | "file"
+      submitted_source      — public-safe label (URL kept as-is, file reduced
+                              to basename so local directories never leak)
+      source_url            — original URL for URL input; None for file input
+      paper_name            — current PaperFlow folder name; convenience key,
+                              not a permanent id (smart rename / archive /
+                              same-title reprocess can shift it)
+      location              — "outputs" | "archives" — store with
+                              paperflow_source_id for collision-safe resolution
+      paper_meta            — title / authors / abstract / venue / year / doi /
+                              categories from the paper's paper_meta.json
+      files                 — {md_en, md_ko, pdf, images_count} availability
+      viewer_url            — {base}/viewer/{quote(paper_name)} convenience
+                              link. AUTH-REQUIRED: anonymous clicks redirect
+                              to /login. Host-local only when base is localhost
+      download_url          — zip endpoint. AUTH-REQUIRED: caller must send
+                              Authorization: Bearer <MCP_API_KEY>. Agent-only
+                              retrieval URL — do NOT embed in human reports
+      expires_at            — MCP job-index TTL (~7 days). The zip endpoint
+                              also 410s once the paper folder is gone, even
+                              before this expiry.
+
+    For long-lived report links, the safe pair is
+    `source_url` (original) + `paperflow_source_id` + `location`; download the
+    zip and stash it in your own artifact store rather than linking
+    `download_url` directly.
+    """
     from ..config import settings as _settings
 
     rec = await mcp_jobs.reconcile_job(job_id)

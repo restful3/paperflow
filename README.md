@@ -284,6 +284,19 @@ flowchart TD
 - **안전한 취소/정리**: smart-renamed outputs 폴더는 정리하되 archives는 삭제하지 않음
 - **zip export**: `include_pdf`, `include_translation` 옵션으로 결과 패키징
 - **보안 기본값**: Bearer token, Origin allowlist, opt-in mount (`MCP_API_KEY` + `MCP_PUBLIC_BASE_URL`)
+- **응답 contract (`get_job_result`)**: `job_id`, `paperflow_source_id`(= durable `expected_filename`), `input_type`, `submitted_source`(file 입력은 basename), `source_url`(URL 입력만), `paper_name`, `location`, `paper_meta`, `files`, `viewer_url`, `download_url`, `expires_at`
+- **location-aware lookup**: `get_job_result`/zip endpoint 모두 `rec.location`을 존중하여 outputs↔archives 동일 paper_name 충돌 상황에서 올바른 폴더를 해석
+
+#### 링크 contract — 외부 보고서에 쓸 때 주의
+
+| 필드 | 용도 | 외부 보고서에 박아도 되나? |
+|---|---|---|
+| `source_url` | 원본 영구 URL (URL 입력만) | ✅ Primary — PaperFlow와 무관하게 살아남음 |
+| `viewer_url` | `/viewer/{quote(paper_name)}` 사내 편의 링크 | ⚠️ PaperFlow 로그인 필요, 비로그인은 `/login` 리다이렉트. `localhost` base면 host-local only |
+| `download_url` | zip 다운로드 endpoint | ❌ `Authorization: Bearer <MCP_API_KEY>` 필수, 브라우저 클릭만으로는 401. agent-only retrieval URL — zip을 내려받아 자체 아티팩트 저장소(Paperclip 등)로 옮긴 뒤 그 링크를 보고서에 박을 것 |
+| `paperflow_source_id` | 처리 산출물 식별자 | ✅ `paper_name` rename에 영향 없는 durable key. `location`과 함께 기록 |
+| `paper_name` | 폴더명 (편의 키) | ⚠️ rename/archive로 변경 가능, 영속 보장 X |
+| `expires_at` | MCP job-index TTL (~7일) | 참고용 — 그 전이라도 archive/delete 시 zip endpoint는 410 |
 
 ---
 
