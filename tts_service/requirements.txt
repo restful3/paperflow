@@ -1,3 +1,7 @@
-chatterbox-tts
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0
+torchaudio==2.10.0
+qwen-tts
+soundfile
 fastapi
 uvicorn[standard]
