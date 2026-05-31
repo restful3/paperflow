@@ -1,5 +1,5 @@
 ---
-name: paper-explainer-korean
+name: paper-explainer
 description: Convert an academic paper (any language) into an easy Korean explainer with accurate technical preservation (formulas/citations/figures), consistent analogies, glossary, and section-by-section output to avoid token overflow. Use when user asks "쉽게 설명해줘", "해설판", "알기 쉽게 풀어줘", or requests a paper-specific Korean explainer from file/path/URL/title.
 ---
 
@@ -562,7 +562,14 @@ When the input is specified as a URL/title/file:
 ### Batch Mode (important)
 When the user does **NOT specify a target** and says "논문 해설판 만들어줘":
 1. Recursively scan **both** `/home/restful3/workspace/paperflow/outputs` **and** `/home/restful3/workspace/paperflow/archives` subdirectories.
-2. Build candidates that are missing `*_ko_explained.md`.
+2. Build the candidate set. A directory is an **eligible paper folder** only if ALL of these hold:
+   - The folder name does NOT start with `.` (skip config/hidden folders like `.claude/`)
+   - It contains at least one **source MD**: a `*_ko.md`, OR a non-explained/non-backup `*.md`
+     (excluding `*_ko_explained.md`, `*_explained.md`, `*_backup_*.md`)
+   - It is missing `*_ko_explained.md`
+   Folders that are empty, contain no source MD, or are hidden/config folders are NOT candidates —
+   skip them (never create, rename, or delete them). If any sourceless/orphan folders are found,
+   list them in the completion report so the operator can clean them up.
 3. **Select only one target per run**: the most recently updated source file among missing candidates.
 4. Source preference per target:
    - Prefer `*_ko.md` when available in the same paper directory.
@@ -584,5 +591,6 @@ On task completion, report concisely:
 - Processing mode (auto / section-safe)
 - Number of sections covered / total sections in original
 - Notable issues (missing risk / source quality problems / heavy OCR noise / etc.)
+- (Batch mode only) Sourceless/orphan folders skipped during the scan, if any — so the operator can clean them up
 
 **If ratio < 1.0**, explicitly note which sections or content were not covered and why.
