@@ -457,13 +457,21 @@
             <div class="flex items-center gap-2 sm:gap-1.5">
               <!-- File type dots (mobile + desktop) -->
               <div class="flex items-center gap-1.5">
-                <span x-show="paper.formats.md_ko" class="w-2 h-2 rounded-full bg-purple-500"
-                      :class="paper.formats.md_ko_explained && 'ring-[1.5px] ring-amber-400'"
-                      :title="paper.formats.md_ko_explained ? 'MD-KO + Easy' : 'MD-KO'"></span>
-                <span x-show="paper.formats.md_en" class="w-2 h-2 rounded-full bg-gray-400"
-                      :class="paper.formats.md_en_explained && 'ring-[1.5px] ring-amber-400'"
-                      :title="paper.formats.md_en_explained ? 'MD-EN + Easy' : 'MD-EN'"></span>
-                <span x-show="paper.formats.pdf" class="w-2 h-2 rounded-full bg-blue-500" title="PDF"></span>
+                <!-- 생성 순서: 원본(PDF) → 한국어(번역→해설→듣기) -->
+                <!-- 원본 소스: PDF (+ EN MD 있으면 회색 링) -->
+                <span x-show="paper.formats.pdf || paper.formats.md_en" class="w-2 h-2 rounded-full"
+                      :class="(paper.formats.pdf ? 'bg-blue-500' : 'bg-gray-400') + ((paper.formats.pdf && paper.formats.md_en) ? ' ring-[1.5px] ring-gray-400' : '')"
+                      :title="(paper.formats.pdf && paper.formats.md_en) ? 'PDF + MD-EN' : (paper.formats.pdf ? 'PDF' : 'MD-EN')"></span>
+                <!-- 한국어 자산: 번역 → +해설(amber 링) → +듣기(스피커) -->
+                <span x-show="paper.formats.md_ko" class="inline-flex items-center gap-0.5">
+                  <span class="w-2 h-2 rounded-full bg-purple-500"
+                        :class="paper.formats.md_ko_explained && 'ring-[1.5px] ring-amber-400'"
+                        :title="paper.formats.md_ko_audio ? 'MD-KO + Easy + 듣기' : (paper.formats.md_ko_explained ? 'MD-KO + Easy' : 'MD-KO')"></span>
+                  <svg x-show="paper.formats.md_ko_audio" class="w-3 h-3 text-sky-500" fill="currentColor" viewBox="0 0 24 24">
+                    <title>듣기판 (TTS)</title>
+                    <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+                  </svg>
+                </span>
               </div>
               <span class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paper.size_mb + ' MB'"></span>
               <span x-show="paperDateLabel(paper)" class="text-[10px] ml-1 transition-colors" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="paperDateLabel(paper)"></span>
@@ -658,13 +666,21 @@
 
                 <!-- File type dots (mobile + desktop) -->
                 <div class="flex gap-1 ml-1">
-                  <span x-show="paper.formats.md_ko" class="w-1.5 h-1.5 rounded-full bg-purple-500"
-                        :class="paper.formats.md_ko_explained && 'ring-[1.5px] ring-amber-400'"
-                        :title="paper.formats.md_ko_explained ? 'MD-KO + Easy' : 'MD-KO'"></span>
-                  <span x-show="paper.formats.md_en" class="w-1.5 h-1.5 rounded-full bg-gray-400"
-                        :class="paper.formats.md_en_explained && 'ring-[1.5px] ring-amber-400'"
-                        :title="paper.formats.md_en_explained ? 'MD-EN + Easy' : 'MD-EN'"></span>
-                  <span x-show="paper.formats.pdf" class="w-1.5 h-1.5 rounded-full bg-blue-500" title="PDF"></span>
+                  <!-- 생성 순서: 원본(PDF) → 한국어(번역→해설→듣기) -->
+                  <!-- 원본 소스: PDF (+ EN MD 있으면 회색 링) -->
+                  <span x-show="paper.formats.pdf || paper.formats.md_en" class="w-1.5 h-1.5 rounded-full"
+                        :class="(paper.formats.pdf ? 'bg-blue-500' : 'bg-gray-400') + ((paper.formats.pdf && paper.formats.md_en) ? ' ring-[1.5px] ring-gray-400' : '')"
+                        :title="(paper.formats.pdf && paper.formats.md_en) ? 'PDF + MD-EN' : (paper.formats.pdf ? 'PDF' : 'MD-EN')"></span>
+                  <!-- 한국어 자산: 번역 → +해설(amber 링) → +듣기(스피커) -->
+                  <span x-show="paper.formats.md_ko" class="inline-flex items-center gap-0.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-purple-500"
+                          :class="paper.formats.md_ko_explained && 'ring-[1.5px] ring-amber-400'"
+                          :title="paper.formats.md_ko_audio ? 'MD-KO + Easy + 듣기' : (paper.formats.md_ko_explained ? 'MD-KO + Easy' : 'MD-KO')"></span>
+                    <svg x-show="paper.formats.md_ko_audio" class="w-2.5 h-2.5 text-sky-500" fill="currentColor" viewBox="0 0 24 24">
+                      <title>듣기판 (TTS)</title>
+                      <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+                    </svg>
+                  </span>
                 </div>
 
                 <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-[5.5rem] text-center"
