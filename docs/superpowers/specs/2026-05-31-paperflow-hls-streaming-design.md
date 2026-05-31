@@ -1,43 +1,46 @@
 # PaperFlow HLS 실시간 한국어 TTS — 설계 스펙
 
-_작성: 2026-05-31 · 상태: 승인 대기(사용자 리뷰)_
+_작성: 2026-05-31 · 개정: R1(Codex 리뷰 반영) · 상태: 재리뷰 대기_
+
+> **R1 개정 요약**: Codex 리뷰([docs/reviews/2026-05-31-hls-tts-spec-codex.md](../../reviews/2026-05-31-hls-tts-spec-codex.md))의 BLOCKING 5 + HIGH 3 + MEDIUM/LOW 전부 반영. 주요 변경: ①세그먼트 URI를 playlist 상대경로 `seg/…`로 교정 ②TARGETDURATION 실측-후-결정 + 하드 게이트 ③HMAC signed token 인증을 1순위 설계로 포함 ④매니페스트 2층화(텍스트/타이밍 분리) + streaming 중 `/audio/html` 전체 span 반환 ⑤sweep 기본 OFF+캡 ⑥세그먼트 원자 publish ⑦paper file lock + stale 복구 ⑧구버전 HLS TTL 정리 ⑨partial 실패 정책 ⑩MIME/cache 확정 ⑪하위호환 코드레벨.
 
 ## 0. 배경 / 목표
 
-라이브 한국어 TTS MVP(배치판)는 `_ko_audio.md`(낭독 텍스트) 전체를 문장별로 합성·stitch 한 뒤에야 재생 가능하다 — 긴 논문(854문장)은 첫 재생까지 ~40분 대기. 병목은 전처리/stitch 가 아니라 **GPU 문장 합성 전체**이며, 단일 mp3 라 "전부 끝나야 재생" 구조다.
+라이브 한국어 TTS MVP(배치판)는 `_ko_audio.md`(낭독 텍스트) 전체를 문장별 합성·stitch 한 뒤에야 재생 가능 — 긴 논문(854문장)은 첫 재생까지 ~40분 대기. 병목은 전처리/stitch 가 아니라 **GPU 문장 합성 전체**이며, 단일 mp3 라 "전부 끝나야 재생" 구조다.
 
-**목표:** 합성과 동시에 **점진적으로 들을 수 있게** 한다 — 첫 문장(~3초)부터 재생, 나머지는 백그라운드로 이어짐. 표준 `<audio>` 단일 mp3 로는 "재생 중 파일 append" 가 불가능하고(고정 Content-Length), iPhone Safari 는 오디오 MSE 를 사실상 미지원하므로, **HLS(HTTP Live Streaming) 라이브 플레이리스트** — Apple 네이티브 progressive 재생 — 로 구현한다.
+**목표:** 합성과 동시에 **점진적으로 들을 수 있게** 한다 — 첫 1\~3 세그먼트(~수초)부터 재생, 나머지는 백그라운드로 이어짐. 표준 `<audio>` 단일 mp3 는 "재생 중 파일 append" 불가(고정 Content-Length)이고 iPhone Safari 는 오디오 MSE 사실상 미지원이므로 **HLS(HTTP Live Streaming) — Apple 네이티브 progressive 재생** 로 구현한다.
 
 **선행 MVP:** [2026-05-31-paperflow-live-tts-design.md](2026-05-31-paperflow-live-tts-design.md) (배치판, 구현·검증 완료). 본 스펙은 그 위에 스트리밍 전달 계층을 얹는다.
 
-## 1. 승인된 결정 (브레인스토밍)
+## 1. 승인된 결정
 
 | # | 결정 | 선택 |
 |---|------|------|
-| 1 | mp3 와 공존 | **HLS 주력 + 최종 mp3(다운로드·폴백) 유지**. 기존 단일-mp3 논문도 계속 재생 |
-| 2 | 세그먼트 단위 | **문장 1개 = 세그먼트 1개** (기존 청크/매니페스트/하이라이트와 1:1) |
-| 3 | 비-iOS 지원 | **iOS 네이티브 + hls.js 폴백** (Chrome/Firefox/데스크톱) |
-| 4 | 스코프 | **HLS 스트리밍 + 배치 사전생성** 함께 |
-| 5 | 사전생성 트리거 | **tts 사이드카 주기 sweep — 리소스 유휴(GPU flock 비점유 + foreground job 없음)일 때만** |
+| 1 | mp3 와 공존 | HLS 주력 + 최종 mp3(다운로드·폴백) 유지. 기존 단일-mp3 논문도 계속 재생 |
+| 2 | 세그먼트 단위 | 문장 1개 = 세그먼트 1개 (단, TARGETDURATION 초과 문장은 §5.3 sub-split) |
+| 3 | 비-iOS 지원 | iOS 네이티브 + hls.js 폴백(pinned+SRI+vendoring 옵션) |
+| 4 | 스코프 | HLS 스트리밍 + 유휴 사전생성 sweep |
+| 5 | **HLS 인증** | **HMAC signed token** — 쿠키 의존 제거(§7). iOS 네이티브 AVPlayer 쿠키 불확실성 대응 |
+| 6 | **sweep v1 정책** | **기본 OFF(`SWEEP_ENABLED=false`) + 캡**(짧은 논문 N개/최대 M분). 완전 preemption 은 v1.1 |
+| 7 | **TARGETDURATION** | **구현 전 실측 단계(§12.0)** 에서 corpus duration 분포 측정 후 확정 + 초과 문장 sub-split |
 
 ## 2. 아키텍처
 
-문장별 합성(Chatterbox-Multilingual)은 MVP 그대로 유지한다. 변경점은 **전달**:
+문장별 합성(Chatterbox-Multilingual)은 MVP 그대로. 변경점은 **전달**:
 
-- 합성 루프가 문장 wav 를 만들 때마다 → **무음 패딩을 baked-in 한 AAC MPEG-TS 세그먼트로 인코딩** → 라이브 `stream.m3u8` 에 세그먼트 줄을 **원자적으로 append** → 매니페스트에 해당 청크 타이밍 append.
-- 뷰어는 `stream.m3u8` 을 재생한다(iOS 네이티브 `<audio src=m3u8>`, 그 외 hls.js). 라이브 플레이리스트가 자라면 플레이어가 자동으로 이어 재생하므로 **파일 swap 불필요 → gapless**.
-- 모든 문장 완료 시 `#EXT-X-ENDLIST` 로 VOD 확정 + **다운로드/폴백용 단일 mp3** 를 stitch(기존 로직 재사용).
-- 별도 백그라운드 **sweep** 가 유휴 시간에 `_ko_audio.md` 는 있으나 fresh 스트림이 없는 논문을 한 개씩 미리 생성.
-
-GPU 동시성은 기존 공유 flock(`outputs/.gpu.lock`)으로 converter(MinerU)와 상호배제. sweep 는 그 위에 "유휴일 때만" 정책을 더한다.
+1. **Segmentation(합성 전):** chunker 가 전체 문장/DOM 메타데이터를 먼저 산출 → 매니페스트의 `chunks[]` 를 **timing 없이(`start_sec=null`) 전부 publish** + `status="streaming"`. `/audio/html` 은 이 전체 chunks 로 span HTML 을 만들어 즉시 본문 표시(하이라이트는 timing 채워진 문장만).
+2. **합성 루프:** 문장 i 의 wav(+무음 패딩)를 AAC MPEG-TS 세그먼트로 인코딩 → **temp→ffprobe→atomic rename** 으로 publish → playlist 에 `#EXTINF` append → 매니페스트 chunk i 의 `start_sec/end_sec` 를 **id-keyed 갱신**.
+3. **재생:** 뷰어는 `stream.m3u8` 재생(iOS 네이티브 `<audio src=m3u8>`, 그 외 hls.js). 라이브 플레이리스트가 자라면 플레이어가 자동으로 이어 재생(파일 swap 불필요 → gapless). **1\~3 세그먼트 ready 시 자동 mount/play**.
+4. **완료:** 모든 문장 후 playlist 에 `#EXT-X-ENDLIST` → VOD 확정 + 다운로드/폴백 mp3 stitch + `status="complete"`.
+5. **사전생성 sweep:** (기본 OFF) 유휴 시 `_ko_audio.md` 있고 fresh HLS 없는 논문을 캡 내에서 미리 생성.
 
 ```text
-[합성 루프] 문장 i
-   └─ wav_i (+pad) ──▶ hls.encode_segment ──▶ seg_i.ts
-                          └─ playlist.append(#EXTINF, seg_i.ts)  (atomic)
-                          └─ manifest.append(chunk_i: start/end_sec)  status="streaming"
-   ... 모든 문장 후 ...
-   └─ playlist.finalize(ENDLIST) + stitch_mp3 + manifest.status="complete"
+chunker(전체) ─▶ manifest.chunks[](text/dom, start_sec=null), status=streaming, /audio/html 전체 span
+   └─ 문장 i: wav+pad ─▶ seg_i.ts.tmp ─ffprobe─▶ os.replace seg_i.ts ─▶ playlist.append(#EXTINF)
+                          └─▶ manifest.chunks[i].start_sec/end_sec 갱신(id-keyed)
+   ... 전부 후 ...
+   └─ playlist.ENDLIST + stitch mp3 + status=complete
+   (중도 실패 시 §5.4: ENDLIST + status=failed_partial, mp3=null)
 ```
 
 ## 3. 산출물 레이아웃
@@ -45,160 +48,199 @@ GPU 동시성은 기존 공유 flock(`outputs/.gpu.lock`)으로 converter(MinerU
 ```text
 outputs/<paper>/audio/
 ├── .jobs/<job_id>/                      # 합성 중 임시 wav (완료 후 폐기, 빈 .jobs/ 도 정리)
-├── <base>_ko_audio.<sha12>/             # HLS 출력 디렉터리 (content-versioned)
-│   ├── stream.m3u8                       # 라이브(EVENT) → 완료 시 ENDLIST
-│   ├── seg_000000.ts                      # 문장당 1 세그먼트 (AAC-LC, 문장 뒤 무음 패딩 포함)
-│   ├── seg_000001.ts
-│   └── ...
-├── <base>_ko_audio.<sha12>.mp3          # 완료 후 다운로드/폴백 단일 mp3 (기존 stitch)
-└── <base>_ko_audio.manifest.json        # 문장 타임라인 + status + stream/mp3 포인터
+├── .locks/<sha12>.lock                  # paper×버전 단위 file lock(§8 동시성)
+├── <base>_ko_audio.<sha12>/             # HLS 출력(content-versioned)
+│   ├── stream.m3u8                       # 디스크엔 토큰 없는 상대 URI. 라이브→완료 시 ENDLIST
+│   ├── seg_000000.ts ... seg_NNNNNN.ts   # 문장당 1 세그먼트(AAC-LC, 문장 뒤 무음 패딩 포함)
+├── <base>_ko_audio.<sha12>.mp3          # 완료 후 다운로드/폴백 단일 mp3
+└── <base>_ko_audio.manifest.json        # 문장 텍스트/DOM + timing + status + hls/mp3 포인터
 ```
 
-- **content-versioned**: 디렉터리·mp3 파일명에 source sha12 포함 → "old manifest + new audio" 경합 원천 차단(기존 B1 패턴 유지). 재생성 시 구버전 디렉터리/ mp3 정리.
-- HLS 디렉터리와 mp3 가 같은 sha12 를 공유하므로 freshness 판정 일관.
+- **content-versioned**(sha12): old/new 경합 차단(B1). HLS 디렉터리와 mp3 가 같은 sha12 공유.
+- **구버전 정리는 즉시 삭제 금지**(§8.3 TTL): active 재생 중 client 가 구버전 세그먼트를 계속 요청하므로.
 
-## 4. 매니페스트 스키마 (증분)
+## 4. 매니페스트 스키마 v2 (2층: 텍스트 vs 타이밍)
 
 ```jsonc
 {
-  "schema_version": 2,                       // HLS 필드 추가로 버전 업
-  "status": "streaming" | "complete" | "failed",
-  "generated_at": "<ISO8601, complete 시>",
+  "schema_version": 2,
+  "status": "streaming" | "complete" | "failed_partial" | "failed",
+  "generated_at": "<ISO8601, complete/실패 확정 시>",
+  "heartbeat": "<ISO8601, 합성 진행 중 주기 갱신 — stale 복구용(§8.4)>",
   "source": { "path", "sha256", "mtime" },
   "tts": { ...DEFAULT_TTS, "chunker_version", "model_revision" },
   "audio": {
-    "hls": "stream.m3u8",                    // 스트리밍 진입점(항상)
-    "mp3": "<base>_ko_audio.<sha12>.mp3" | null,  // complete 전엔 null
-    "mime_type": "audio/mpeg",
-    "duration_sec": <누적, streaming 중엔 부분합>,
+    "hls": { "playlist": "stream.m3u8",
+             "mime_type": "application/vnd.apple.mpegurl",
+             "segment_mime_type": "video/mp2t" },
+    "mp3": { "file": "<base>_ko_audio.<sha12>.mp3" | null,   // complete 전 null
+             "mime_type": "audio/mpeg" },
+    "duration_sec": <timing 확정분 누적>,
     "sample_rate": 24000
   },
-  "chunks": [ { "id","kind","level?","dom_id","section_id","paragraph_index",
-                "sentence_index","text","start_sec","end_sec" }, ... ]  // 세그먼트마다 append
+  "chunks": [                          // 1층: 전체 텍스트/DOM — segmenting 직후 전부 publish
+    { "id","kind","level?","dom_id","section_id","paragraph_index","sentence_index","text",
+      "start_sec": <number|null>,      // 2층: 세그먼트 timing 확정 시 채움(id-keyed 갱신)
+      "end_sec": <number|null> }, ...
+  ]
 }
 ```
 
-- `status="streaming"` 동안 `chunks` 와 `audio.duration_sec` 가 점진적으로 늘어남. 프론트는 이를 주기 재조회해 하이라이트 타임라인을 확장.
-- `is_fresh()`: `status=="complete"` + sha 일치 + cache key 일치일 때만 캐시 유효(스트리밍 중간본은 fresh 아님).
-- **하위호환**: 구형 매니페스트(schema_version 1, `audio.file` 만 있음)는 `audio.hls` 부재 → 프론트가 단일-mp3 폴백 경로로 처리.
+- `status="streaming"` 동안 `chunks` 의 **텍스트는 처음부터 전부 존재**, `start_sec/end_sec` 만 점진 확정. 프론트는 이를 **`chunk.id` keyed replacement 로 머지**(append 아님 — 중복 polling/재시도/실패 전이에서 중복 방지).
+- `is_fresh_for_playback(manifest, sha)`: `status=="complete"` + sha/cachekey 일치 → 캐시 재생 가능. **v1 `audio.file` 매니페스트도 인정**.
+- `is_fresh_for_hls(manifest, sha)`: `status=="complete"` + **schema_version≥2** + `audio.hls` 존재 + sha 일치 → sweep 의 "HLS 사전생성 불필요" 판정. v1(mp3-only)은 stale 로 보고 HLS 업그레이드 대상.
+- **하위호환**: v1(schema 1, `audio.file`) 매니페스트는 `audio.hls` 부재 → 프론트가 단일-mp3 폴백(§9).
 
 ## 5. HLS 세그먼트 · 라이브 플레이리스트
 
-### 5.1 세그먼트 포맷
-- **MPEG-TS 컨테이너 + AAC-LC** (오디오 전용). iOS 네이티브 HLS + hls.js 모두 지원. ffmpeg `-c:a aac -b:a 96k -f mpegts`.
-- 입력: 문장 wav(24kHz mono) + 문장 뒤 무음 패딩(기존 `pad_for(prev_kind,next_kind)`)을 **이어붙인 뒤** 인코딩 → 패딩이 세그먼트 안에 포함되어 HLS gapless.
-- 각 세그먼트 duration 은 ffprobe 실측(패딩 포함).
+### 5.1 세그먼트 포맷 · 원자 publish
+- **MPEG-TS + AAC-LC**(오디오 전용). ffmpeg `-c:a aac -b:a 96k -f mpegts`. iOS 네이티브 + hls.js 지원.
+- 입력: 문장 wav(24kHz mono) + 문장 뒤 무음 패딩(`pad_for`)을 이어붙인 뒤 인코딩 → 패딩 baked-in(HLS gapless).
+- **원자 publish 순서(불변식):** `seg_NNNNNN.ts.tmp.<pid>` 로 인코딩 → ffprobe 로 codec=aac·duration>0 검증(+ §5.3 길이 게이트) → `os.replace(tmp, seg_NNNNNN.ts)` → **그 다음** playlist/manifest 갱신. **playlist 가 참조한 세그먼트는 절대 재작성하지 않는다.**
 
 ### 5.2 라이브 플레이리스트 (`stream.m3u8`)
+디스크 저장본(토큰 없음, 상대 URI):
 ```text
 #EXTM3U
 #EXT-X-VERSION:3
-#EXT-X-PLAYLIST-TYPE:EVENT
-#EXT-X-TARGETDURATION:16          # 문장 길이 상한(품질게이트 sec/char 상한)에 맞춘 안전 고정값
+#EXT-X-PLAYLIST-TYPE:EVENT          # growing event VOD (sliding live 아님; segment 제거/ MEDIA-SEQUENCE 증가 없음)
+#EXT-X-TARGETDURATION:<§12.0 실측 확정>
 #EXT-X-MEDIA-SEQUENCE:0
 #EXTINF:3.214,
-seg_000000.ts
+seg/seg_000000.ts                   # ★ playlist URL(/api/papers/X/audio/stream.m3u8) 기준 상대 → /api/papers/X/audio/seg/seg_000000.ts
 #EXTINF:2.880,
-seg_000001.ts
+seg/seg_000001.ts
 ... (세그먼트 추가마다 append) ...
-#EXT-X-ENDLIST                    # 완료 시에만
+#EXT-X-ENDLIST                      # 완료(또는 §5.4 partial)에만
 ```
-- `EXT-X-PLAYLIST-TYPE:EVENT`: 세그먼트는 append 만, 제거 없음 → 처음부터 끝까지 seek 가능.
-- 플레이리스트는 **tmp 파일에 전체 재작성 후 `os.replace`** (원자적). 부분 읽힘 방지.
-- `TARGETDURATION` 은 정수 상한 고정(예: 16s). 품질게이트가 sec/char ≤ 1.5 로 문장당 길이를 제한하므로 실제 세그먼트는 이를 넘지 않음. (만약 초과 세그먼트 발생 시 — 방어적으로 인코딩 후 duration > TARGETDURATION 이면 경고 로그.)
-- 완료 시 `#EXT-X-ENDLIST` append → VOD 로 확정(클라가 더 이상 폴링 안 함, 완전 seek/cache).
+- **세그먼트 URI 는 `seg/seg_NNNNNN.ts`**(상대) — playlist 가 `/audio/stream.m3u8` 에서 서빙되므로 `/audio/seg/seg_NNNNNN.ts` 로 해석돼 API(§6)와 일치. (Codex BLOCKING #1)
+- playlist 는 **tmp+`os.replace` 원자 재작성**. EXT-X-PLAYLIST-TYPE:EVENT(append-only). 완료 시 ENDLIST → 클라 reload 중단.
+- **인증 토큰은 디스크 저장본에 넣지 않는다.** API(§6)가 매 요청 시 세그먼트 URI 에 `?token=…` 을 주입해 반환.
 
-## 6. 음량 정규화 (트레이드오프)
+### 5.3 TARGETDURATION · 길이 하드 게이트 (Codex BLOCKING #2)
+- `sec/char ≤ 1.5` 품질게이트는 **비율 상한이지 절대 duration 상한이 아님** → 긴 문장이 TARGETDURATION 을 넘을 수 있음. RFC 8216: 모든 `EXTINF` 는 반올림 시 `TARGETDURATION` 이하여야 하고 `TARGETDURATION` 은 불변.
+- **§12.0 실측**으로 `TARGETDURATION`(예: P100 + 여유) 확정.
+- **하드 게이트:** 세그먼트 인코딩 후 `duration > TARGETDURATION` 이면 publish 금지. 처리:
+  - chunker 에 **문장 길이 hard cap** 도입 → 초과 문장은 **TTS 용 sub-sentence 로 분할**(구두점/길이 기준)하되, **UI/매니페스트에서는 같은 `paragraph_index`+동일 문장 그룹(`sentence_group_id`)으로 묶어** 하이라이트는 한 문장처럼 보이게.
+  - sub-sentence 각각이 1 세그먼트. 하이라이트 span 은 그룹 단위로 묶거나 sub-span 으로 분리(구현 플랜에서 확정).
 
-- 현재 배치는 stitch 후 **2-pass loudnorm**(전체 신호 기준). 세그먼트 단위로는 불가(전체 신호 필요).
-- **스트리밍 세그먼트**: **단일 패스** 정규화 — `loudnorm`(single-pass, 측정 없이 타깃 적용) 또는 고정 피크 정규화. 세그먼트 간 음량이 2-pass 대비 약간 덜 일정할 수 있음.
-- **다운로드 mp3**: 완료 시 기존 2-pass loudnorm 그대로 적용(고품질).
-- 수용 근거: Chatterbox 출력이 대체로 균일. 청취 체감 차이 작음. v1.1 에서 세그먼트 normalization 튜닝 가능.
+### 5.4 partial 실패 정책 (Codex MEDIUM #13)
+세그먼트 N 까지 publish 후 N+1 실패 시:
+- playlist 에 `#EXT-X-ENDLIST` append → **앞부분은 재생 가능**. manifest `status="failed_partial"`, `audio.mp3=null`(다운로드 404).
+- 프론트는 partial 배지 + "이어서 생성/재시도" 버튼. (개인용 UX: 들을 수 있는 만큼은 살림)
+- 완전 실패(0 세그먼트 등)는 `status="failed"`, playlist 미생성, 재시도 버튼.
 
-## 7. 사전생성 sweep (유휴 시)
+### 5.5 startup 하한 (Codex HIGH #4)
+"첫 1 세그먼트부터" 를 단정하지 않는다 — **1\~3 세그먼트 available 시 자동 mount/play**. acceptance: 실기기에서 "첫 audible time" 과 "첫 10문장 stall 무" 를 기준으로 §12 에서 검증.
 
-`tts_service/app/sweep.py` — 백그라운드 데몬 스레드(사이드카 기동 시 시작).
+## 6. 음량 정규화 (용어 교정 — Codex MEDIUM #9)
 
-루프(매 `SWEEP_INTERVAL`초, 기본 60s):
-1. **유휴 게이트**: (a) in-memory `_jobs` 에 진행 중(stage ∉ {ready,failed,none}) 항목 없음 **AND** (b) GPU flock `try_acquire` non-blocking 성공(즉시 해제). 둘 중 하나라도 실패 → 이번 사이클 skip(다음 주기).
-2. **스캔**: `outputs/` 직하위 각 폴더에서 `*_ko_audio.md` 존재 && (HLS 디렉터리 없음 || manifest status≠complete || sha mismatch)인 논문 수집.
-3. **한 개** 선택(예: mtime 최신 우선) → 기존 `run_job` 과 동일 파이프라인으로 생성. 생성은 GPU flock 을 정상 획득(블로킹)하므로 도중 foreground/converter 가 들어오면 다음 작업은 양보됨.
-4. 논문 단위 try/except 격리, 생성/skip 을 `log` 로 기록(무음 캡 금지).
+- 현재 배치 stitch 는 **single-pass `loudnorm=I=-16:TP=-1.5:LRA=11`**(true 2-pass 아님). 스펙 용어를 구현에 맞춤.
+- **스트리밍 세그먼트:** 짧은 발화에서 segment 별 loudnorm 은 gain pumping 위험 → **고정 gain + true-peak limiter**(예측 가능). §12.0 실측 샘플로 mp3 대비 비교.
+- **다운로드 mp3:** 완료 후 **현재와 동일한 single-pass loudnorm** 유지(품질 불변).
 
-- foreground(사용자 클릭) job 과 sweep job 은 같은 `run_job`/flock 을 공유하므로 자연히 직렬화. sweep 는 "유휴일 때 1개"만 착수하여 우선순위를 양보.
-- converter 배치가 GPU 를 잡으면 flock try_acquire 실패 → sweep skip → 배치 우선.
+## 7. HLS 인증 — HMAC signed token (Codex BLOCKING #3)
 
-## 8. 백엔드 API (viewer)
+iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가져가 HttpOnly/SameSite 쿠키가 안 붙을 수 있음 → **쿠키 단일 의존 제거**.
 
-기존 엔드포인트 유지(`/audio/jobs`, `/status`, `/manifest`, `/file`(mp3), `/position`, `/html`). 추가:
+- **토큰:** `token = base64url( exp . hmac_sha256(AUDIO_TOKEN_SECRET, f"{source_id}|{sha12}|{exp}") )`.
+  - `exp = now + AUDIO_TOKEN_TTL`(기본 12h — VOD 1회 fetch 후 긴 청취 커버). `source_id`=durable paper 식별자, `sha12`=오디오 버전.
+  - 토큰은 **paper×버전 바인딩**. 유출돼도 해당 오디오만 노출(mp3 download URL 과 동급 민감도).
+- **흐름:** 인증된(쿠키) 클라가 `GET /audio/stream.m3u8` 요청 → 서버가 디스크 playlist 를 읽어 **세그먼트 URI 에 `?token=<fresh>` 주입**해 반환. 세그먼트 요청 `GET /audio/seg/{seg}?token=…` 은 토큰 HMAC+exp+sha 검증(쿠키 불요). traversal 방어(`seg` 정규식 + `_under_audio_dir`).
+- `/audio/stream.m3u8` 자체는 기존 쿠키 인증 게이트(브라우저/네이티브가 첫 playlist 요청엔 same-origin 쿠키 보낼 가능성 높음). **만약 네이티브가 playlist 에도 쿠키를 안 붙이면** → §9 의 "one-time signed playlist URL" 폴백: 인증된 API 가 `…/stream.m3u8?ptoken=…` 형태 서명 URL 을 만들어 `<audio src>` 에 주입(playlist·segment 모두 query token).
+- **hls.js 경로:** `xhrSetup`/`fetchSetup` 으로 `credentials: 'include'` 명시(reverse proxy/public base URL 변경 대비). 토큰 방식이면 쿠키 불요라도 양립.
+- 신규 설정: `AUDIO_TOKEN_SECRET`(JWT_SECRET_KEY 재사용 가능), `AUDIO_TOKEN_TTL`(기본 43200s).
+
+## 8. 동시성 · 정리 (Codex HIGH #8, MEDIUM #12)
+
+### 8.1 paper×버전 file lock
+- 합성 시작 시 `audio/.locks/<sha12>.lock` 에 flock(GPU flock 과 별개 — 같은 paper 의 foreground/sweep 중복 쓰기 차단). 같은 sha12 디렉터리 동시 쓰기 방지.
+- foreground create 가 진행 중 job 의 sha12 lock 을 못 잡으면 "이미 진행 중" 반환(기존 _jobs 게이트 보강).
+
+### 8.2 worker 가정
+- tts 사이드카 `workers==1` 명시(uvicorn 단일 워커). 다중 워커 시 in-memory `_jobs` 분리되므로 file lock 이 1차 방어.
+
+### 8.3 구버전 HLS 디렉터리 TTL 정리 (즉시 삭제 금지)
+- 재생성 시 구버전 HLS 디렉터리/mp3 **즉시 삭제 안 함** — active client 가 구버전 세그먼트를 계속 요청(즉시 삭제 시 404 끊김).
+- **TTL cleanup**: 최근 N(기본 2) 버전 보존 또는 `age > max(duration_sec, 1h)`. 신규 job 시작 시 정리.
+
+### 8.4 stale streaming manifest 복구
+- `status="streaming"` 인데 `heartbeat` mtime 이 30분 이상 정지 → 다음 접근/sweep 시 `status="failed"`(또는 `abandoned`) 전이 후 재생성 허용(사이드카 재시작으로 `_jobs` 유실된 케이스 복구).
+
+## 9. 백엔드 API (viewer)
+
+기존 유지(`/audio/jobs`, `/status`, `/manifest`, `/position`). 변경/추가:
 
 | Method | Path | 용도 |
 |--------|------|------|
-| `GET` | `/api/papers/{name}/audio/stream.m3u8` | 라이브/완료 플레이리스트. `text/vnd.apple.mpegurl`. streaming 중 `Cache-Control: no-cache` |
-| `GET` | `/api/papers/{name}/audio/seg/{seg}` | 세그먼트 `.ts`. `video/mp2t`. `FileResponse`(Range). `seg` 정규식 검증(`seg_[0-9]{6}\.ts`) + `_under_audio_dir` traversal 방어 |
+| `GET` | `/audio/stream.m3u8` | 디스크 playlist 읽어 **세그먼트 URI 에 fresh token 주입** 후 반환. `application/vnd.apple.mpegurl`. streaming: `Cache-Control: no-cache, no-store`. complete: `private, max-age` 가능 |
+| `GET` | `/audio/seg/{seg}` | 토큰 검증(HMAC+exp+sha) → 세그먼트 `.ts`. `video/mp2t`. `FileResponse`(Range). complete 세그먼트: `private, max-age=31536000, immutable`. `seg` 정규식 `seg_[0-9]{6}\.ts` + `_under_audio_dir` |
+| `GET` | `/audio/html` | **streaming 에서도 전체 `chunks` 텍스트로 span HTML 반환**(409 제거; `status in {streaming,complete,failed_partial}` 허용) |
+| `GET` | `/audio/file` | mp3 다운로드. `audio.mp3.file` 채워진(complete) 경우만 200, 아니면 404 |
 
-- `/audio/file`(mp3 다운로드)은 `audio.mp3` 가 채워진(완료) 경우에만 200, 그 전엔 404.
-- 경로 해석은 manifest 의 `audio.hls` 가 가리키는 버전드 디렉터리를 통해(B1 패턴) — old/new 경합 방지.
-- 모든 audio 엔드포인트는 `get_current_user_api` 인증. (주의: `/stream.m3u8`·`/seg/*` 도 인증 게이트 — hls.js/네이티브가 **same-origin 쿠키**를 자동 전송하므로 동작. iOS 네이티브 AVPlayer 의 쿠키 전송은 통합 검증에서 확인 항목.)
+- 경로 해석은 manifest 의 `audio.hls.playlist`/`audio.mp3.file`(버전드)을 통해(B1).
+- MIME/cache (Codex MEDIUM #14) 위 표대로 확정. segment `Accept-Ranges` smoke 확인.
 
-## 9. 프론트엔드 (viewer.html)
+## 10. 프론트엔드 (viewer.html)
 
-- `audioSrc()` → 버전드 `stream.m3u8` URL.
-- **HLS 부착**:
-  - `audioEl.canPlayType('application/vnd.apple.mpegurl')` truthy(Safari/iOS) → `audioEl.src = m3u8`.
-  - 아니면 **hls.js 동적 로드**(CDN, 1회) → `const hls = new Hls(); hls.loadSource(m3u8); hls.attachMedia(audioEl);`. 인스턴스는 컴포넌트에 보관, 모드 이탈/재로드 시 `hls.destroy()`.
-- **스트리밍 확장**: 라이브 플레이리스트 성장은 네이티브/hls.js 가 자동 반영(swap 불필요). status="streaming" 동안 **매니페스트를 주기(예 3s) 재조회**해 새 청크를 하이라이트 타임라인(`audioManifest.chunks`)에 머지 → `onTimeUpdate` 하이라이트가 새 문장까지 따라감. status="complete" 되면 폴링 중단.
-- **하이라이트/이어듣기/MediaSession**: currentTime 기반이라 그대로 동작.
-- **공존/폴백**: manifest 에 `audio.hls` 없음(구형) → 기존 단일 `<audio src=mp3>` 경로. `audio.hls` 있으나 HLS 재생 불가(canPlayType 거짓 && hls.js 로드 실패) && `audio.mp3` 존재 → mp3 폴백.
-- **생성 흐름**: 🎧 생성 → job POST → 매니페스트에 `status` 등장 + 세그먼트 ≥1 + stream.m3u8 존재하면 즉시 mount + 재생(첫 문장부터). 진행 표시는 status 폴링(기존 `pollAudioJob`) 유지.
+- `audioSrc()` → 버전드 `stream.m3u8` URL(필요 시 `?ptoken=` 폴백).
+- **HLS 부착:** `canPlayType('application/vnd.apple.mpegurl')` truthy(Safari/iOS) → `src` 직접. 아니면 **hls.js**(pinned version + SRI, vendoring 옵션) 동적 로드 → `xhrSetup` credentials → `loadSource`/`attachMedia`. 인스턴스 보관·`destroy()`.
+- **streaming 중 player mount**(complete 안 기다림): manifest `status in {streaming,complete,failed_partial}` && playlist+세그먼트 1\~3 ready → mount+play.
+- **`/audio/html` 전체 span**: 본문은 처음부터 전체 문장 표시. `onTimeUpdate` 는 **`start_sec != null` 인 chunk 만** 대상.
+- **매니페스트 머지 idempotent**: status="streaming" 동안 주기(예 3s) 재조회 → **`chunk.id` keyed 갱신**(append 금지). complete/실패 시 폴링 중단.
+- 하이라이트·이어듣기·MediaSession: currentTime 기반 유지.
+- **hls.js 에러 핸들링**(Codex LOW #16): `MANIFEST_LOAD_ERROR`/`FRAG_LOAD_ERROR`/`BUFFER_STALLED_ERROR` 별 재시도·manifest reload·mp3 폴백 분기.
+- **공존/폴백**: manifest `audio.hls` 없음(v1) → 기존 `<audio src=mp3>`. HLS 재생 불가 && `audio.mp3` 존재 → mp3 폴백.
 
-## 10. 신규/변경 모듈
+## 11. 신규/변경 모듈
 
 | 파일 | 변경 |
 |------|------|
-| `tts_service/app/hls.py` | **신규**: `encode_segment(wav, pad, out_ts, sr)` (패딩 결합+AAC TS 인코딩+ffprobe duration), `LivePlaylist`(append/atomic rewrite/finalize ENDLIST) |
-| `tts_service/app/job.py` | **변경**: 합성 루프에서 세그먼트 인코딩+플레이리스트 append+매니페스트 증분 publish, status 전이(streaming→complete), 종료 시 mp3 stitch |
-| `tts_service/app/manifest.py` | **변경**: schema_version 2, `audio.hls`/`audio.mp3` 필드, streaming status, 증분 append 헬퍼 |
-| `tts_service/app/sweep.py` | **신규**: 유휴 사전생성 루프 |
-| `tts_service/app/main.py` | **변경**: 기동 시 sweep 스레드 시작, 환경변수(`SWEEP_INTERVAL`, `SWEEP_ENABLED`) |
-| `viewer/app/services/audio.py` | **변경**: `stream_playlist_path`/`segment_path`(traversal 방어), manifest `audio.hls` 해석 |
-| `viewer/app/routers/api.py` | **변경**: `/audio/stream.m3u8`, `/audio/seg/{seg}` 추가 |
-| `viewer/app/templates/viewer.html` | **변경**: HLS 부착(네이티브/hls.js), 스트리밍 매니페스트 폴링 머지, 폴백 |
+| `tts_service/app/hls.py` | **신규**: `encode_segment`(패딩 결합+AAC TS+temp/atomic+ffprobe+길이게이트), `LivePlaylist`(append/atomic/ENDLIST/partial) |
+| `tts_service/app/segtoken.py` | **신규**: HMAC signed token mint/verify(§7) |
+| `tts_service/app/job.py` | **변경**: segmentation 선-publish, 증분 세그먼트+playlist+manifest(id-keyed), heartbeat, status 전이, paper file lock, 종료 mp3 stitch, 구버전 TTL 정리 |
+| `tts_service/app/manifest.py` | **변경**: schema v2(2층, audio.hls/mp3), `is_fresh_for_playback`/`is_fresh_for_hls`, id-keyed merge 헬퍼 |
+| `tts_service/app/sweep.py` | **신규**: 유휴 사전생성(기본 OFF, 캡, _sweep_active 등록) |
+| `tts_service/app/main.py` | **변경**: sweep 조건부 기동, 설정(`SWEEP_ENABLED`/캡/`AUDIO_TOKEN_*`) |
+| `viewer/app/services/audio.py` | **변경**: v1 `audio.file`+v2 `audio.mp3` 동시 지원, hls playlist/seg 경로(traversal), token mint/verify 연동, 전체 span 렌더 |
+| `viewer/app/routers/api.py` | **변경**: `/audio/stream.m3u8`(token 주입), `/audio/seg/{seg}`(token 검증), `/audio/html` 409 제거 |
+| `viewer/app/templates/viewer.html` | **변경**: HLS 부착(네이티브/hls.js+SRI), streaming mount, id-keyed merge, 폴백·에러분기 |
 
-## 11. 에러 처리
+## 12. 테스트 · 실측
 
-- 세그먼트 인코딩 실패 → 기존 `_chunk_ok` 품질게이트 1회 재시도 → 지속 시 job `failed`, manifest `status="failed"`.
-- 플레이리스트 쓰기 실패 → job 실패(원자적 rewrite 라 부분손상 없음).
-- 플레이어: m3u8 404/stall(hls.js `ERROR`) → `audio.mp3` 존재 시 mp3 폴백, 없으면 재시도 버튼. 버전드 디렉터리 정리로 세그먼트 404 → manifest 재로드.
-- sweep: 논문 단위 try/except, foreground 절대 차단 안 함(유휴 게이트), 예외 로깅.
+### 12.0 (선행) 실측 단계 — 구현 전 BLOCKING
+- 전체 `_ko_audio.md` corpus(또는 대표 표본)에서 **문장별 합성 duration 분포**(P50/P95/P99/P100) 측정 → `TARGETDURATION` 및 문장 길이 hard cap(sub-split 임계) 확정.
+- 스트리밍 고정 gain+limiter vs 최종 mp3 loudnorm **샘플 비교**로 음량 정책 확정.
 
-## 12. 테스트 전략
+### 12.1 단위/통합
+- **`hls.py`**(ffmpeg 실호출): 유효 AAC TS(ffprobe codec/duration), 패딩 포함, 길이게이트 동작, `LivePlaylist` 포맷(상대 URI `seg/…`, EXTINF, ENDLIST, partial, 원자성).
+- **`segtoken.py`**: mint→verify 왕복, exp 만료 거부, sha/source 불일치 거부, 변조 거부.
+- **`manifest.py`**: v2 2층 shape, streaming→complete/failed_partial 전이, id-keyed merge idempotent, `is_fresh_for_playback` vs `is_fresh_for_hls`(v1 mp3 → hls stale).
+- **job 통합 스모크**(GPU): segmentation 선-publish → m3u8 성장 → 1\~3 세그먼트 곧 재생가능 → ENDLIST → mp3 → .jobs 폐기 → 구버전 TTL.
+- **viewer API**: stream.m3u8 token 주입/seg token 검증/traversal/Range, `/audio/html` streaming 전체 span, v1 폴백.
+- **sweep**: 기본 OFF 확인, 캡 동작, 유휴 게이트(진행중 job/flock 점유 시 skip), file lock 중복 방지.
 
-- **`hls.py` 단위**(pytest, ffmpeg 실호출): `encode_segment` 가 유효 AAC TS 생성(ffprobe codec=aac, duration>0, 패딩 포함), `LivePlaylist` 포맷(EXTINF 수치/순서, ENDLIST 유무, 원자성).
-- **`manifest.py` 단위**: schema v2 shape, streaming→complete 전이, `is_fresh` 가 streaming 중간본을 fresh 로 보지 않음.
-- **job 통합 스모크**(GPU): 합성 시작 후 stream.m3u8 가 자라고 첫 세그먼트가 곧 재생가능, 완료 시 ENDLIST + mp3 생성 + .jobs 폐기.
-- **viewer API**: `/stream.m3u8`·`/seg/*` 경로 해석/traversal 방어/Range, 구형 매니페스트 폴백.
-- **프론트 Playwright**: (a) Chromium + hls.js 폴백으로 재생·하이라이트·seek·첫 세그먼트 startup 지연 측정; (b) Safari 네이티브 경로는 가능 시 webkit, 불가 시 수동 체크리스트.
-- **sweep 단위**: 유휴 게이트(진행 중 job 있으면 skip, flock 점유 시 skip), stale 논문 선택, 논문 단위 예외 격리.
-- **실기기 수동**: iPhone Safari 스트리밍 재생·잠금화면·seek, 데이터망 전환.
+### 12.2 프론트 Playwright
+- Chromium + hls.js: streaming mount → 재생 → start_sec 채워지며 하이라이트 → seek → 첫 세그먼트 startup 지연, BUFFER_STALLED 폴백.
+- (가능 시) webkit 네이티브 경로.
 
-## 13. 마이그레이션 / 하위호환
+### 12.3 실기기 — **ship 전 BLOCKING preflight** (Codex #3)
+- iPhone Safari: m3u8/segment 요청에 인증(쿠키 or token)이 실제로 통과하는가 — **token 경로로 검증**. 잠금화면/백그라운드/네트워크 전환 후 지속 재생·seek. AirPods/MediaSession.
 
-- 기존 단일-mp3 매니페스트(schema 1) 논문: 프론트가 `audio.hls` 부재 감지 → 기존 mp3 경로로 재생(무손상). 재생성 트리거(소스 변경 또는 sweep)되면 HLS 로 업그레이드.
-- 신규 생성은 항상 HLS(+완료 시 mp3).
-- viewer 의 `md_ko_audio` 감지/듣기 토글/`/md-ko-audio`(정적 텍스트) 는 불변.
+## 13. 마이그레이션 / 하위호환 (Codex MEDIUM #11)
+
+- v1(schema 1, `audio.file`) 논문: `viewer/app/services/audio.py` 가 `audio.file`(v1)·`audio.mp3.file`(v2) 모두 읽음. 프론트는 `audio.hls` 부재 → 기존 mp3 경로(무손상).
+- `is_fresh_for_playback`(v1 인정) vs `is_fresh_for_hls`(v1 stale → sweep 업그레이드 대상) 분리.
+- v1→HLS 업그레이드 시 기존 재생 안 깨지게 old mp3/HLS **grace period(§8.3 TTL)**.
 
 ## 14. 비목표 (YAGNI)
 
-- 적응형 비트레이트(ABR) 멀티 variant — 단일 24kHz/96k 고정.
-- fMP4/CMAF 세그먼트 — TS 로 충분(추후 옵션).
-- 실시간 음성 클로닝/화자 선택 — 별도.
-- DRM/암호화 세그먼트.
-- 세그먼트 단위 2-pass loudnorm(전체 신호 필요).
+- ABR 멀티 variant · fMP4/CMAF · 화자 선택 · DRM 암호화 세그먼트 · 세그먼트 2-pass loudnorm · sweep 완전 preemption(v1.1).
 
-## 15. 미해결 → 구현 플랜에서 확정
+## 15. 구현 플랜에서 확정할 잔여
 
-- TARGETDURATION 고정값(16s 가정) 실측 검증.
-- 스트리밍 단일패스 정규화 필터 정확한 파라미터.
-- 매니페스트 스트리밍 폴링 주기(3s 가정) 튜닝.
-- iOS 네이티브 AVPlayer 의 인증 쿠키 전송 동작 확인.
+- §12.0 실측 결과로 `TARGETDURATION`·문장 hard cap·음량 파라미터 확정.
+- sub-split 시 하이라이트 span 그룹 단위 vs sub-span 표현.
+- 매니페스트 streaming 폴링 주기(3s 가정) 튜닝.
+- AVPlayer 가 playlist 에도 쿠키 미전송일 때 `?ptoken=` 폴백 확정 여부(실기기 결과 따라).
+- hls.js vendoring vs pinned-CDN 최종 선택.
