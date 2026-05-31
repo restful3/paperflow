@@ -734,6 +734,7 @@
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800 shadow'">
           <audio x-ref="audioEl" preload="metadata"
+                 x-init="$nextTick(() => reattachAudio())"
                  @timeupdate="onTimeUpdate()" @play="audioPlaying=true" @pause="audioPlaying=false"
                  @error="onAudioError()"></audio>
           <button @click="togglePlay()" class="px-2 py-1 rounded hover:bg-sky-500/20 text-lg leading-none"
@@ -1270,6 +1271,7 @@ function viewerApp() {
     audioHls: null,             // hls.js 인스턴스(비-iOS)
     audioStreamUrl: '',         // signed playlist URL
     _audioMounted: false,       // 중복 mount 방지(streaming 중 재호출 대비)
+    _audioRemountN: 0, _lastRemountAt: 0,   // remount 루프 백오프
     _lisT: null,
     location: '{{ location }}',
     appViewportHeight: null,
@@ -1959,6 +1961,15 @@ function viewerApp() {
         el.src = '/api/papers/' + name + '/audio/file';   // HLS 불가 → mp3 폴백
       }
     },
+    async reattachAudio() {
+      // view 전환/편집 종료로 audio 엘리먼트가 x-if 로 파괴·재생성되면(x-init 재호출) 새 엘리먼트에 재부착.
+      // 이미 로드된 manifest 사용(재fetch 없음). manifest 미로드/미준비면 정규 loadAudio 흐름에 맡김.
+      if (!this.audioManifest || !this.audioReady || !this.$refs.audioEl) return;
+      this.audioCurChunk = -1;                 // 새 DOM 의 하이라이트 재동기화
+      if (this.audioIsHls) await this.attachHls();
+      else this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';
+      this.$nextTick(() => this.restoreListening());
+    },
     async mountAudioHtml() {
       const r = await apiFetch('/api/papers/' + name + '/audio/html');
       if (r && r.ok) {
@@ -2006,11 +2017,6 @@ function viewerApp() {
     },
 
     // ── Live TTS: playback controls ──
-    audioSrc() {
-      // B4: 로드한 manifest의 audio.file을 URL에 고정 → old timeline + new audio race 차단.
-      const f = (this.audioManifest && this.audioManifest.audio && this.audioManifest.audio.file) || '';
-      return '/api/papers/' + name + '/audio/file?file=' + encodeURIComponent(f);
-    },
     togglePlay() {
       const a = this.$refs.audioEl;
       if (!a) return;
@@ -2026,11 +2032,30 @@ function viewerApp() {
     seekToChunk(i) {
       const cs = this.audioManifest && this.audioManifest.chunks;
       if (!cs || i < 0 || i >= cs.length) return;
+      if (cs[i].start_sec == null) return;   // streaming 미생성 구간 → no-op(null+0.001=0.001 로 처음 점프 방지)
       this.$refs.audioEl.currentTime = cs[i].start_sec + 0.001;
     },
     prevSentence() { this.seekToChunk(this.audioCurChunk - 1); },
     nextSentence() { this.seekToChunk(this.audioCurChunk + 1); },
     async remountAudio() {
+      // 백오프: 30s 창에서 3회 초과 remount 면 루프로 보고 mp3 폴백 또는 중단(무한 stream-url 재요청 방지).
+      const now = Date.now();
+      if (now - this._lastRemountAt > 30000) this._audioRemountN = 0;
+      this._lastRemountAt = now;
+      this._audioRemountN += 1;
+      if (this._audioRemountN > 3) {
+        const mp3 = this.audioManifest && this.audioManifest.audio && this.audioManifest.audio.mp3;
+        if (mp3 && mp3.file) {
+          this.audioIsHls = false;
+          if (this.audioHls) { this.audioHls.destroy(); this.audioHls = null; }
+          this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';
+          showToast('스트리밍 불안정 → mp3로 전환', 'warning');
+        } else {
+          this.audioReady = false;
+          showToast('오디오 재생 실패(토큰/네트워크). 새로고침 해주세요.', 'error');
+        }
+        return;
+      }
       const t = this.$refs.audioEl.currentTime;
       await this.attachHls();                 // 새 signed URL 로 재부착(토큰 만료 복구)
       this.$nextTick(() => { try { this.$refs.audioEl.currentTime = t; } catch (e) {} });
