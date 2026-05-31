@@ -10,6 +10,10 @@ from app.gpulock import gpu_lock
 GPU_LOCK_PATH = os.environ.get("PF_GPU_LOCK", "/data/outputs/.gpu.lock")
 
 
+class Preempted(Exception):
+    """foreground 가 다른 논문으로 바뀌어 이 백그라운드 합성이 협조적으로 양보됨."""
+
+
 def _sha256(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -34,8 +38,9 @@ def _paper_lock(adir, sha12):
     return fh
 
 
-def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
-    """src_md = 절대경로 <base>_ko_audio.md. HLS 증분 publish + 완료 mp3. 반환: manifest dict."""
+def run_job(paper_dir, src_md, progress_cb=None, device="cuda", is_active=None):
+    """src_md = 절대경로 <base>_ko_audio.md. HLS 증분 publish + 완료 mp3. 반환: manifest dict.
+    is_active: 호출 시 False 면 foreground 가 다른 논문으로 바뀐 것 → 청크 사이에서 Preempted 로 양보."""
     base = _base(src_md)
     adir = _audio_dir(paper_dir)
     os.makedirs(adir, exist_ok=True)
@@ -81,6 +86,8 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
         total = len(chunks)    # heading+text 전부 세그먼트(MVP 가 heading 도 합성)
         with gpu_lock(GPU_LOCK_PATH):                  # converter 와 상호배제
             for i, ch in enumerate(chunks):
+                if is_active is not None and not is_active():   # foreground 가 바뀜 → 양보(gpu_lock 해제)
+                    raise Preempted(f"yielded at chunk {i}/{len(chunks)}")
                 wf = os.path.join(seg_dir, f".w{i:06d}.wav")
                 pad = pad_for(ch["kind"], chunks[i + 1]["kind"]) if i < len(chunks) - 1 else 0.0
                 seg_name = f"seg_{i:06d}.ts"

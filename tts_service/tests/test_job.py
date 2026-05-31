@@ -59,6 +59,33 @@ def test_synth_timeout_fails_fast(monkeypatch, tmp_path):
     assert elapsed < 4                  # 무한/5s 대기 아님 — 타임아웃으로 빠르게 끊김
 
 
+def test_run_job_preempts_between_chunks(monkeypatch, tmp_path):
+    # 협조적 선점: is_active 가 False 가 되면 청크 사이에서 Preempted 로 양보(gpu_lock 해제).
+    import pytest
+    paper = tmp_path / "P"; paper.mkdir()
+    md = paper / "P_ko_audio.md"
+    md.write_text("# 제목\n\n첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다.\n", encoding="utf-8")
+    monkeypatch.setattr(job, "GPU_LOCK_PATH", str(tmp_path / ".gpu.lock"))
+    monkeypatch.setattr(job, "synth_chunk", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(job, "_chunk_ok", lambda *a, **k: True)
+
+    def fake_encode(wf, pad, out_ts, **k):
+        open(out_ts, "wb").close()
+        return 1.0
+    monkeypatch.setattr(job, "encode_segment", fake_encode)
+
+    calls = {"n": 0}
+    def is_active():
+        calls["n"] += 1
+        return calls["n"] <= 1          # 첫 청크만 허용, 그 다음 양보
+
+    with pytest.raises(job.Preempted):
+        job.run_job(str(paper), str(md), is_active=is_active)
+    # 첫 청크 1개만 세그먼트 생성되고 중단됐어야 함
+    segs = [p for p in (tmp_path).rglob("seg_*.ts")]
+    assert len(segs) == 1
+
+
 def test_version_sha():
     assert job._version_sha("P_ko_audio.abc123def456") == "abc123def456"
     assert job._version_sha("P_ko_audio.abc123def456.mp3") == "abc123def456"
