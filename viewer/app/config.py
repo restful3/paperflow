@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # Live TTS sidecar (Chatterbox-Multilingual)
     TTS_SERVICE_URL: str = "http://paperflow-tts:8100"
 
+    # HLS audio token config (Task 9 endpoints consume these)
+    AUDIO_TOKEN_SECRET: str = ""        # 빈 값이면 JWT_SECRET_KEY 사용(아래 property)
+    AUDIO_PTOKEN_TTL: int = 43200       # 12h
+    AUDIO_TOKEN_TTL: int = 43200
+    AUDIO_RESUME_GRACE: int = 3600
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -100,6 +106,10 @@ class Settings(BaseSettings):
                 "Set MCP_PUBLIC_BASE_URL (e.g. http://localhost:8090) or clear MCP_API_KEY."
             )
         return True
+
+    @property
+    def audio_secret(self) -> str:
+        return self.AUDIO_TOKEN_SECRET or self.JWT_SECRET_KEY
 
     @property
     def mcp_allowed_origins_set(self) -> set[str]:

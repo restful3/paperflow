@@ -41,3 +41,51 @@ def test_render_audio_html_from_manifest():
 def test_render_audio_html_escapes():
     manifest = {"chunks": [{"id": 0, "kind": "text", "dom_id": "tts-s-000000", "text": "a<b>&", "paragraph_index": 0}]}
     assert "a&lt;b&gt;&amp;" in render_audio_html(manifest)
+
+
+def test_mp3_path_v1_and_v2(tmp_path, monkeypatch):
+    paper = tmp_path/"P"; (paper/"audio").mkdir(parents=True)
+    (paper/"P_ko_audio.md").write_text("# t\n\n본문.")
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    # v1
+    (paper/"audio"/"P_ko_audio.manifest.json").write_text(
+        '{"schema_version":1,"status":"complete","audio":{"file":"P_ko_audio.v1.mp3"}}')
+    (paper/"audio"/"P_ko_audio.v1.mp3").write_bytes(b"x")
+    assert a.mp3_file_path("P").name == "P_ko_audio.v1.mp3"
+    # v2
+    (paper/"audio"/"P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"complete","audio":{"hls":{"playlist":"stream.m3u8"},'
+        '"mp3":{"file":"P_ko_audio.abc.mp3"}}}')
+    assert a.mp3_file_path("P").name == "P_ko_audio.abc.mp3"
+
+
+def test_hls_paths_resolve(tmp_path, monkeypatch):
+    paper = tmp_path/"P"; (paper/"audio"/"P_ko_audio.abc123def456").mkdir(parents=True)
+    (paper/"P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper/"audio"/"P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"streaming","source":{"sha256":"abc123def456ff"},'
+        '"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}}}')
+    (paper/"audio"/"P_ko_audio.abc123def456"/"stream.m3u8").write_text("#EXTM3U")
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    assert a.hls_playlist_path("P").name == "stream.m3u8"
+    # 실재하는 세그먼트
+    (paper/"audio"/"P_ko_audio.abc123def456"/"seg_000000.ts").write_bytes(b"\x47" + b"\x00"*187)
+    seg = a.hls_segment_path("P", "seg_000000.ts")
+    assert seg.parent.name == "P_ko_audio.abc123def456"
+    # 미존재 세그먼트 → None (Task 9 가 404 로 변환)
+    assert a.hls_segment_path("P", "seg_000999.ts") is None
+    # traversal 방어
+    assert a.hls_segment_path("P", "../../etc") is None
+
+
+def test_reconcile_stale_streaming_to_failed(tmp_path, monkeypatch):
+    paper = tmp_path/"P"; (paper/"audio").mkdir(parents=True)
+    (paper/"P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper/"audio"/"P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"streaming","heartbeat":"2000-01-01T00:00:00+00:00",'
+        '"source":{"sha256":"s"},"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}},"chunks":[]}')
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    assert a.reconcile_stale("P") is True                    # 오래된 heartbeat → failed 전이
+    import json as _j
+    assert _j.loads((paper/"audio"/"P_ko_audio.manifest.json").read_text())["status"] == "failed"
+    assert a.reconcile_stale("P") is False                   # 이미 failed → no-op
