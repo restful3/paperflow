@@ -35,3 +35,10 @@ def test_closing_quote_after_period_splits():   # nit#1
     md = '그는 "좋다." 라고 말했다. 다음 문장.'
     texts = [c["text"] for c in chunk_markdown(md)]
     assert texts == ['그는 "좋다."', "라고 말했다.", "다음 문장."]
+
+
+def test_heading_level_captured():
+    chunks = chunk_markdown("# A\n\n본문.\n\n### B\n\n또 본문.")
+    headings = [c for c in chunks if c["kind"] == "heading"]
+    assert headings[0]["level"] == 1
+    assert headings[1]["level"] == 3

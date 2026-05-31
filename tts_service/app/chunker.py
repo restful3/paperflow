@@ -33,9 +33,10 @@ def chunk_markdown(md: str):
         m = _HEADING.match(block)
         if m and "\n" not in block:
             text = m.group(2).strip()
+            level = len(m.group(1))          # '#' 개수
             section_id = _slug(text, n)
             chunks.append({
-                "id": n, "kind": "heading", "dom_id": f"tts-s-{n:06d}",
+                "id": n, "kind": "heading", "level": level, "dom_id": f"tts-s-{n:06d}",
                 "section_id": section_id, "paragraph_index": para_idx,
                 "sentence_index": 0, "text": text,
             })
