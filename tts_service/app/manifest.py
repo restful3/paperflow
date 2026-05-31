@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timezone
 
 from app.chunker import CHUNKER_VERSION
@@ -63,6 +64,20 @@ def _cachekey_match(manifest, tts_overrides=None):
     return all(have.get(k) == want.get(k) for k in CACHE_KEY_FIELDS)
 
 
+def compute_audio_version(source_sha256, tts_overrides=None):
+    """아티팩트 버전 = source sha + freshness cache-key 필드들의 digest[:12].
+
+    Codex Finding 2: HLS dir/mp3/token 을 source sha 만으로 키잉하면 model/cache-key 변경 후
+    재생성이 같은 immutable 경로를 덮어쓴다. cache-key 까지 묶으면 '재생성=새 dir' 이 되어
+    구버전 세그먼트/토큰이 그대로 유효하게 남는다. is_fresh_for_playback 과 동일 입력이라
+    'fresh ⟺ 같은 version' 이 성립한다."""
+    tts = dict(DEFAULT_TTS)
+    if tts_overrides:
+        tts.update(tts_overrides)
+    key = source_sha256 + "|" + "|".join(f"{k}={tts.get(k)}" for k in CACHE_KEY_FIELDS)
+    return hashlib.sha256(key.encode()).hexdigest()[:12]
+
+
 def build_manifest_v2(source_path, source_sha256, chunks, sample_rate,
                       source_mtime=None, tts_overrides=None):
     tts = dict(DEFAULT_TTS)
@@ -76,6 +91,7 @@ def build_manifest_v2(source_path, source_sha256, chunks, sample_rate,
         "source": {"path": source_path, "sha256": source_sha256, "mtime": source_mtime},
         "tts": tts,
         "audio": {
+            "version": compute_audio_version(source_sha256, tts_overrides),  # 아티팩트 버전(dir/mp3/token)
             "hls": {"playlist": "stream.m3u8",
                     "mime_type": "application/vnd.apple.mpegurl",
                     "segment_mime_type": "video/mp2t"},

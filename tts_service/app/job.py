@@ -4,7 +4,7 @@ from app.synth import synth_chunk, model_revision
 from app.stitch import stitch_chunks, pad_for
 from app.hls import encode_segment, LivePlaylist, TARGETDURATION
 from app.manifest import (build_manifest_v2, merge_chunk_timing,
-                          is_fresh_for_playback, _now_iso)
+                          is_fresh_for_playback, compute_audio_version, _now_iso)
 from app.gpulock import gpu_lock
 
 GPU_LOCK_PATH = os.environ.get("PF_GPU_LOCK", "/data/outputs/.gpu.lock")
@@ -40,11 +40,12 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
     adir = _audio_dir(paper_dir)
     os.makedirs(adir, exist_ok=True)
     src_sha = _sha256(src_md)
-    sha12 = src_sha[:12]
+    tts_over = {"model_revision": model_revision()}
+    version = compute_audio_version(src_sha, tts_over)  # source sha + cache-key digest (Codex Finding 2)
     man_path = os.path.join(adir, f"{base}_ko_audio.manifest.json")
-    hls_dir = os.path.join(adir, f"{base}_ko_audio.{sha12}")
+    hls_dir = os.path.join(adir, f"{base}_ko_audio.{version}")
     seg_dir = hls_dir                                  # 세그먼트는 hls_dir 직하위
-    mp3_name = f"{base}_ko_audio.{sha12}.mp3"
+    mp3_name = f"{base}_ko_audio.{version}.mp3"
 
     # freshness skip: 완료된 동일 버전 HLS 가 이미 있으면 재사용
     if os.path.exists(man_path):
@@ -57,7 +58,7 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
         except Exception:
             pass
 
-    lock = _paper_lock(adir, sha12)                    # 같은 버전 동시 쓰기 차단
+    lock = _paper_lock(adir, version)                  # 같은 아티팩트 버전 동시 쓰기 차단
     try:
         md = open(src_md, encoding="utf-8").read()
         chunks = chunk_markdown(md)
@@ -69,7 +70,7 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
         manifest = build_manifest_v2(
             os.path.basename(src_md), src_sha, chunks, sample_rate=24000,
             source_mtime=str(os.path.getmtime(src_md)),
-            tts_overrides={"model_revision": model_revision()})
+            tts_overrides=tts_over)                     # audio.version == 위 version 과 동일 산식
         manifest["heartbeat"] = _now_iso()             # 생성 시점부터 heartbeat 시작 →
         _publish_manifest(man_path, manifest)          # reconcile_stale 이 막 시작한 job 을 죽이지 않음
         # (전체 chunks 즉시 publish, status=streaming. 첫 세그먼트 전 GPU 대기 중에도 stale 아님)
@@ -112,7 +113,7 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
                 os.remove(wf)
             except OSError:
                 pass
-        _cleanup_old_versions(adir, base, keep_sha12=sha12)
+        _cleanup_old_versions(adir, base, keep_sha12=version)
         if progress_cb:
             progress_cb(stage="ready", done=total, total=total)
         return manifest

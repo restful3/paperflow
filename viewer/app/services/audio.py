@@ -89,13 +89,20 @@ def mp3_file_path(name):                       # v1 audio.file + v2 audio.mp3.fi
     return manifest_path(name).parent / fn
 
 
+def _audio_version(man):
+    # 아티팩트 버전(Codex Finding 2). 구버전 manifest 는 source sha[:12] 로 폴백.
+    v = (man.get("audio") or {}).get("version")
+    if v: return v
+    return ((man.get("source") or {}).get("sha256") or "")[:12] or None
+
+
 def _hls_dir(name):
     man = _manifest_dict(name)
     if not man: return None
-    sha = (man.get("source") or {}).get("sha256")
+    ver = _audio_version(man)
     base = _base_for(_resolve_paper_dir(name))
-    if not sha or not base: return None
-    return manifest_path(name).parent / f"{base}_ko_audio.{sha[:12]}"
+    if not ver or not base: return None
+    return manifest_path(name).parent / f"{base}_ko_audio.{ver}"
 
 
 def hls_playlist_path(name):
@@ -114,11 +121,11 @@ def hls_segment_path(name, seg):
     return cand if cand.exists() else None    # ← Task 9 가 404 로 변환 (FileResponse 500 방지)
 
 
-def source_id_and_sha(name):                   # 토큰 바인딩용
+def source_id_and_sha(name):                   # 토큰 바인딩용 (sha 자리 = 아티팩트 버전)
     man = _manifest_dict(name)
     if not man: return None, None
     src = (man.get("source") or {})
-    return src.get("path"), (src.get("sha256") or "")[:12]
+    return src.get("path"), (_audio_version(man) or "")
 
 
 def reconcile_stale(name, threshold_sec=1800):

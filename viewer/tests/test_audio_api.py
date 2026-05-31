@@ -195,3 +195,17 @@ def test_reconcile_stale_none_heartbeat_uses_mtime(tmp_path, monkeypatch):
     old = 946684800  # 2000-01-01
     _os.utime(mp, (old, old))
     assert a.reconcile_stale("P") is True
+
+
+def test_hls_dir_uses_audio_version_not_source_sha(tmp_path, monkeypatch):
+    # Codex Finding 2: dir/token 은 audio.version 으로 해석(source sha 가 달라도 version 우선).
+    paper = tmp_path / "P"; ver = "0123456789ab"
+    (paper / "audio" / f"P_ko_audio.{ver}").mkdir(parents=True)
+    (paper / "P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper / "audio" / "P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"streaming","source":{"path":"P_ko_audio.md","sha256":"ffffffffffff99"},'
+        '"audio":{"version":"' + ver + '","hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}}}')
+    (paper / "audio" / f"P_ko_audio.{ver}" / "stream.m3u8").write_text("#EXTM3U")
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    assert a.hls_playlist_path("P").parent.name == f"P_ko_audio.{ver}"   # source sha 아닌 version
+    assert a.source_id_and_sha("P") == ("P_ko_audio.md", ver)            # 토큰도 version 바인딩

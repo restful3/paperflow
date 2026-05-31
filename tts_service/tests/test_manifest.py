@@ -67,3 +67,19 @@ def test_fresh_split_v1_vs_v2():
     v2 = build_manifest_v2("a.md", "s", [_chunk(0)], 24000)
     v2["status"] = "complete"
     assert is_fresh_for_hls(v2, "s") is True
+
+
+from app.manifest import compute_audio_version
+
+
+def test_audio_version_deterministic_and_cachekey_sensitive():
+    v = compute_audio_version("sha_abc")
+    assert v == compute_audio_version("sha_abc")                 # deterministic
+    assert len(v) == 12 and all(c in "0123456789abcdef" for c in v)
+    assert compute_audio_version("sha_abc") != compute_audio_version("sha_def")          # source 다름
+    assert compute_audio_version("sha_abc") != compute_audio_version("sha_abc", {"model_revision": "r2"})  # cache-key 다름
+
+
+def test_build_v2_stores_audio_version():
+    m = build_manifest_v2("a.md", "sha_xyz", [_chunk(0)], 24000)
+    assert m["audio"]["version"] == compute_audio_version("sha_xyz")
