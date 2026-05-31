@@ -165,6 +165,24 @@ def test_redact_filter_masks_token():
     assert "SECRET" not in rec.getMessage() and "token=REDACTED" in rec.getMessage()
 
 
+def test_redact_filter_preserves_int_status_code():
+    # 회귀: uvicorn.access 레코드는 마지막 %d 에 int 상태코드를 넘긴다.
+    # 필터가 모든 arg 를 str() 로 바꾸면 %d 포맷이 TypeError 로 깨진다.
+    import logging
+    from app.main import _TokenRedactFilter
+    rec = logging.LogRecord(
+        "uvicorn.access", 20, "", 0,
+        '%s - "%s %s HTTP/%s" %d',
+        ('1.2.3.4:5', 'GET', '/a?token=SECRET', '1.1', 200),
+        None,
+    )
+    _TokenRedactFilter().filter(rec)
+    msg = rec.getMessage()  # %d % "200" 이면 TypeError
+    assert "SECRET" not in msg
+    assert "token=REDACTED" in msg
+    assert msg.endswith(" 200")
+
+
 def test_reconcile_stale_keeps_fresh_heartbeat(tmp_path, monkeypatch):
     # 회귀: 막 시작한 job(최근 heartbeat)은 streaming 유지 — failed 로 뒤집지 않는다.
     from datetime import datetime, timezone

@@ -19,7 +19,12 @@ class _TokenRedactFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.args:
-            record.args = tuple(self._RE.sub(r"\1REDACTED", str(a)) for a in record.args)
+            # 문자열 arg 만 마스킹한다. uvicorn.access 의 상태코드(int, msg 의 %d)를
+            # str 로 바꾸면 %d 포맷이 TypeError 로 깨진다.
+            record.args = tuple(
+                self._RE.sub(r"\1REDACTED", a) if isinstance(a, str) else a
+                for a in record.args
+            )
         record.msg = self._RE.sub(r"\1REDACTED", str(record.msg))
         return True
 
