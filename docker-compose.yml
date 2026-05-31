@@ -58,6 +58,9 @@ services:
       - MCP_ALLOWED_ORIGINS=${MCP_ALLOWED_ORIGINS:-}
       - MCP_REQUIRE_TRANSLATION=${MCP_REQUIRE_TRANSLATION:-true}
       - TTS_SERVICE_URL=http://paperflow-tts:8100
+      - AUDIO_TOKEN_SECRET=${AUDIO_TOKEN_SECRET:-}
+      # NOTE: access log 에 ?token/?ptoken 노출 가능 — viewer 가 uvicorn.access 에 redaction 필터를
+      #       부착(main.py _TokenRedactFilter). 운영 시 프록시 마스킹 병행 권장.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -75,6 +78,10 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - PF_GPU_LOCK=/data/outputs/.gpu.lock      # converter의 /app/outputs/.gpu.lock 과 동일 호스트 파일
       - PF_OUTPUTS_ROOT=/data/outputs
+      - SWEEP_ENABLED=${SWEEP_ENABLED:-false}
+      - SWEEP_INTERVAL=${SWEEP_INTERVAL:-60}
+      - SWEEP_MAX_PAPERS=${SWEEP_MAX_PAPERS:-3}
+      - AUDIO_TOKEN_SECRET=${AUDIO_TOKEN_SECRET:-}
     deploy:
       resources:
         reservations:
