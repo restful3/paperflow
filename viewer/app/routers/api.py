@@ -685,13 +685,16 @@ async def audio_file(name: str, file: str | None = None, _user: str = Depends(ge
     return FileResponse(target, media_type="audio/mpeg")  # Starlette가 Range 처리
 
 
-@router.get("/papers/{name:path}/audio/progress")
-async def get_audio_progress(name: str, _user: str = Depends(get_current_user_api)):
+# NOTE: 경로를 `/audio/position`으로 둔다(`/audio/progress` 금지). 읽기 진행률 라우트
+# `POST /papers/{name:path}/progress`(greedy)가 먼저 등록돼 `.../audio/progress`를
+# name=".../audio"로 삼켜 섀도잉한다. `/position`은 충돌하는 트레일링 세그먼트가 없다.
+@router.get("/papers/{name:path}/audio/position")
+async def get_audio_position(name: str, _user: str = Depends(get_current_user_api)):
     return audio_svc.get_listening_progress(name)
 
 
-@router.post("/papers/{name:path}/audio/progress")
-async def save_audio_progress(name: str, payload: dict, _user: str = Depends(get_current_user_api)):
+@router.post("/papers/{name:path}/audio/position")
+async def save_audio_position(name: str, payload: dict, _user: str = Depends(get_current_user_api)):
     audio_svc.save_listening_progress(name, payload)
     return {"ok": True}
 
