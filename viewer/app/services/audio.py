@@ -1,4 +1,5 @@
 import json, os
+from html import escape
 from pathlib import Path
 
 from .papers import safe_paper_dir          # 기존 경로 안전 헬퍼 재사용
@@ -70,3 +71,31 @@ def save_listening_progress(name, payload):
     tmp = pf.with_suffix(".json.tmp")                 # nit#10: atomic write
     tmp.write_text(json.dumps(data, ensure_ascii=False))
     os.replace(tmp, pf)
+
+
+def render_audio_html(manifest: dict) -> str:
+    """manifest.chunks만으로 문장-span HTML 생성(단일 진실원천, marked 우회).
+    heading→<hN id=dom_id>, text→문단 안 <span id=dom_id>. 같은 paragraph_index는 한 <p>."""
+    out = []
+    cur_para = None
+    para_open = False
+
+    def close_para():
+        nonlocal para_open
+        if para_open:
+            out.append("</p>"); para_open = False
+
+    for ch in manifest.get("chunks", []):
+        cid, dom, text = ch["id"], ch["dom_id"], escape(ch["text"])
+        if ch["kind"] == "heading":
+            close_para()
+            lvl = min(max(int(ch.get("level", 2)), 1), 6)
+            out.append(f'<h{lvl} id="{dom}" data-tts-chunk="{cid}">{text}</h{lvl}>')
+            cur_para = None
+        else:
+            if ch.get("paragraph_index") != cur_para:
+                close_para(); out.append("<p>"); para_open = True
+                cur_para = ch.get("paragraph_index")
+            out.append(f'<span id="{dom}" data-tts-chunk="{cid}">{text}</span> ')
+    close_para()
+    return "".join(out)

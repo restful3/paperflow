@@ -653,6 +653,17 @@ async def audio_manifest(name: str, _user: str = Depends(get_current_user_api)):
     return FileResponse(p, media_type="application/json")
 
 
+@router.get("/papers/{name:path}/audio/html")
+async def audio_html(name: str, _user: str = Depends(get_current_user_api)):
+    p = audio_svc.manifest_path(name)
+    if not p or not p.exists():
+        raise HTTPException(404)
+    manifest = json.loads(p.read_text())
+    if manifest.get("status") != "complete":
+        raise HTTPException(409, "not ready")
+    return Response(content=audio_svc.render_audio_html(manifest), media_type="text/html; charset=utf-8")
+
+
 @router.get("/papers/{name:path}/audio/file")
 async def audio_file(name: str, file: str | None = None, _user: str = Depends(get_current_user_api)):
     # B4: 프론트가 로드한 manifest의 audio.file을 명시하면 그 버전드 파일을 서빙(timeline 정합).
