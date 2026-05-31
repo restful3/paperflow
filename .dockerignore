@@ -6,9 +6,16 @@ logs/
 outputs/
 newones/
 archives/
+model_cache/
 .sessions/
 __pycache__/
 *.pyc
+*.bak
+*.bak_*
+*.orig
+*.rej
+/*.png
+test_container_tui.txt
 .claude/
 prompt copy.md
 config.json.backup
