@@ -20,6 +20,12 @@ def _worker(paper_dir, src_md):
     try:
         cb("segmenting", 0, 0)
         run_job(paper_dir, src_md, progress_cb=cb)
+        # freshness-skip 경로는 progress_cb("ready")를 부르지 않으므로 완료를 보장한다.
+        with _lock:
+            st = _jobs.get(paper_dir, {})
+            if st.get("stage") != "ready":
+                _jobs[paper_dir] = {"stage": "ready", "done": st.get("done", 0),
+                                    "total": st.get("total", 0), "error": None}
     except Exception as e:
         with _lock:
             _jobs[paper_dir] = {"stage": "failed", "done": 0, "total": 0, "error": str(e)}
