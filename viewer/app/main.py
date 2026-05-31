@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+import logging
+import re as _re
 from contextlib import suppress
 from pathlib import Path
 
@@ -8,6 +10,18 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .routers import api, pages
+
+
+class _TokenRedactFilter(logging.Filter):
+    """Mask ?token=/?ptoken= values in uvicorn access logs (HIGH#1)."""
+
+    _RE = _re.compile(r"((?:p?token)=)[^&\s\"']+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            record.args = tuple(self._RE.sub(r"\1REDACTED", str(a)) for a in record.args)
+        record.msg = self._RE.sub(r"\1REDACTED", str(record.msg))
+        return True
 
 
 async def _periodic_mcp_cleanup():
@@ -48,6 +62,7 @@ async def app_lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings.validate_runtime()
+    logging.getLogger("uvicorn.access").addFilter(_TokenRedactFilter())
     application = FastAPI(
         title="PaperFlow Viewer",
         docs_url=None,

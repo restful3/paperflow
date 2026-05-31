@@ -2,15 +2,18 @@ import json
 import os
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from ..auth import create_token, set_auth_cookie, clear_auth_cookie
 from ..config import settings
-from ..dependencies import get_current_user_api
+from ..dependencies import get_current_user_api, get_current_user_page
 from ..services import papers as paper_svc
 from ..services import audio as audio_svc
+from ..services.tts_token import mint as _tok_mint, verify as _tok_verify
 import httpx
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -647,6 +650,7 @@ async def audio_status(name: str, _user: str = Depends(get_current_user_api)):
 
 @router.get("/papers/{name:path}/audio/manifest")
 async def audio_manifest(name: str, _user: str = Depends(get_current_user_api)):
+    audio_svc.reconcile_stale(name)                       # BLOCKING#4: stale streaming 복구
     p = audio_svc.manifest_path(name)
     if not p or not p.exists():
         raise HTTPException(404)
@@ -659,7 +663,8 @@ async def audio_html(name: str, _user: str = Depends(get_current_user_api)):
     if not p or not p.exists():
         raise HTTPException(404)
     manifest = json.loads(p.read_text())
-    if manifest.get("status") != "complete":
+    # HIGH#1: streaming(진행 중)·complete·failed_partial 모두 렌더 허용(앞부분 재생 가능).
+    if manifest.get("status") not in ("streaming", "complete", "failed_partial"):
         raise HTTPException(409, "not ready")
     return Response(content=audio_svc.render_audio_html(manifest), media_type="text/html; charset=utf-8")
 
@@ -668,7 +673,7 @@ async def audio_html(name: str, _user: str = Depends(get_current_user_api)):
 async def audio_file(name: str, file: str | None = None, _user: str = Depends(get_current_user_api)):
     # B4: 프론트가 로드한 manifest의 audio.file을 명시하면 그 버전드 파일을 서빙(timeline 정합).
     #     생략 시 현재 manifest가 가리키는 파일. 어느 경우든 traversal 방어 + 존재 검증.
-    cur = audio_svc.audio_file_path(name)                 # 현재 manifest의 audio.file
+    cur = audio_svc.mp3_file_path(name)                   # HIGH#2: v1 audio.file + v2 audio.mp3.file
     if not cur:
         raise HTTPException(404)
     target = cur
@@ -683,6 +688,77 @@ async def audio_file(name: str, file: str | None = None, _user: str = Depends(ge
     if not target.exists():
         raise HTTPException(404)      # 정리된 구버전 → 프론트가 onAudioError로 재로드
     return FileResponse(target, media_type="audio/mpeg")  # Starlette가 Range 처리
+
+
+# ── HLS streaming (signed-token) ──────────────────────────────────────────────
+
+def _segment_ttl(name: str) -> int:
+    # HIGH#6: max(AUDIO_TOKEN_TTL, duration + resume_grace) — VOD 1회 fetch 후 장시간 커버
+    man = audio_svc._manifest_dict(name) or {}
+    dur = (man.get("audio") or {}).get("duration_sec") or 0
+    return int(max(settings.AUDIO_TOKEN_TTL, dur + settings.AUDIO_RESUME_GRACE))
+
+
+def _audio_token(kind: str, name: str, ttl: int) -> str:
+    sid, sha = audio_svc.source_id_and_sha(name)
+    return _tok_mint(settings.audio_secret, kind=kind, source_id=sid or "", sha12=sha or "", ttl=ttl)
+
+
+def _playlist_segment_count(name: str) -> int:
+    pl = audio_svc.hls_playlist_path(name)
+    if not pl:
+        return 0
+    return sum(1 for ln in pl.read_text().splitlines() if ln.startswith("seg/"))
+
+
+@router.get("/papers/{name:path}/audio/stream-url")
+async def audio_stream_url(name: str, _user: str = Depends(get_current_user_api)):
+    audio_svc.reconcile_stale(name)                       # BLOCKING#4: stale streaming 복구
+    # HIGH#1: 빈 EVENT playlist(세그먼트 0)면 아직 attach 시키지 않음(hls.js/Safari fatal 회피).
+    if _playlist_segment_count(name) < 1:
+        raise HTTPException(425, "no segments yet")       # 425 Too Early → 프론트 재시도
+    ptoken = _audio_token("playlist", name, settings.AUDIO_PTOKEN_TTL)
+    return {"ptoken": ptoken, "url": f"/api/papers/{name}/audio/stream.m3u8?ptoken={ptoken}"}
+
+
+@router.get("/papers/{name:path}/audio/stream.m3u8")
+async def audio_stream(name: str, ptoken: str | None = None,
+                       user_cookie=Depends(get_current_user_page)):
+    sid, sha = audio_svc.source_id_and_sha(name)
+    if ptoken:
+        ok, _r = _tok_verify(settings.audio_secret, ptoken, "playlist", sid or "", sha or "", time.time())
+        if not ok:
+            raise HTTPException(403, "bad ptoken")
+    elif not user_cookie:
+        raise HTTPException(401)
+    pl = audio_svc.hls_playlist_path(name)
+    if not pl:
+        raise HTTPException(404)
+    man = audio_svc._manifest_dict(name) or {}
+    streaming = man.get("status") == "streaming"
+    seg_tok = _audio_token("segment", name, _segment_ttl(name))
+    body = []
+    for line in pl.read_text().splitlines():
+        if line.startswith("seg/"):
+            line = f"{line}?token={seg_tok}"
+        body.append(line)
+    # HIGH#6 cache 분리: streaming = no-store, complete tokenized = no-cache
+    cache = "no-cache, no-store" if streaming else "private, no-cache"
+    return Response("\n".join(body) + "\n", media_type="application/vnd.apple.mpegurl",
+                    headers={"Cache-Control": cache})
+
+
+@router.get("/papers/{name:path}/audio/seg/{seg}")
+async def audio_seg(name: str, seg: str, token: str = Query(...)):
+    sid, sha = audio_svc.source_id_and_sha(name)
+    ok, _r = _tok_verify(settings.audio_secret, token, "segment", sid or "", sha or "", time.time())
+    if not ok:
+        raise HTTPException(403, "bad token")
+    p = audio_svc.hls_segment_path(name, seg)
+    if not p:
+        raise HTTPException(404)
+    return FileResponse(p, media_type="video/mp2t",                  # segment 파일만 immutable cache
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 # NOTE: 경로를 `/audio/position`으로 둔다(`/audio/progress` 금지). 읽기 진행률 라우트

@@ -89,3 +89,77 @@ def test_reconcile_stale_streaming_to_failed(tmp_path, monkeypatch):
     import json as _j
     assert _j.loads((paper/"audio"/"P_ko_audio.manifest.json").read_text())["status"] == "failed"
     assert a.reconcile_stale("P") is False                   # 이미 failed → no-op
+
+
+# ── Task 9: HLS streaming endpoints ───────────────────────────────────────────
+from fastapi.testclient import TestClient
+
+
+def _client(monkeypatch, tmp_path):
+    from app.config import settings as _s
+    monkeypatch.setattr(_s, "BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(_s, "JWT_SECRET_KEY", "x" * 48)
+    monkeypatch.setattr(_s, "LOGIN_ID", "admin")        # .env 가 실자격을 덮으므로 테스트값 고정
+    monkeypatch.setattr(_s, "LOGIN_PASSWORD", "admin")
+    from app.main import create_app
+    return TestClient(create_app())
+
+
+def test_stream_url_then_playlist_then_seg(tmp_path, monkeypatch):
+    paper = tmp_path / "outputs" / "P"
+    (paper / "audio" / "P_ko_audio.abc123def456").mkdir(parents=True)
+    (paper / "P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper / "audio" / "P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"complete","source":{"path":"P_ko_audio.md","sha256":"abc123def456ff"},'
+        '"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}},"chunks":[]}')
+    hd = paper / "audio" / "P_ko_audio.abc123def456"
+    (hd / "stream.m3u8").write_text("#EXTM3U\n#EXTINF:1.0,\nseg/seg_000000.ts\n#EXT-X-ENDLIST\n")
+    (hd / "seg_000000.ts").write_bytes(b"\x47" + b"\x00" * 187)
+    c = _client(monkeypatch, tmp_path)
+    assert c.post("/api/login", json={"username": "admin", "password": "admin"}).status_code == 200
+    su = c.get("/api/papers/P/audio/stream-url")
+    assert su.status_code == 200, su.text
+    ptoken = su.json()["ptoken"]
+    pl = c.get(f"/api/papers/P/audio/stream.m3u8?ptoken={ptoken}")
+    assert pl.status_code == 200
+    assert "token=" in pl.text                                  # segment URI 에 토큰 주입
+    seg_uri = [ln for ln in pl.text.splitlines() if ln.startswith("seg/")][0]
+    tok = seg_uri.split("token=")[1]
+    sg = c.get(f"/api/papers/P/audio/seg/seg_000000.ts?token={tok}")
+    assert sg.status_code == 200
+    bad = c.get("/api/papers/P/audio/seg/seg_000000.ts?token=bad")
+    assert bad.status_code == 403
+
+
+def test_stream_url_425_when_no_segments(tmp_path, monkeypatch):
+    paper = tmp_path / "outputs" / "P"
+    (paper / "audio" / "P_ko_audio.abc123def456").mkdir(parents=True)
+    (paper / "P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper / "audio" / "P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"streaming","source":{"path":"P_ko_audio.md","sha256":"abc123def456ff"},'
+        '"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}},"chunks":[]}')
+    (paper / "audio" / "P_ko_audio.abc123def456" / "stream.m3u8").write_text("#EXTM3U\n")  # 세그먼트 0
+    c = _client(monkeypatch, tmp_path)
+    c.post("/api/login", json={"username": "admin", "password": "admin"})
+    assert c.get("/api/papers/P/audio/stream-url").status_code == 425
+
+
+def test_audio_file_v2_fallback(tmp_path, monkeypatch):
+    paper = tmp_path / "outputs" / "P"
+    (paper / "audio").mkdir(parents=True)
+    (paper / "P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper / "audio" / "P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"complete","source":{"path":"P","sha256":"abc123def456ff"},'
+        '"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":"P_ko_audio.abc.mp3"}},"chunks":[]}')
+    (paper / "audio" / "P_ko_audio.abc.mp3").write_bytes(b"\xff\xfb")
+    c = _client(monkeypatch, tmp_path)
+    c.post("/api/login", json={"username": "admin", "password": "admin"})
+    assert c.get("/api/papers/P/audio/file").status_code == 200
+
+
+def test_redact_filter_masks_token():
+    import logging
+    from app.main import _TokenRedactFilter
+    rec = logging.LogRecord("x", 20, "", 0, 'GET /a?token=SECRET&ptoken=Y', (), None)
+    _TokenRedactFilter().filter(rec)
+    assert "SECRET" not in rec.getMessage() and "token=REDACTED" in rec.getMessage()
