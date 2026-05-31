@@ -186,6 +186,10 @@
       margin-top: var(--top-bar-height, 140px);
     }
   }
+
+  /* Live TTS: current sentence highlight */
+  .tts-active { background: rgba(56,189,248,0.25); border-radius: 4px; transition: background .2s; }
+  [data-tts-chunk] { cursor: pointer; }
 </style>
 {% endblock %}
 
@@ -724,14 +728,56 @@
 
     <!-- Markdown view (language controlled by EN/KO toggle) -->
     <template x-if="view === 'md' && !editMode">
-      <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
-           :class="$store.darkMode.on && 'dark'"
-           x-html="activeMdContent"
-           @touchstart="handleMarkdownTouchStart($event)"
-           @touchmove="handleTouchMove($event)"
-           @touchend="handleTouchEnd($event)"
-           @touchcancel="handleTouchCancel($event)"
-           @click="handleMarkdownClickDesktop($event)"></div>
+      <div class="flex flex-col flex-1 min-h-0">
+        <!-- Live TTS player bar (audio mode, generated) -->
+        <div x-show="audioMode && audioReady"
+             class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2"
+             :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800 shadow'">
+          <audio x-ref="audioEl" :src="audioSrc()" preload="metadata"
+                 @timeupdate="onTimeUpdate()" @play="audioPlaying=true" @pause="audioPlaying=false"
+                 @error="onAudioError()"></audio>
+          <button @click="togglePlay()" class="px-2 py-1 rounded hover:bg-sky-500/20 text-lg leading-none"
+                  x-text="audioPlaying ? '⏸' : '▶'" title="재생/일시정지"></button>
+          <button @click="prevSentence()" class="px-2 py-1 rounded hover:bg-sky-500/20" title="이전 문장">⏮</button>
+          <button @click="nextSentence()" class="px-2 py-1 rounded hover:bg-sky-500/20" title="다음 문장">⏭</button>
+          <select x-model.number="audioRate" @change="$refs.audioEl.playbackRate = audioRate"
+                  class="text-xs rounded px-1 py-0.5 bg-transparent border"
+                  :class="$store.darkMode.on ? 'border-gray-600' : 'border-gray-300'">
+            <template x-for="r in [0.8,1.0,1.25,1.5,2.0]" :key="r"><option :value="r" x-text="r+'x'"></option></template>
+          </select>
+          <label class="text-xs flex items-center gap-1 ml-auto"><input type="checkbox" x-model="audioFollow"> 따라가기</label>
+        </div>
+
+        <!-- Live TTS generate prompt (audio mode, not yet generated) -->
+        <div x-show="audioMode && !audioReady"
+             class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm"
+             :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-sky-50 text-gray-800 border-b border-sky-200'">
+          <template x-if="!audioGenerating">
+            <button @click="generateAudio()"
+                    class="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition">
+              🎧 오디오 생성
+            </button>
+          </template>
+          <template x-if="audioGenerating">
+            <span class="flex items-center gap-2">
+              <svg class="animate-spin h-4 w-4 text-sky-600" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+              <span x-text="'생성 중… (' + audioJobStage + (audioJobTotal ? ' ' + audioJobDone + '/' + audioJobTotal : '') + ')'"></span>
+            </span>
+          </template>
+        </div>
+
+        <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
+             :class="$store.darkMode.on && 'dark'"
+             x-html="activeMdContent"
+             @touchstart="handleMarkdownTouchStart($event)"
+             @touchmove="handleTouchMove($event)"
+             @touchend="handleTouchEnd($event)"
+             @touchcancel="handleTouchCancel($event)"
+             @click="onMarkdownClick($event)"></div>
+      </div>
     </template>
 
     <!-- PDF view -->
@@ -1209,6 +1255,17 @@ function viewerApp() {
     explainedMode: false,
     hasMdKoAudio: {{ 'true' if has_md_ko_audio else 'false' }},
     audioMode: false,
+    // ── Live TTS audio player state (Plan 2) ──
+    audioManifest: null,        // {chunks:[{id,dom_id,start_sec,end_sec,...}], audio:{duration_sec,file}}
+    audioReady: false,          // 생성된 stitched 오디오 존재 + manifest complete
+    audioGenerating: false,
+    audioJobStage: '',          // segmenting|synthesizing|stitching|validating|ready|failed
+    audioJobDone: 0, audioJobTotal: 0,
+    audioPlaying: false,
+    audioCurChunk: -1,
+    audioFollow: true,          // auto-follow 스크롤
+    audioRate: 1.0,
+    _lisT: null,
     location: '{{ location }}',
     appViewportHeight: null,
     _appVvHandler: null,
@@ -1480,6 +1537,7 @@ function viewerApp() {
       // Pre-load markdown if default view is markdown
       if (this.view === 'md') {
         await this.loadMdForCurrentLang();
+        if (this.audioMode) await this.loadAudio();   // 복원된 듣기 모드면 플레이어 활성화
       }
 
       // Watch language toggle: reload markdown content
@@ -1842,7 +1900,12 @@ function viewerApp() {
       }
       localStorage.setItem('pf-audio', newMode ? 'true' : 'false');
       this.refreshProgressStats();
-      await this.loadMdForCurrentLang();
+      await this.loadMdForCurrentLang();   // 정적 텍스트 baseline(읽기용)
+      if (newMode) {
+        await this.loadAudio();            // 생성됐으면 서버 span-HTML로 업그레이드(플레이어 활성)
+      } else if (this.$refs.audioEl) {
+        this.$refs.audioEl.pause();        // 듣기 끄면 재생 중지
+      }
       if (this.view === 'split') {
         this.splitMdContent = this.activeMdContent;
       }
@@ -1850,6 +1913,146 @@ function viewerApp() {
         this.extractTocItems();
         this.setupTocObserver();
       });
+    },
+
+    // ── Live TTS: load / generate / poll ──
+    async loadAudio() {
+      const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
+      if (r && r.ok) {
+        this.audioManifest = await r.json();
+        this.audioReady = this.audioManifest.status === 'complete';
+        if (this.audioReady) {
+          await this.mountAudioHtml();         // 서버 span-HTML이 audio 모드 본문
+          this.setupMediaSession();
+        }
+      } else {
+        this.audioReady = false;               // 미생성 → 생성 버튼 노출(정적 텍스트는 baseline 유지)
+      }
+    },
+    async mountAudioHtml() {
+      const r = await apiFetch('/api/papers/' + name + '/audio/html');
+      if (r && r.ok) {
+        this.mdKoAudioContent = await r.text();
+        this.audioCurChunk = -1;   // 콘텐츠 재마운트로 하이라이트가 지워지므로 다음 timeupdate에서 재동기화
+        this.$nextTick(() => this.restoreListening());
+      }
+    },
+    async generateAudio() {
+      this.audioGenerating = true; this.audioJobStage = 'segmenting';
+      this.audioJobDone = 0; this.audioJobTotal = 0;
+      await apiFetch('/api/papers/' + name + '/audio/jobs', { method: 'POST' });
+      this.pollAudioJob();
+    },
+    async pollAudioJob() {
+      if (!this.audioMode) { this.audioGenerating = false; return; }   // 모드 이탈 시 폴링 중단
+      const r = await apiFetch('/api/papers/' + name + '/audio/status');
+      const st = await r.json();
+      this.audioJobStage = st.stage; this.audioJobDone = st.done; this.audioJobTotal = st.total;
+      if (st.stage === 'ready') { this.audioGenerating = false; await this.loadAudio(); return; }
+      if (st.stage === 'failed') { this.audioGenerating = false; showToast('오디오 생성 실패: ' + (st.error || ''), 'error'); return; }
+      setTimeout(() => this.pollAudioJob(), 1500);
+    },
+
+    // ── Live TTS: playback controls ──
+    audioSrc() {
+      // B4: 로드한 manifest의 audio.file을 URL에 고정 → old timeline + new audio race 차단.
+      const f = (this.audioManifest && this.audioManifest.audio && this.audioManifest.audio.file) || '';
+      return '/api/papers/' + name + '/audio/file?file=' + encodeURIComponent(f);
+    },
+    togglePlay() {
+      const a = this.$refs.audioEl;
+      if (!a) return;
+      if (a.paused) { a.playbackRate = this.audioRate; a.play().catch(e => showToast('재생 실패: ' + e.message, 'error')); }
+      else a.pause();
+    },
+    chunkAt(t) {                       // currentTime → chunk index
+      const cs = this.audioManifest.chunks;
+      for (let i = cs.length - 1; i >= 0; i--) if (t >= cs[i].start_sec) return i;
+      return 0;
+    },
+    seekToChunk(i) {
+      const cs = this.audioManifest && this.audioManifest.chunks;
+      if (!cs || i < 0 || i >= cs.length) return;
+      this.$refs.audioEl.currentTime = cs[i].start_sec + 0.001;
+    },
+    prevSentence() { this.seekToChunk(this.audioCurChunk - 1); },
+    nextSentence() { this.seekToChunk(this.audioCurChunk + 1); },
+    async onAudioError() {
+      // B4: 버전드 파일이 재생성으로 정리돼 404면 manifest/html을 다시 로드해 최신 버전과 정합.
+      await this.loadAudio();
+    },
+    onMarkdownClick(e) {
+      this.onSentenceTap(e);                 // 오디오 모드면 그 문장부터 재생
+      this.handleMarkdownClickDesktop(e);    // 기존 데스크톱 동작 유지
+    },
+    onSentenceTap(e) {
+      if (!this.audioMode || !this.audioReady) return;
+      const el = e.target.closest('[data-tts-chunk]');
+      if (!el) return;
+      this.seekToChunk(parseInt(el.dataset.ttsChunk, 10));
+      if (this.$refs.audioEl && this.$refs.audioEl.paused) this.togglePlay();
+    },
+
+    // ── Live TTS: highlight + auto-follow ──
+    onTimeUpdate() {
+      if (!this.audioManifest) return;
+      const i = this.chunkAt(this.$refs.audioEl.currentTime);
+      if (i === this.audioCurChunk) return;
+      this.audioCurChunk = i;
+      // document 기준 조회: Alpine은 이벤트 핸들러에서 this.$el을 <audio>(자식 없음)로 해석할 수 있음
+      document.querySelectorAll('[data-tts-chunk].tts-active').forEach(n => {
+        n.classList.remove('tts-active'); n.removeAttribute('aria-current');
+      });
+      const cur = document.querySelector('[data-tts-chunk="' + i + '"]');
+      if (cur) {
+        cur.classList.add('tts-active'); cur.setAttribute('aria-current', 'true');
+        if (this.audioFollow) cur.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      this.throttledSaveListening();
+    },
+
+    // ── Live TTS: resume (듣기 진행률, 읽기와 분리) ──
+    throttledSaveListening() {
+      clearTimeout(this._lisT);
+      this._lisT = setTimeout(() => this.saveListening(), 2000);
+    },
+    async saveListening() {
+      if (!this.audioManifest || !this.$refs.audioEl) return;
+      const a = this.$refs.audioEl;
+      const dur = (this.audioManifest.audio && this.audioManifest.audio.duration_sec) || 1;
+      await apiFetch('/api/papers/' + name + '/audio/position', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_version: (this.audioManifest.source && this.audioManifest.source.sha256) || '',
+          chunk_id: this.audioCurChunk, time_sec: a.currentTime,
+          percent: Math.round(a.currentTime / dur * 100)
+        })
+      });
+    },
+    async restoreListening() {
+      const r = await apiFetch('/api/papers/' + name + '/audio/position');
+      if (!r || !r.ok) return;
+      const p = await r.json();
+      const ver = (this.audioManifest.source && this.audioManifest.source.sha256) || '';
+      if (p && p.time_sec && p.audio_version === ver && this.$refs.audioEl) {
+        this.$refs.audioEl.currentTime = p.time_sec;   // 이어듣기
+      }
+    },
+
+    // ── Live TTS: MediaSession (progressive enhancement) ──
+    setupMediaSession() {
+      if (!('mediaSession' in navigator) || !this.audioManifest) return;
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: decodeURIComponent(name), artist: 'PaperFlow 듣기판',
+      });
+      const a = this.$refs.audioEl;
+      if (!a) return;
+      navigator.mediaSession.setActionHandler('play', () => a.play().catch(() => {}));
+      navigator.mediaSession.setActionHandler('pause', () => a.pause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => this.prevSentence());
+      navigator.mediaSession.setActionHandler('nexttrack', () => this.nextSentence());
+      navigator.mediaSession.setActionHandler('seekbackward', (d) => { a.currentTime -= (d.seekOffset || 10); });
+      navigator.mediaSession.setActionHandler('seekforward', (d) => { a.currentTime += (d.seekOffset || 10); });
     },
 
     async loadMarkdown(type) {
