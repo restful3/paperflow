@@ -101,6 +101,10 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
             except OSError:
                 pass
     shutil.rmtree(jdir, ignore_errors=True)    # 성공 시 청크 삭제
+    try:
+        os.rmdir(os.path.join(adir, ".jobs"))  # 비어있을 때만 성공(동시 job 있으면 OSError → 무시)
+    except OSError:
+        pass
     if progress_cb:
         progress_cb(stage="ready", done=len(chunks), total=len(chunks))
     return manifest
