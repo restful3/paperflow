@@ -41,6 +41,24 @@ def test_synth_encode_success(monkeypatch, tmp_path):
     assert out == 3.2
 
 
+def test_synth_timeout_fails_fast(monkeypatch, tmp_path):
+    # 워치독: synth_chunk 가 wedge(타임아웃 초과 hang)하면 전체 job 을 무한 대기시키지 않고
+    # 빠르게 실패(None)해야 한다. (이번 인시던트: 첫 청크 generate() 가 wedge → 4분+ 멈춤)
+    import time
+    def hang(*a, **k):
+        time.sleep(5)          # 타임아웃(1s)보다 훨씬 오래 → wedge 모사
+    monkeypatch.setattr(job, "synth_chunk", hang, raising=False)
+    monkeypatch.setattr(job, "_chunk_ok", lambda *a, **k: True)
+    monkeypatch.setattr(job, "encode_segment", lambda *a, **k: 3.0)
+    monkeypatch.setenv("SYNTH_CHUNK_TIMEOUT", "1")
+    t0 = time.time()
+    out = job._synth_encode_with_retry({"text": "x"}, str(tmp_path / "w.wav"), 0.1,
+                                       str(tmp_path / "s.ts"), "cpu")
+    elapsed = time.time() - t0
+    assert out is None                 # wedge → 실패 반환(failed_partial 로 이어짐)
+    assert elapsed < 4                  # 무한/5s 대기 아님 — 타임아웃으로 빠르게 끊김
+
+
 def test_version_sha():
     assert job._version_sha("P_ko_audio.abc123def456") == "abc123def456"
     assert job._version_sha("P_ko_audio.abc123def456.mp3") == "abc123def456"

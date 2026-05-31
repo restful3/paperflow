@@ -1,4 +1,4 @@
-import os, json, hashlib, shutil, time, glob, fcntl
+import os, json, hashlib, shutil, time, glob, fcntl, threading
 from app.chunker import chunk_markdown
 from app.synth import synth_chunk, model_revision
 from app.stitch import stitch_chunks, pad_for
@@ -129,8 +129,12 @@ def _synth_encode_with_retry(ch, wf, pad, out_ts, device):
     과길이는 모델 이상치(glitch)다. upfront-publish 모델(전체 chunks 고정 id)을 깨지 않기 위해
     '재분할' 대신 '재합성'으로 1회 재시도하고, 그래도 초과면 failed_partial.
     (synth_chunk/_chunk_ok/encode_segment 는 모듈 전역 — 테스트 monkeypatch 가능)"""
+    timeout = int(os.environ.get("SYNTH_CHUNK_TIMEOUT", "90"))   # 정상 청크 ~2~20s, wedge 는 분 단위
     for _attempt in (1, 2):
-        synth_chunk(ch["text"], wf, device=device)
+        try:
+            _synth_with_timeout(ch["text"], wf, device, timeout)
+        except TimeoutError:
+            return None                                  # wedge → 즉시 실패(재시도 시 GPU 동시 generate 회피)
         if not _chunk_ok(wf, ch["text"]):
             continue                                     # 품질게이트 실패 → 재합성
         try:
@@ -138,6 +142,30 @@ def _synth_encode_with_retry(ch, wf, pad, out_ts, device):
         except ValueError:
             continue                                     # 과길이 → 재합성(분산으로 짧아질 수 있음)
     return None
+
+
+def _synth_with_timeout(text, wf, device, timeout):
+    """synth_chunk 를 워치독 스레드로 감싸 timeout 초 안에 안 끝나면 TimeoutError.
+    이번 인시던트: 모델/GPU 열화로 첫 청크 generate() 가 wedge → 4분+ 멈춤, heartbeat 동결,
+    실패도 안 함 → 무한 '준비 중'. 타임아웃이면 failed_partial 로 풀어 사용자를 멈춤에서 해방한다.
+    한계: CUDA 커널은 인터럽트 불가라 wedge 된 데몬 스레드는 계속 GPU 를 쓰다 컨테이너 재시작 시 정리됨
+    (job 상태/락은 즉시 풀림). synth_chunk 는 모듈 전역 — 테스트 monkeypatch 가능."""
+    box = {}
+
+    def _run():
+        try:
+            synth_chunk(text, wf, device=device)
+            box["ok"] = True
+        except BaseException as e:                       # noqa: BLE001 — 스레드 예외를 호출자로 전파
+            box["err"] = e
+
+    th = threading.Thread(target=_run, daemon=True)
+    th.start()
+    th.join(timeout)
+    if th.is_alive():
+        raise TimeoutError(f"synth_chunk wedged (> {timeout}s)")
+    if "err" in box:
+        raise box["err"]
 
 
 def _publish_manifest(path, manifest):
