@@ -1,7 +1,8 @@
 import os, threading
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from app.job import run_job
+from app.job import run_job, GPU_LOCK_PATH
+from app.sweep import sweep_loop
 
 app = FastAPI()
 _jobs = {}          # paper_dir -> {"stage","done","total","error"}
@@ -23,9 +24,13 @@ def _worker(paper_dir, src_md):
         # freshness-skip 경로는 progress_cb("ready")를 부르지 않으므로 완료를 보장한다.
         with _lock:
             st = _jobs.get(paper_dir, {})
-            if st.get("stage") != "ready":
+            if st.get("stage") not in ("ready", "failed_partial"):
                 _jobs[paper_dir] = {"stage": "ready", "done": st.get("done", 0),
                                     "total": st.get("total", 0), "error": None}
+    except RuntimeError as e:
+        # _fail_partial 가 raise — manifest 는 이미 failed_partial. status 반영(앞부분 재생 가능).
+        with _lock:
+            _jobs[paper_dir] = {"stage": "failed_partial", "done": 0, "total": 0, "error": str(e)}
     except Exception as e:
         with _lock:
             _jobs[paper_dir] = {"stage": "failed", "done": 0, "total": 0, "error": str(e)}
@@ -52,7 +57,7 @@ def create(req: JobReq):
         raise HTTPException(404, "src_md not found")
     with _lock:
         st = _jobs.get(req.paper_dir)
-        if st and st["stage"] not in ("ready", "failed"):
+        if st and st["stage"] not in ("ready", "failed", "failed_partial"):
             return {"accepted": False, "status": st}     # 이미 진행 중
         _jobs[req.paper_dir] = {"stage": "segmenting", "done": 0, "total": 0, "error": None}
     threading.Thread(target=_worker, args=(req.paper_dir, req.src_md), daemon=True).start()
@@ -63,3 +68,20 @@ def create(req: JobReq):
 def status(paper_dir: str):
     with _lock:
         return _jobs.get(paper_dir, {"stage": "none", "done": 0, "total": 0, "error": None})
+
+
+# ── 유휴 사전생성 sweep (기본 OFF) ─────────────────────────────────────────────
+_SWEEP_ENABLED = os.environ.get("SWEEP_ENABLED", "false").lower() == "true"
+_SWEEP_INTERVAL = int(os.environ.get("SWEEP_INTERVAL", "60"))
+_SWEEP_MAX_PAPERS = int(os.environ.get("SWEEP_MAX_PAPERS", "3"))
+_stop = threading.Event()
+
+
+@app.on_event("startup")
+def _start_sweep():
+    if _SWEEP_ENABLED:
+        threading.Thread(
+            target=sweep_loop,
+            args=(_jobs, _lock, run_job, _OUTPUTS_ROOT, GPU_LOCK_PATH,
+                  True, _SWEEP_INTERVAL, _SWEEP_MAX_PAPERS, _stop),
+            daemon=True).start()
