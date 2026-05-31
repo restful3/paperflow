@@ -12,6 +12,33 @@ import shutil
 import sys
 import urllib.request
 from html.parser import HTMLParser
+import fcntl
+from contextlib import contextmanager
+
+
+@contextmanager
+def _gpu_lock(timeout=1800, poll=2.0):
+    """converter(MinerU)↔TTS 사이드카 GPU 상호배제용 공유 flock.
+    tts_service/app/gpulock.py 와 동일 로직을 인라인 복제(컨테이너 간 import 불가).
+    같은 호스트 inode(./outputs/.gpu.lock)면 컨테이너가 달라도 상호배제된다.
+    """
+    lockpath = os.environ.get("PF_GPU_LOCK", "/app/outputs/.gpu.lock")
+    os.makedirs(os.path.dirname(lockpath), exist_ok=True)
+    fh = open(lockpath, "w")
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError:
+            if time.monotonic() > deadline:
+                fh.close(); raise TimeoutError("GPU lock timeout")
+            time.sleep(poll)
+    try:
+        yield fh
+    finally:
+        fcntl.flock(fh, fcntl.LOCK_UN); fh.close()
+
 
 # Marker-pdf imports
 MARKER_AVAILABLE = False
@@ -3115,7 +3142,8 @@ def process_single_pdf(pdf_path, config, prompt):
                                 print_warning(f"Browser fallback failed: {binfo.get('reason', 'unknown')} -> fallback to PDF converter")
 
                 if not used_url_first:
-                    md_path = convert_pdf_to_md_dispatch(pdf_path, output_dir, config, status_info=status_info)
+                    with _gpu_lock():   # converter↔TTS GPU 상호배제(공유 flock)
+                        md_path = convert_pdf_to_md_dispatch(pdf_path, output_dir, config, status_info=status_info)
 
                 if md_path:
                     print_success(f"Markdown conversion complete: {md_path}")

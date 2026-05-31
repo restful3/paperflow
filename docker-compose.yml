@@ -21,6 +21,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - OPENAI_BASE_URL=http://host.docker.internal:8317/v1
       - PROCESS_TIMEOUT_SECONDS=${PROCESS_TIMEOUT_SECONDS:-7200}
+      - PF_GPU_LOCK=/app/outputs/.gpu.lock
     deploy:
       resources:
         reservations:
@@ -56,6 +57,31 @@ services:
       - MCP_JOB_TTL_DAYS=${MCP_JOB_TTL_DAYS:-7}
       - MCP_ALLOWED_ORIGINS=${MCP_ALLOWED_ORIGINS:-}
       - MCP_REQUIRE_TRANSLATION=${MCP_REQUIRE_TRANSLATION:-true}
+      - TTS_SERVICE_URL=http://paperflow-tts:8100
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  paperflow-tts:
+    build: ./tts_service
+    image: paperflow-tts:latest
+    container_name: paperflow_tts
+    runtime: nvidia
+    volumes:
+      - ./outputs:/data/outputs
+      - ./model_cache:/root/.cache
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PF_GPU_LOCK=/data/outputs/.gpu.lock      # converter의 /app/outputs/.gpu.lock 과 동일 호스트 파일
+      - PF_OUTPUTS_ROOT=/data/outputs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    expose:
+      - "8100"
     restart: unless-stopped
