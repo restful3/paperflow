@@ -2199,8 +2199,11 @@ function viewerApp() {
       navigator.mediaSession.setActionHandler('pause', () => a.pause());
       navigator.mediaSession.setActionHandler('previoustrack', () => this.prevSentence());
       navigator.mediaSession.setActionHandler('nexttrack', () => this.nextSentence());
-      navigator.mediaSession.setActionHandler('seekbackward', (d) => { a.currentTime -= (d.seekOffset || 10); });
-      navigator.mediaSession.setActionHandler('seekforward', (d) => { a.currentTime += (d.seekOffset || 10); });
+      // seekbackward/seekforward 는 의도적으로 null 등록(제거) — iOS/iPadOS 는 seek 핸들러가 있으면
+      // 잠금화면에 ±초 스킵 버튼을 우선 노출한다. 제거하면 ⏮/⏭(previoustrack/nexttrack=문장 이동) 버튼이 뜬다.
+      // null 로 명시 제거해야 remount 시 이전 핸들러가 잔존하지 않는다.
+      navigator.mediaSession.setActionHandler('seekbackward', null);
+      navigator.mediaSession.setActionHandler('seekforward', null);
     },
 
     async loadMarkdown(type) {
