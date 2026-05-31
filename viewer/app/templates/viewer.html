@@ -342,7 +342,7 @@
         </button>
 
         <!-- Audio (listen) Toggle — KO-only listen-optimized narration -->
-        <button x-show="!editMode && hasMdKoAudio"
+        <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
                 @click="toggleAudio(); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
                 :class="audioMode
@@ -561,7 +561,7 @@
       </button>
 
       <!-- Audio (listen) toggle — KO-only -->
-      <button x-show="!editMode && hasMdKoAudio"
+      <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
               @click="toggleAudio()"
               class="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full border transition"
               :class="audioMode
@@ -1549,6 +1549,13 @@ function viewerApp() {
 
       // Watch language toggle: reload markdown content
       this.$watch('$store.lang.ko', async (isKo) => {
+        // 듣기(audioMode)는 KO 전용 — EN 으로 전환하면 자동 해제(원본 보기로). 버튼이 lang.ko 게이트라 stuck 방지.
+        if (!isKo && this.audioMode) {
+          this.audioMode = false;
+          localStorage.setItem('pf-audio', 'false');
+          if (this.$refs.audioEl) this.$refs.audioEl.pause();
+          this.refreshProgressStats();
+        }
         if (this.view !== 'md' && this.view !== 'split') return;
 
         // Save progress immediately before language swap (KO<->EN shared progress)
