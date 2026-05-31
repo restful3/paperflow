@@ -1,8 +1,9 @@
 # PaperFlow HLS 실시간 한국어 TTS — 설계 스펙
 
-_작성: 2026-05-31 · 개정: R1(Codex 리뷰 반영) · 상태: 재리뷰 대기_
+_작성: 2026-05-31 · 개정: R2(Codex 재리뷰 반영) · 상태: 사용자 리뷰 대기(BLOCKING 0)_
 
-> **R1 개정 요약**: Codex 리뷰([docs/reviews/2026-05-31-hls-tts-spec-codex.md](../../reviews/2026-05-31-hls-tts-spec-codex.md))의 BLOCKING 5 + HIGH 3 + MEDIUM/LOW 전부 반영. 주요 변경: ①세그먼트 URI를 playlist 상대경로 `seg/…`로 교정 ②TARGETDURATION 실측-후-결정 + 하드 게이트 ③HMAC signed token 인증을 1순위 설계로 포함 ④매니페스트 2층화(텍스트/타이밍 분리) + streaming 중 `/audio/html` 전체 span 반환 ⑤sweep 기본 OFF+캡 ⑥세그먼트 원자 publish ⑦paper file lock + stale 복구 ⑧구버전 HLS TTL 정리 ⑨partial 실패 정책 ⑩MIME/cache 확정 ⑪하위호환 코드레벨.
+> **R1**: Codex 1차 리뷰([…-codex.md](../../reviews/2026-05-31-hls-tts-spec-codex.md))의 BLOCKING 5 + HIGH 3 + MEDIUM/LOW 반영(세그먼트 URI·TARGETDURATION 하드게이트·signed token·2층 매니페스트·sweep OFF·원자 publish·file lock·TTL 정리·partial 정책·MIME/cache·하위호환).
+> **R2**: Codex 재리뷰([…-codex-round2.md](../../reviews/2026-05-31-hls-tts-spec-codex-round2.md)) — **잔존 BLOCKING 0**, HIGH 4 반영: ①signed **playlist** URL 1급화(쿠키 게이트 제거) ②token 재발급 cadence + tokenized playlist no-cache + 401 remount ③query token 로그 redaction/Referrer-Policy ④sub-split 그룹 스키마(`sentence_group_id` 등).
 
 ## 0. 배경 / 목표
 
@@ -80,11 +81,16 @@ outputs/<paper>/audio/
   },
   "chunks": [                          // 1층: 전체 텍스트/DOM — segmenting 직후 전부 publish
     { "id","kind","level?","dom_id","section_id","paragraph_index","sentence_index","text",
+      // sub-split(§5.3): UI 문장 1개 = sentence_group, TTS sub-sentence 1개 = 1 chunk = 1 HLS segment
+      "sentence_group_id": <int>,      // 같은 UI 문장의 sub-chunk 들이 공유
+      "sub_index": <int>, "sub_count": <int>,   // 그룹 내 위치(0..sub_count-1)
+      "display_sentence_index": <int>, // UI 표시용 문장 인덱스(그룹 단위)
       "start_sec": <number|null>,      // 2층: 세그먼트 timing 확정 시 채움(id-keyed 갱신)
       "end_sec": <number|null> }, ...
   ]
 }
 ```
+- **sub-split schema(HIGH#4)**: 짧은 문장은 `sub_count=1`(그룹=자기 자신). DOM span 은 chunk 단위 sub-span 을 만들되 같은 `sentence_group_id` 를 공유 → 하이라이트는 (a) sub-span 만 칠하거나 (b) 그룹 전체 칠하는 두 UX 모두 지원. 그룹 active 조건 = `any sub-chunk 의 start_sec <= t < end_sec`. 이어듣기/position 은 `sentence_group_id + currentTime` 으로도 복원.
 
 - `status="streaming"` 동안 `chunks` 의 **텍스트는 처음부터 전부 존재**, `start_sec/end_sec` 만 점진 확정. 프론트는 이를 **`chunk.id` keyed replacement 로 머지**(append 아님 — 중복 polling/재시도/실패 전이에서 중복 방지).
 - `is_fresh_for_playback(manifest, sha)`: `status=="complete"` + sha/cachekey 일치 → 캐시 재생 가능. **v1 `audio.file` 매니페스트도 인정**.
@@ -120,14 +126,16 @@ seg/seg_000001.ts
 ### 5.3 TARGETDURATION · 길이 하드 게이트 (Codex BLOCKING #2)
 - `sec/char ≤ 1.5` 품질게이트는 **비율 상한이지 절대 duration 상한이 아님** → 긴 문장이 TARGETDURATION 을 넘을 수 있음. RFC 8216: 모든 `EXTINF` 는 반올림 시 `TARGETDURATION` 이하여야 하고 `TARGETDURATION` 은 불변.
 - **§12.0 실측**으로 `TARGETDURATION`(예: P100 + 여유) 확정.
-- **하드 게이트:** 세그먼트 인코딩 후 `duration > TARGETDURATION` 이면 publish 금지. 처리:
-  - chunker 에 **문장 길이 hard cap** 도입 → 초과 문장은 **TTS 용 sub-sentence 로 분할**(구두점/길이 기준)하되, **UI/매니페스트에서는 같은 `paragraph_index`+동일 문장 그룹(`sentence_group_id`)으로 묶어** 하이라이트는 한 문장처럼 보이게.
-  - sub-sentence 각각이 1 세그먼트. 하이라이트 span 은 그룹 단위로 묶거나 sub-span 으로 분리(구현 플랜에서 확정).
+- **하드 게이트 + 처리 순서(Codex R2):**
+  1. chunker **문장 길이 hard cap**(1차 예방) → 초과 문장은 **TTS sub-sentence 로 분할**(구두점/길이), `sentence_group_id` 공유(§4).
+  2. 그래도 인코딩 후 ffprobe `duration > TARGETDURATION` 이면 → 해당 chunk 를 **더 작은 sub-sentence 로 재분할 후 1회 재시도**.
+  3. 재시도 후에도 초과하면 → `failed_partial`(§5.4)로 ENDLIST 붙이고 멈춤.
+- sub-sentence 각각이 1 세그먼트. 하이라이트 span 처리는 §4(그룹/sub-span) 참조.
 
 ### 5.4 partial 실패 정책 (Codex MEDIUM #13)
 세그먼트 N 까지 publish 후 N+1 실패 시:
 - playlist 에 `#EXT-X-ENDLIST` append → **앞부분은 재생 가능**. manifest `status="failed_partial"`, `audio.mp3=null`(다운로드 404).
-- 프론트는 partial 배지 + "이어서 생성/재시도" 버튼. (개인용 UX: 들을 수 있는 만큼은 살림)
+- 프론트는 partial 배지 + "재생성" 버튼. **재생성은 기존 세그먼트 재사용이 아니라 새 sha12/version 으로 처음부터**(v1 단순성, Codex MEDIUM#4).
 - 완전 실패(0 세그먼트 등)는 `status="failed"`, playlist 미생성, 재시도 버튼.
 
 ### 5.5 startup 하한 (Codex HIGH #4)
@@ -141,15 +149,19 @@ seg/seg_000001.ts
 
 ## 7. HLS 인증 — HMAC signed token (Codex BLOCKING #3)
 
-iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가져가 HttpOnly/SameSite 쿠키가 안 붙을 수 있음 → **쿠키 단일 의존 제거**.
+iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가져가 HttpOnly/SameSite 쿠키가 안 붙을 수 있음 → **쿠키 의존을 playlist·segment 양쪽 모두 제거**(Codex HIGH#1: playlist 토큰도 1급 설계).
 
-- **토큰:** `token = base64url( exp . hmac_sha256(AUDIO_TOKEN_SECRET, f"{source_id}|{sha12}|{exp}") )`.
-  - `exp = now + AUDIO_TOKEN_TTL`(기본 12h — VOD 1회 fetch 후 긴 청취 커버). `source_id`=durable paper 식별자, `sha12`=오디오 버전.
-  - 토큰은 **paper×버전 바인딩**. 유출돼도 해당 오디오만 노출(mp3 download URL 과 동급 민감도).
-- **흐름:** 인증된(쿠키) 클라가 `GET /audio/stream.m3u8` 요청 → 서버가 디스크 playlist 를 읽어 **세그먼트 URI 에 `?token=<fresh>` 주입**해 반환. 세그먼트 요청 `GET /audio/seg/{seg}?token=…` 은 토큰 HMAC+exp+sha 검증(쿠키 불요). traversal 방어(`seg` 정규식 + `_under_audio_dir`).
-- `/audio/stream.m3u8` 자체는 기존 쿠키 인증 게이트(브라우저/네이티브가 첫 playlist 요청엔 same-origin 쿠키 보낼 가능성 높음). **만약 네이티브가 playlist 에도 쿠키를 안 붙이면** → §9 의 "one-time signed playlist URL" 폴백: 인증된 API 가 `…/stream.m3u8?ptoken=…` 형태 서명 URL 을 만들어 `<audio src>` 에 주입(playlist·segment 모두 query token).
-- **hls.js 경로:** `xhrSetup`/`fetchSetup` 으로 `credentials: 'include'` 명시(reverse proxy/public base URL 변경 대비). 토큰 방식이면 쿠키 불요라도 양립.
-- 신규 설정: `AUDIO_TOKEN_SECRET`(JWT_SECRET_KEY 재사용 가능), `AUDIO_TOKEN_TTL`(기본 43200s).
+- **토큰(2종, 같은 HMAC):** `tok = base64url( exp "." hmac_sha256(AUDIO_TOKEN_SECRET, f"{kind}|{source_id}|{sha12}|{exp}") )`. `kind ∈ {playlist, segment}`.
+  - `source_id`=durable paper 식별자, `sha12`=오디오 버전. **paper×버전 바인딩**(유출 시 해당 오디오만, mp3 download URL 과 동급 민감도).
+  - **playlist 토큰 TTL**: 기본 12h(`AUDIO_PTOKEN_TTL`). **segment 토큰 TTL**: `max(AUDIO_TOKEN_TTL, audio.duration_sec + resume_grace)` — VOD 1회 fetch 후 장시간 pause/resume 커버(Codex HIGH#2). complete VOD 는 더 긴 별도 TTL 허용.
+- **1급 흐름(쿠키 비의존):** 인증된(쿠키) HTML/API 가 **signed playlist URL 발급** — manifest 응답에 `audio.hls.signed_playlist_url = "…/stream.m3u8?ptoken=<fresh>"`(또는 `GET /audio/stream-url`). **iOS 네이티브 `<audio src>` 는 이 signed playlist URL 을 기본값으로 사용.**
+  - `GET /audio/stream.m3u8?ptoken=…` → **쿠키 없이 ptoken 검증** → 디스크 playlist 를 읽어 **세그먼트 URI 에 fresh segment token `?token=<seg>` 주입**해 반환.
+  - `GET /audio/seg/{seg}?token=…` → token HMAC+exp+sha+kind 검증(쿠키 불요) + traversal 방어(`seg` 정규식 + `_under_audio_dir`).
+  - 쿠키 게이트(`?ptoken` 없는 `/audio/stream.m3u8`)는 hls.js/개발 편의 경로로만 유지.
+- **hls.js 경로:** `xhrSetup`/`fetchSetup` 으로 `credentials:'include'` 또는 signed URL 사용(reverse proxy/public base URL 변경 대비).
+- **로그 노출 방어(Codex HIGH#3):** token 은 query string 이라 access log·devtools·Referer 에 남을 수 있음 → ① viewer/tts access log 에서 `token`/`ptoken` 파라미터 **redaction**(또는 token hash prefix 만) ② viewer 페이지 `Referrer-Policy: same-origin`(이상) ③ 프론트는 `audio.src` 전체 URL 을 console/error report 에 찍지 않음.
+- **설정:** `AUDIO_TOKEN_SECRET`(**JWT_SECRET_KEY 와 별도 secret 권장**; rotation 시 기존 HLS 토큰 무효화 → 재생 중 401→remount 로 회복, §10), `AUDIO_PTOKEN_TTL`(43200s), `AUDIO_TOKEN_TTL`/`resume_grace`.
+- **멀티유저 주의:** 현재 payload 는 user/session binding 없음 — **개인용 단일 사용자 전제**. 공유 환경 전환 시 audience binding 추가(비목표).
 
 ## 8. 동시성 · 정리 (Codex HIGH #8, MEDIUM #12)
 
@@ -165,7 +177,7 @@ iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가�
 - **TTL cleanup**: 최근 N(기본 2) 버전 보존 또는 `age > max(duration_sec, 1h)`. 신규 job 시작 시 정리.
 
 ### 8.4 stale streaming manifest 복구
-- `status="streaming"` 인데 `heartbeat` mtime 이 30분 이상 정지 → 다음 접근/sweep 시 `status="failed"`(또는 `abandoned`) 전이 후 재생성 허용(사이드카 재시작으로 `_jobs` 유실된 케이스 복구).
+- `status="streaming"` 인데 `heartbeat` 가 30분 이상 정지 → 다음 접근/sweep 시 **`status="failed"`** 전이 후 새 version 재생성 허용(사이드카 재시작으로 `_jobs` 유실된 케이스 복구). (`abandoned` 미사용 — 프론트는 failed = 재시도 버튼 단일 규칙.)
 
 ## 9. 백엔드 API (viewer)
 
@@ -173,18 +185,22 @@ iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가�
 
 | Method | Path | 용도 |
 |--------|------|------|
-| `GET` | `/audio/stream.m3u8` | 디스크 playlist 읽어 **세그먼트 URI 에 fresh token 주입** 후 반환. `application/vnd.apple.mpegurl`. streaming: `Cache-Control: no-cache, no-store`. complete: `private, max-age` 가능 |
-| `GET` | `/audio/seg/{seg}` | 토큰 검증(HMAC+exp+sha) → 세그먼트 `.ts`. `video/mp2t`. `FileResponse`(Range). complete 세그먼트: `private, max-age=31536000, immutable`. `seg` 정규식 `seg_[0-9]{6}\.ts` + `_under_audio_dir` |
+| `GET` | `/audio/stream-url` | (쿠키 인증) signed playlist URL `…/stream.m3u8?ptoken=<fresh>` 발급. manifest 응답의 `audio.hls.signed_playlist_url` 로도 동등 제공 |
+| `GET` | `/audio/stream.m3u8` | **`?ptoken=` 있으면 쿠키 없이 ptoken 검증**(iOS 네이티브 1급 경로); 없으면 쿠키 게이트(hls.js/dev). 디스크 playlist 읽어 **세그먼트 URI 에 fresh segment token 주입** 후 반환. `application/vnd.apple.mpegurl`. **tokenized playlist 는 complete 라도 `Cache-Control: private, no-cache`**(token 만료 vs cache 충돌 방지, Codex HIGH#2). streaming: `no-cache, no-store` |
+| `GET` | `/audio/seg/{seg}` | segment token 검증(HMAC+exp+sha+kind) → `.ts`. `video/mp2t`. `FileResponse`(Range). **segment 파일만 immutable cache**: `private, max-age=31536000, immutable`. `seg` 정규식 `seg_[0-9]{6}\.ts` + `_under_audio_dir`. (playlist 의 `seg/` 는 URL 라우팅일 뿐 — 디스크는 HLS 디렉터리 직하위 `seg_NNNNNN.ts`) |
 | `GET` | `/audio/html` | **streaming 에서도 전체 `chunks` 텍스트로 span HTML 반환**(409 제거; `status in {streaming,complete,failed_partial}` 허용) |
 | `GET` | `/audio/file` | mp3 다운로드. `audio.mp3.file` 채워진(complete) 경우만 200, 아니면 404 |
 
 - 경로 해석은 manifest 의 `audio.hls.playlist`/`audio.mp3.file`(버전드)을 통해(B1).
-- MIME/cache (Codex MEDIUM #14) 위 표대로 확정. segment `Accept-Ranges` smoke 확인.
+- access log 에서 `token`/`ptoken` redaction(§7). MIME/cache (Codex MEDIUM #14, HIGH#2) 위 표대로. segment `Accept-Ranges` smoke 확인.
 
 ## 10. 프론트엔드 (viewer.html)
 
-- `audioSrc()` → 버전드 `stream.m3u8` URL(필요 시 `?ptoken=` 폴백).
-- **HLS 부착:** `canPlayType('application/vnd.apple.mpegurl')` truthy(Safari/iOS) → `src` 직접. 아니면 **hls.js**(pinned version + SRI, vendoring 옵션) 동적 로드 → `xhrSetup` credentials → `loadSource`/`attachMedia`. 인스턴스 보관·`destroy()`.
+- `audioSrc()` → **signed playlist URL**(`audio.hls.signed_playlist_url`, 즉 `stream.m3u8?ptoken=…`). iOS 네이티브 1급 경로.
+- **HLS 부착:** `canPlayType('application/vnd.apple.mpegurl')` truthy(Safari/iOS) → `src` = signed playlist URL 직접. 아니면 **hls.js**(pinned version + SRI, vendoring 옵션) 동적 로드 → `xhrSetup` credentials → `loadSource`/`attachMedia`. 인스턴스 보관·`destroy()`.
+- **token 만료 회복(HIGH#2):** segment 401/403 → `audio/stream-url` 재발급 → `<audio src>` 새 signed playlist URL 로 remount(hls.js 는 error handler, 네이티브는 `audio.src` 재설정) + currentTime 복원.
+- **하이라이트(sub-split, §4):** currentTime → `start_sec != null` 인 chunk → 그 chunk 의 `sentence_group_id` 그룹을 active. 그룹 active = `any sub-chunk start_sec<=t<end_sec`. sub-span 단위 or 그룹 단위 칠하기(구현 플랜 택1).
+- **보안:** `audio.src` 전체 URL 을 console/error report 에 로깅하지 않음(token 노출 방지, §7).
 - **streaming 중 player mount**(complete 안 기다림): manifest `status in {streaming,complete,failed_partial}` && playlist+세그먼트 1\~3 ready → mount+play.
 - **`/audio/html` 전체 span**: 본문은 처음부터 전체 문장 표시. `onTimeUpdate` 는 **`start_sec != null` 인 chunk 만** 대상.
 - **매니페스트 머지 idempotent**: status="streaming" 동안 주기(예 3s) 재조회 → **`chunk.id` keyed 갱신**(append 금지). complete/실패 시 폴링 중단.
@@ -197,13 +213,13 @@ iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가�
 | 파일 | 변경 |
 |------|------|
 | `tts_service/app/hls.py` | **신규**: `encode_segment`(패딩 결합+AAC TS+temp/atomic+ffprobe+길이게이트), `LivePlaylist`(append/atomic/ENDLIST/partial) |
-| `tts_service/app/segtoken.py` | **신규**: HMAC signed token mint/verify(§7) |
+| `tts_service/app/segtoken.py` | **신규**: HMAC signed token mint/verify(playlist+segment, kind 바인딩, §7) |
 | `tts_service/app/job.py` | **변경**: segmentation 선-publish, 증분 세그먼트+playlist+manifest(id-keyed), heartbeat, status 전이, paper file lock, 종료 mp3 stitch, 구버전 TTL 정리 |
 | `tts_service/app/manifest.py` | **변경**: schema v2(2층, audio.hls/mp3), `is_fresh_for_playback`/`is_fresh_for_hls`, id-keyed merge 헬퍼 |
 | `tts_service/app/sweep.py` | **신규**: 유휴 사전생성(기본 OFF, 캡, _sweep_active 등록) |
 | `tts_service/app/main.py` | **변경**: sweep 조건부 기동, 설정(`SWEEP_ENABLED`/캡/`AUDIO_TOKEN_*`) |
 | `viewer/app/services/audio.py` | **변경**: v1 `audio.file`+v2 `audio.mp3` 동시 지원, hls playlist/seg 경로(traversal), token mint/verify 연동, 전체 span 렌더 |
-| `viewer/app/routers/api.py` | **변경**: `/audio/stream.m3u8`(token 주입), `/audio/seg/{seg}`(token 검증), `/audio/html` 409 제거 |
+| `viewer/app/routers/api.py` | **변경**: `/audio/stream-url`(signed URL 발급), `/audio/stream.m3u8`(ptoken 검증+segment token 주입), `/audio/seg/{seg}`(token 검증), `/audio/html` 409 제거, access-log token redaction |
 | `viewer/app/templates/viewer.html` | **변경**: HLS 부착(네이티브/hls.js+SRI), streaming mount, id-keyed merge, 폴백·에러분기 |
 
 ## 12. 테스트 · 실측
@@ -217,7 +233,7 @@ iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가�
 - **`segtoken.py`**: mint→verify 왕복, exp 만료 거부, sha/source 불일치 거부, 변조 거부.
 - **`manifest.py`**: v2 2층 shape, streaming→complete/failed_partial 전이, id-keyed merge idempotent, `is_fresh_for_playback` vs `is_fresh_for_hls`(v1 mp3 → hls stale).
 - **job 통합 스모크**(GPU): segmentation 선-publish → m3u8 성장 → 1\~3 세그먼트 곧 재생가능 → ENDLIST → mp3 → .jobs 폐기 → 구버전 TTL.
-- **viewer API**: stream.m3u8 token 주입/seg token 검증/traversal/Range, `/audio/html` streaming 전체 span, v1 폴백.
+- **viewer API**: stream-url 발급, stream.m3u8 ptoken 검증(쿠키 없이)+segment token 주입, seg token 검증/traversal/Range, tokenized playlist no-cache 헤더, access-log token redaction, `/audio/html` streaming 전체 span, v1 폴백.
 - **sweep**: 기본 OFF 확인, 캡 동작, 유휴 게이트(진행중 job/flock 점유 시 skip), file lock 중복 방지.
 
 ### 12.2 프론트 Playwright
@@ -239,8 +255,8 @@ iOS 네이티브 AVPlayer 는 playlist/segment 를 AppleCoreMedia 경로로 가�
 
 ## 15. 구현 플랜에서 확정할 잔여
 
-- §12.0 실측 결과로 `TARGETDURATION`·문장 hard cap·음량 파라미터 확정.
-- sub-split 시 하이라이트 span 그룹 단위 vs sub-span 표현.
+- §12.0 실측 결과로 `TARGETDURATION`·문장 hard cap·음량(fixed gain+limiter) 파라미터 확정.
+- 하이라이트: sub-span 단위 vs 그룹 단위 칠하기 택1(§4 schema 는 둘 다 지원).
 - 매니페스트 streaming 폴링 주기(3s 가정) 튜닝.
-- AVPlayer 가 playlist 에도 쿠키 미전송일 때 `?ptoken=` 폴백 확정 여부(실기기 결과 따라).
-- hls.js vendoring vs pinned-CDN 최종 선택.
+- hls.js vendoring vs pinned-CDN(+SRI) 최종 선택.
+- segment 토큰 `resume_grace` 구체값.
