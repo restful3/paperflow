@@ -163,3 +163,18 @@ def test_redact_filter_masks_token():
     rec = logging.LogRecord("x", 20, "", 0, 'GET /a?token=SECRET&ptoken=Y', (), None)
     _TokenRedactFilter().filter(rec)
     assert "SECRET" not in rec.getMessage() and "token=REDACTED" in rec.getMessage()
+
+
+def test_reconcile_stale_keeps_fresh_heartbeat(tmp_path, monkeypatch):
+    # 회귀: 막 시작한 job(최근 heartbeat)은 streaming 유지 — failed 로 뒤집지 않는다.
+    from datetime import datetime, timezone
+    paper = tmp_path / "P"; (paper / "audio").mkdir(parents=True)
+    (paper / "P_ko_audio.md").write_text("# t\n\n본문.")
+    fresh = datetime.now(timezone.utc).isoformat()
+    (paper / "audio" / "P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"streaming","heartbeat":"' + fresh + '",'
+        '"source":{"sha256":"s"},"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}},"chunks":[]}')
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    assert a.reconcile_stale("P") is False
+    import json as _j
+    assert _j.loads((paper / "audio" / "P_ko_audio.manifest.json").read_text())["status"] == "streaming"

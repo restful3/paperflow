@@ -70,7 +70,9 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
             os.path.basename(src_md), src_sha, chunks, sample_rate=24000,
             source_mtime=str(os.path.getmtime(src_md)),
             tts_overrides={"model_revision": model_revision()})
-        _publish_manifest(man_path, manifest)          # 전체 chunks 즉시 publish(status=streaming)
+        manifest["heartbeat"] = _now_iso()             # 생성 시점부터 heartbeat 시작 →
+        _publish_manifest(man_path, manifest)          # reconcile_stale 이 막 시작한 job 을 죽이지 않음
+        # (전체 chunks 즉시 publish, status=streaming. 첫 세그먼트 전 GPU 대기 중에도 stale 아님)
         playlist = LivePlaylist(os.path.join(hls_dir, "stream.m3u8"))
 
         seg_wavs = []          # mp3 stitch 용 (heading 포함, MVP 정합)
