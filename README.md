@@ -300,6 +300,20 @@ flowchart TD
 
 ---
 
+## Claude Code Skills (선택)
+
+이 repo에는 Claude Code용 프로젝트 스킬이 포함되어 있어, clone 후 별도 설치 없이 바로 사용할 수 있습니다 (`.claude/skills/`).
+
+| 스킬 | 하는 일 | 호출 예시 |
+|------|---------|-----------|
+| **paper-explainer** | 논문 MD를 한국어 해설판(`_ko_explained.md`)으로 변환 (비유·용어풀이·수식 보존, 원문 이상 분량) | "이 논문 쉽게 설명해줘", "해설판 만들어줘" |
+| **md-to-html** | 번역/해설 MD를 자체 완결형 HTML로 렌더 (Quarto) | "이 MD를 HTML로 변환해줘" |
+| **paper-audio-korean** | 해설판을 아이폰 음성용 한국어 낭독판(`*_ko_audio.md`)으로 변환 (수식·표·그림을 placeholder 아닌 자연어 묘사로 — 오디오 디스크립션). 뷰어 상단 "듣기" 토글로 노출 | "듣기용으로 만들어줘", "낭독판 만들어줘" |
+
+Claude Code에서 이 프로젝트를 열면 스킬이 자동 인식되며, 위 표현으로 요청하면 발동합니다. `paper-explainer`는 대상을 명시하면 해당 파일만(Single Target), 대상 없이 요청하면 `outputs/`·`archives/`에서 해설판이 없는 논문 폴더 1개를 골라 처리합니다(Batch). 빈 폴더·설정 폴더 등 소스가 없는 디렉터리는 자동 제외됩니다.
+
+---
+
 ## RAG 챗봇 아키텍처
 
 각 논문마다 독립적인 RAG 기반 챗봇을 제공합니다.

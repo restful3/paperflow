@@ -192,8 +192,12 @@ outputs/Sanitized Paper Title/
 ├── chat_history.json           # RAG chat history (auto-created)
 ├── chat_chunks.json            # Cached MD chunks for RAG (auto-created)
 ├── *_backup_YYYYMMDD_HHMMSS.md # Edit backups (auto-created)
+├── example_ko_audio.md         # Listen-optimized narration (paper-audio-korean skill, optional)
+├── example_ko_audio.meta.json  # Audio completion sidecar (status + source freshness)
 └── *.jpeg / images/*.jpg       # Extracted images
 ```
+
+**`_ko_audio.md` 는 1급 한국어 포맷 (듣기 낭독판)**: 폴더 직하위에 둔다(해설판처럼). `_paper_info()`/`_resolve_result()` 가 `md_ko_audio` 플래그로 감지하고, `get_md_ko_audio_path()` + `/api/papers/{name}/md-ko-audio` 로 서빙하며, viewer.html "듣기" 토글(KO 전용, Easy와 상호배타)로 노출된다. 오분류 방지를 위해 `get_md_en_path()`/`save_markdown(...,"en")` 과 `chat.load_paper_chunks()`(RAG) 는 `_ko_audio.md` 를 제외하고, `mcp_zip` 은 `include_translation` 으로 게이팅한다. `*_ko_audio.meta.json` sidecar 에 완료 상태 + source freshness(mtime/size/sha256) 를 기록하며, 본문에는 메타데이터를 넣지 않는다(순수 낭독 텍스트).
 
 ## Configuration
 
