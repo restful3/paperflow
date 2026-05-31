@@ -682,11 +682,17 @@ def _version_sha(name):
     m = re.search(r"_ko_audio\.([0-9a-f]{12})(?:\.mp3)?$", name)
     return m.group(1) if m else None
 
-def _cleanup_old_versions(adir, base, keep_sha12, keep=2):
-    """HLS 디렉터리 + mp3 를 version(sha12) 단위로 묶어 최근 keep 버전 보존, 나머지 삭제.
-    (active token TTL 보다 짧게 삭제 안 하려면 keep>=2 권장 — 직전 버전 grace.)"""
-    import glob
-    versions = {}   # sha12 -> (mtime, [paths])
+def _cleanup_old_versions(adir, base, keep_sha12, keep=2, grace_sec=None):
+    """HLS 디렉터리 + mp3 를 version(sha12) 단위로 묶어 정리.
+    삭제 조건(HIGH#2, 스펙 §8.3): 현재 버전 아님 AND 최근 keep 밖 AND
+    age > max(duration_sec, 1h, AUDIO_TOKEN_TTL+RESUME_GRACE) — active segment token 보유
+    클라가 삭제된 구버전을 요청하지 않도록 grace 보장."""
+    import glob, time
+    if grace_sec is None:
+        grace_sec = max(int(os.environ.get("AUDIO_TOKEN_TTL", "43200")) +
+                        int(os.environ.get("AUDIO_RESUME_GRACE", "3600")), 3600)
+    now = time.time()
+    versions = {}   # sha12 -> [mtime, [paths]]
     for p in glob.glob(os.path.join(adir, f"{base}_ko_audio.*")):
         sha = _version_sha(os.path.basename(p))
         if not sha:
@@ -696,8 +702,10 @@ def _cleanup_old_versions(adir, base, keep_sha12, keep=2):
         try: versions[sha][0] = max(versions[sha][0], os.path.getmtime(p))
         except OSError: pass
     ordered = sorted(versions.items(), key=lambda kv: kv[1][0], reverse=True)
-    for idx, (sha, (_, paths)) in enumerate(ordered):
+    for idx, (sha, (mtime, paths)) in enumerate(ordered):
         if sha == keep_sha12 or idx < keep:
+            continue
+        if (now - mtime) <= grace_sec:                   # 아직 active token grace 내 → 보존
             continue
         for p in paths:                                  # 구버전 HLS dir + mp3 함께 정리
             if os.path.isdir(p): shutil.rmtree(p, ignore_errors=True)
@@ -717,17 +725,19 @@ def _cleanup_old_versions(adir, base, keep_sha12, keep=2):
 import os
 from app import job
 
-def test_cleanup_keeps_recent_versions(tmp_path):
+def test_cleanup_grace_and_keep(tmp_path):
     adir = tmp_path; base = "P"
-    for sha in ("aaaaaaaaaaaa","bbbbbbbbbbbb","cccccccccccc"):
+    for sha in ("aaaaaaaaaaaa","bbbbbbbbbbbb","cccccccccccc","dddddddddddd"):
         os.makedirs(adir/f"{base}_ko_audio.{sha}")
         (adir/f"{base}_ko_audio.{sha}.mp3").write_bytes(b"x")
-    # keep_sha12=현재버전, keep=2 → 현재 + 최근1 보존, 가장 오래된 1 삭제(dir+mp3)
-    os.utime(adir/"P_ko_audio.aaaaaaaaaaaa", (1,1))   # 가장 오래됨
-    job._cleanup_old_versions(str(adir), base, keep_sha12="cccccccccccc", keep=2)
-    assert (adir/"P_ko_audio.cccccccccccc").exists()
-    assert not (adir/"P_ko_audio.aaaaaaaaaaaa").exists()
-    assert not (adir/"P_ko_audio.aaaaaaaaaaaa.mp3").exists()   # mp3 도 함께 정리
+    os.utime(adir/"P_ko_audio.aaaaaaaaaaaa", (1,1))            # 아주 오래됨(grace 초과)
+    os.utime(adir/"P_ko_audio.aaaaaaaaaaaa.mp3", (1,1))
+    # bbbb 는 구버전이지만 방금 생성(grace 내) → 보존돼야 함(active token race 방지)
+    job._cleanup_old_versions(str(adir), base, keep_sha12="dddddddddddd", keep=1, grace_sec=3600)
+    assert (adir/"P_ko_audio.dddddddddddd").exists()           # 현재버전
+    assert (adir/"P_ko_audio.bbbbbbbbbbbb").exists()           # grace 내 → 보존(HIGH#2)
+    assert not (adir/"P_ko_audio.aaaaaaaaaaaa").exists()       # grace 초과 + keep 밖 → 삭제
+    assert not (adir/"P_ko_audio.aaaaaaaaaaaa.mp3").exists()   # mp3 도 함께
 
 def test_synth_encode_retry_then_fail(monkeypatch, tmp_path):
     calls = {"n": 0}
@@ -1166,10 +1176,17 @@ def _audio_token(kind, name, ttl):
     sid, sha = audio_svc.source_id_and_sha(name)
     return _tok_mint(settings.audio_secret, kind=kind, source_id=sid or "", sha12=sha or "", ttl=ttl)
 
+def _playlist_segment_count(name):
+    pl = audio_svc.hls_playlist_path(name)
+    if not pl: return 0
+    return sum(1 for l in pl.read_text().splitlines() if l.startswith("seg/"))
+
 @router.get("/papers/{name:path}/audio/stream-url")
 async def audio_stream_url(name: str, _user: str = Depends(get_current_user_api)):
     audio_svc.reconcile_stale(name)                       # BLOCKING#4: stale streaming 복구
-    if not audio_svc.hls_playlist_path(name): raise HTTPException(404)
+    # HIGH#1: 빈 EVENT playlist(세그먼트 0)면 아직 attach 시키지 않음(hls.js/Safari fatal 회피).
+    if _playlist_segment_count(name) < 1:
+        raise HTTPException(425, "no segments yet")       # 425 Too Early → 프론트 재시도
     ptoken = _audio_token("playlist", name, settings.AUDIO_PTOKEN_TTL)
     return {"ptoken": ptoken, "url": f"/api/papers/{name}/audio/stream.m3u8?ptoken={ptoken}"}
 

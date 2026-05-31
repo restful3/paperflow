@@ -99,9 +99,9 @@ async loadAudio() {
 },
 
 async attachHls() {
-  // signed playlist URL 발급(쿠키 비의존 1급 경로)
+  // signed playlist URL 발급(쿠키 비의존 1급 경로). HIGH#1: 세그먼트 0이면 425 → 아직 attach 안 함.
   const su = await apiFetch('/api/papers/' + name + '/audio/stream-url');
-  if (!su || !su.ok) { this.audioReady = false; return; }
+  if (!su || !su.ok) { this.audioReady = false; this._audioMounted = false; return; }  // 425 포함 → 다음 폴링 재시도
   this.audioStreamUrl = (await su.json()).url;
   const el = this.$refs.audioEl;
   if (this.audioHls) { this.audioHls.destroy(); this.audioHls = null; }
@@ -405,6 +405,18 @@ const remounted = await page.evaluate(async () => {
   await new Promise(r=>setTimeout(r,300)); return called;
 });
 console.assert(remounted, 'NETWORK_ERROR triggers remount');
+```
+
+```javascript
+// (e) HIGH#1 빈 playlist race: 세그먼트 0 streaming 에선 mount 안 됨, ≥1 이면 mount
+//     (생성 직후 시점을 잡거나, stream-url 이 세그먼트 0일 때 425 를 주는지 직접 검증)
+const early = await page.evaluate(async () => {
+  const r = await fetch('/api/papers/' + encodeURIComponent(document.title.split(' - ')[0]) + '/audio/stream-url',
+                        {credentials:'same-origin'});
+  return r.status;   // 세그먼트 0이면 425, ≥1 이면 200
+});
+console.log('stream-url status (425=no seg yet / 200=ready):', early);
+console.assert(early === 200 || early === 425, 'stream-url gates on segment availability');
 ```
 
 > iOS 네이티브(webkit)는 hls.js 가 없어 (a)/(d) 일부가 다르다 — Chromium(hls.js) 경로로 회귀를 잡고, 네이티브는 Step 3 실기기 체크리스트로.
