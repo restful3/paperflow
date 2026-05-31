@@ -70,6 +70,7 @@ git commit -m "feat(hls): load pinned hls.js (SRI) + same-origin referrer policy
 audioIsHls: false,
 audioHls: null,          // hls.js 인스턴스(비-iOS)
 audioStreamUrl: '',      // signed playlist URL
+_audioMounted: false,    // 중복 mount 방지(streaming 중 재호출 대비)
 ```
 
 - [ ] **Step 2: loadAudio() 확장 + attachHls()**
@@ -87,9 +88,13 @@ async loadAudio() {
   // streaming 에서도 mount(첫 세그먼트부터). complete/failed_partial 도 재생.
   this.audioReady = ['streaming','complete','failed_partial'].includes(st);
   if (!this.audioReady) return;
+  if (this._audioMounted) { if (st==='streaming') this.pollStreamingManifest(); return; }  // 중복 mount 방지
   await this.mountAudioHtml();          // 전체 span HTML(서버)
-  if (this.audioIsHls) await this.attachHls();
-  this.setupMediaSession();
+  if (this.audioIsHls) {
+    // HLS dir 이 아직 안 생겼으면(짧은 404 window) attachHls 가 실패 → 재시도(아래 pollAudioJob)
+    await this.attachHls();
+  }
+  if (this.audioReady) { this._audioMounted = true; this.setupMediaSession(); }
   if (st === 'streaming') this.pollStreamingManifest();   // Task 3
 },
 
@@ -123,6 +128,32 @@ async attachHls() {
 ```
 
 v1(`audio.hls` 없음): `attachHls()` 를 타지 않으므로 `loadAudio()` 끝에서 `if (!this.audioIsHls) this.$refs.audioEl.src = '/api/papers/'+name+'/audio/file';`
+
+- [ ] **Step 2b: 생성 중 streaming mount (BLOCKING#2) + failed_partial (HIGH#7)**
+
+기존 `generateAudio()`/`pollAudioJob()`(MVP)는 `stage==='ready'` 일 때만 `loadAudio()` 한다 → 생성 중엔 HLS 가 자라도 mount 안 됨(핵심 목표 깨짐). `pollAudioJob()` 을 교체:
+
+```javascript
+async pollAudioJob() {
+  if (!this.audioMode) { this.audioGenerating = false; return; }
+  const r = await apiFetch('/api/papers/' + name + '/audio/status');
+  const st = await r.json();
+  this.audioJobStage = st.stage; this.audioJobDone = st.done; this.audioJobTotal = st.total;
+  // ★ 생성 중(streaming)에도 mount 시도 — manifest+playlist 가 준비되면 첫 세그먼트부터 재생
+  if (!this._audioMounted && ['segmenting','synthesizing','stitching'].includes(st.stage)) {
+    await this.loadAudio();              // streaming 이면 mount(아직 404 면 다음 폴링에서 재시도)
+  }
+  if (st.stage === 'ready') { this.audioGenerating = false; await this.loadAudio(); return; }
+  if (st.stage === 'failed_partial') {   // HIGH#7: 앞부분만 mount + 폴링 종료
+    this.audioGenerating = false; showToast('일부만 생성됨(나머지 실패)', 'warning');
+    await this.loadAudio(); return;
+  }
+  if (st.stage === 'failed') { this.audioGenerating = false; showToast('오디오 생성 실패: '+(st.error||''), 'error'); return; }
+  setTimeout(() => this.pollAudioJob(), 1500);
+},
+```
+
+`attachHls()` 의 stream-url 404(짧은 window)는 throw 하지 말고 `this.audioReady=false; this._audioMounted=false` 로 두어 다음 폴링이 재시도하게 한다(loadAudio 가 streaming 재확인).
 
 - [ ] **Step 3: 수동 검증**
 
@@ -338,18 +369,45 @@ git commit -m "feat(hls): resume by sentence_group + currentTime (streaming-safe
 
 Run: `docker compose build paperflow-viewer && docker compose up -d`
 
-- [ ] **Step 2: Playwright(Chromium + hls.js)**
+- [ ] **Step 2: Playwright(Chromium + hls.js) — 핵심 동작 자동 검증 (HIGH#8)**
 
-검증: 듣기 토글 → (생성 중이면) streaming mount → ▶ 재생 → start_sec 채워지며 `.tts-active` 그룹 강조 등장 → ⏭/문장 탭 → seek → 토큰 만료 remount(짧은 TTL 임시) → 새로고침 이어듣기.
+생성 완료된 v2 논문으로, 다음 4가지를 **assert** 한다(수동 아님):
 
 ```javascript
-// 핵심 assert
+// (a) HLS 부착: stream-url 이 실제 호출됐는가 + hls.js 경로
+const reqs = []; page.on('request', r => reqs.push(r.url()));
 await page.locator("button:visible:has-text('듣기')").first().click();
 await page.waitForTimeout(3000);
-const active = await page.locator('.tts-active').count();   // 그룹 강조 ≥1
-const isHls = await page.evaluate(() => Alpine.$data(document.querySelector('audio')).audioIsHls);
-console.log('hls:', isHls, 'active:', active);
+const d = () => page.evaluate(() => Alpine.$data(document.querySelector('audio')));
+console.assert((await d()).audioIsHls === true, 'should be HLS');
+console.assert(reqs.some(u => u.includes('/audio/stream-url')), 'stream-url called');
+
+// (b) 재생 → 그룹 하이라이트(같은 sentence_group_id 의 모든 span active)
+await page.evaluate(() => document.querySelector('audio').play());
+await page.waitForTimeout(4000);
+const active = await page.locator('.tts-active').count();
+console.assert(active >= 1, 'group highlight present');
+
+// (c) id-keyed merge 무중복: streaming 폴링 후 chunks 길이/ id 유일성
+const merge = await page.evaluate(() => {
+  const m = Alpine.$data(document.querySelector('audio')).audioManifest;
+  const ids = m.chunks.map(c => c.id); return {n: ids.length, uniq: new Set(ids).size};
+});
+console.assert(merge.n === merge.uniq, 'no duplicate chunk ids after merge');
+
+// (d) NETWORK_ERROR → remount 호출(짧은 토큰 TTL 임시 or hls.js 에러 강제)
+const remounted = await page.evaluate(async () => {
+  const dd = Alpine.$data(document.querySelector('audio'));
+  let called = false; const orig = dd.remountAudio.bind(dd);
+  dd.remountAudio = async () => { called = true; return orig(); };
+  if (dd.audioHls) dd.audioHls.trigger(Hls.Events.ERROR,
+    {fatal:true, type:Hls.ErrorTypes.NETWORK_ERROR, details:'fragLoadError'});
+  await new Promise(r=>setTimeout(r,300)); return called;
+});
+console.assert(remounted, 'NETWORK_ERROR triggers remount');
 ```
+
+> iOS 네이티브(webkit)는 hls.js 가 없어 (a)/(d) 일부가 다르다 — Chromium(hls.js) 경로로 회귀를 잡고, 네이티브는 Step 3 실기기 체크리스트로.
 
 - [ ] **Step 3: 실기기 — BLOCKING preflight (스펙 §12.3)**
 

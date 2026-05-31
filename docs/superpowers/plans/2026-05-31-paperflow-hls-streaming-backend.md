@@ -50,30 +50,31 @@ docker-compose.yml     # 수정: AUDIO_TOKEN_SECRET, SWEEP_* env
 
 - [ ] **Step 1: 합성 duration 분포 측정**
 
-기존 검증 venv 재사용. 디스크의 `_ko_audio.md` 들에서 문장을 chunk 로 쪼개 합성하고 duration 분포를 구한다.
+기존 검증 venv 재사용. **대표 표본**(long-tail 포함): 디스크의 `_ko_audio.md` **전부**(또는 최소 10개 + 가장 긴 논문 포함)에서 **모든 text 문장**을 합성해 duration 분포를 구한다. P100(최장 문장) 이 TARGETDURATION 을 좌우하므로 표본을 줄이지 않는다.
 
 ```bash
 cd /media/restful3/data/workspace/paperflow/tts_service
 PLAYWRIGHT_BROWSERS_PATH= /tmp/cbx-venv/bin/python - <<'PY'
-import glob, statistics, os
+import glob, statistics, os, subprocess, json, tempfile
 from app.chunker import chunk_markdown
 from app.synth import synth_chunk
-import subprocess, json, tempfile
 durs=[]
-files = glob.glob("/media/restful3/data/workspace/paperflow/outputs/*/*_ko_audio.md")[:3]
-for f in files:
+files = sorted(glob.glob("/media/restful3/data/workspace/paperflow/outputs/*/*_ko_audio.md"),
+               key=lambda f: os.path.getsize(f), reverse=True)   # 큰 논문(long-tail) 우선 포함
+for f in files:                                  # 전체 표본(시간 들면 상위 N + 최장 1개 보장)
     md=open(f,encoding="utf-8").read()
-    for ch in chunk_markdown(md)[:120]:
+    for ch in chunk_markdown(md):
         if ch["kind"]!="text": continue
         wf=tempfile.mktemp(suffix=".wav"); synth_chunk(ch["text"], wf)
         out=subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","json",wf])
         d=float(json.loads(out)["format"]["duration"]); durs.append((len(ch["text"]),d)); os.remove(wf)
 ds=[d for _,d in durs]
-print("n",len(ds),"P50",round(statistics.median(ds),2),"P95",round(sorted(ds)[int(len(ds)*0.95)],2),"P100",round(max(ds),2))
-print("max sec/char chunk:", max(durs, key=lambda x:x[1]))
+print("n",len(ds),"P50",round(statistics.median(ds),2),"P95",round(sorted(ds)[int(len(ds)*0.95)],2),
+      "P99",round(sorted(ds)[int(len(ds)*0.99)],2),"P100",round(max(ds),2))
+print("max sec/char(=worst char->dur):", round(max(d/max(c,1) for c,d in durs),3))
 PY
 ```
-Expected: P50/P95/P100 출력 (예시 — 실제 값으로 결정)
+Expected: P50/P95/P99/P100 + worst sec/char 출력. **TARGETDURATION = ceil(P100 × 1.3)**, **SENTENCE_CHAR_CAP = floor(TARGETDURATION / worst_sec_per_char × 0.9)**(안전계수). chunker cap 이 TARGETDURATION 안에 들도록 보수적으로.
 
 - [ ] **Step 2: 결정 기록**
 
@@ -90,7 +91,8 @@ git add docs/research/2026-05-31-hls-tts-measurement.md
 git commit -m "docs(hls): measure synth duration distribution → TARGETDURATION/char cap/loudness"
 ```
 
-> 이후 태스크의 `TARGETDURATION`/`SENTENCE_CHAR_CAP`/음량 필터는 **Task 0 결정값**으로 치환한다. 아래 코드의 `16`/`220`/필터는 플레이스홀더 기본값이며 Task 0 결과로 교체.
+> 이후 태스크의 `TARGETDURATION`(hls.py)/`SENTENCE_CHAR_CAP`(chunker.py)/음량 필터는 **Task 0 결정값**으로 치환한다. 아래 코드의 `16`/`220`/필터는 플레이스홀더 기본값.
+> **치환 가드(HIGH#9):** Task 2/3 커밋 전 `grep -nE "SENTENCE_CHAR_CAP = 220|TARGETDURATION = 16" tts_service/app/{chunker,hls}.py` 가 **빈 결과**여야 한다(기본값 잔존 시 커밋 금지). Task 0 측정 후 실제 값으로 바뀐 것을 확인.
 
 ---
 
@@ -520,7 +522,10 @@ def _now_iso():
 def is_fresh_for_playback(manifest, current_sha256, tts_overrides=None):
     if manifest.get("status") != "complete": return False
     if manifest.get("source", {}).get("sha256") != current_sha256: return False
-    return _cachekey_match(manifest, tts_overrides)      # 기존 v1 cachekey 로직 재사용
+    # HIGH#3: v1(schema<2) 은 legacy 라 cachekey 스킵(과거 tts 필드 부재 매니페스트 인정).
+    if manifest.get("schema_version", 1) < 2:
+        return True
+    return _cachekey_match(manifest, tts_overrides)
 
 def is_fresh_for_hls(manifest, current_sha256, tts_overrides=None):
     if manifest.get("schema_version", 1) < 2: return False
@@ -605,37 +610,30 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
         _publish_manifest(man_path, manifest)          # 전체 chunks(텍스트) 즉시 publish
         playlist = LivePlaylist(os.path.join(hls_dir, "stream.m3u8"))
 
-        seg_wavs = []          # mp3 stitch 용
+        seg_wavs = []          # mp3 stitch 용 (heading 포함, MVP 정합)
         cursor = 0.0
+        total = len(chunks)    # heading+text 전부 세그먼트(MVP 가 heading 도 합성)
         with gpu_lock(GPU_LOCK_PATH):
             for i, ch in enumerate(chunks):
-                if ch["kind"] != "text":               # heading 등은 합성 제외(MVP 동일)
-                    continue
                 wf = os.path.join(seg_dir, f".w{i:06d}.wav")
-                synth_chunk(ch["text"], wf, device=device)
-                if not _chunk_ok(wf, ch["text"]):
-                    synth_chunk(ch["text"], wf, device=device)
-                    if not _chunk_ok(wf, ch["text"]):
-                        return _fail_partial(playlist, man_path, manifest, f"chunk {i} quality gate")
                 pad = pad_for(ch["kind"], chunks[i+1]["kind"]) if i < len(chunks)-1 else 0.0
                 seg_name = f"seg_{i:06d}.ts"
-                try:
-                    dur = encode_segment(wf, pad, os.path.join(seg_dir, seg_name))
-                except ValueError as e:                 # 길이게이트 등 → partial
-                    return _fail_partial(playlist, man_path, manifest, str(e))
+                dur = _synth_encode_with_retry(ch, wf, pad, os.path.join(seg_dir, seg_name), device)
+                if dur is None:                          # 품질게이트/과길이 재시도 후에도 실패 → partial
+                    return _fail_partial(playlist, man_path, manifest, f"chunk {i} failed (quality/over-length)")
                 playlist.append(seg_name, dur)
                 merge_chunk_timing(manifest, ch["id"], cursor, cursor + dur)
                 cursor += dur
                 manifest["heartbeat"] = _now_iso()
                 _publish_manifest(man_path, manifest)
                 seg_wavs.append(wf)
-                if progress_cb: progress_cb(stage="synthesizing", done=len(seg_wavs), total=len(text_chunks))
+                if progress_cb: progress_cb(stage="synthesizing", done=len(seg_wavs), total=total)
 
-        # 완료: ENDLIST + mp3 stitch
+        # 완료: ENDLIST + mp3 stitch (heading 포함 전체)
         playlist.finalize()
-        if progress_cb: progress_cb(stage="stitching", done=len(text_chunks), total=len(text_chunks))
+        if progress_cb: progress_cb(stage="stitching", done=total, total=total)
         mp3_tmp = os.path.join(seg_dir, ".out.mp3")
-        stitch_chunks(seg_wavs, [c for c in chunks if c["kind"]=="text"], mp3_tmp, sample_rate=24000)
+        stitch_chunks(seg_wavs, chunks, mp3_tmp, sample_rate=24000)
         os.replace(mp3_tmp, os.path.join(adir, mp3_name))
         manifest["audio"]["mp3"]["file"] = mp3_name
         manifest["status"] = "complete"; manifest["generated_at"] = _now_iso()
@@ -644,10 +642,27 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda"):
             try: os.remove(wf)
             except OSError: pass
         _cleanup_old_versions(adir, base, keep_sha12=sha12)
-        if progress_cb: progress_cb(stage="ready", done=len(text_chunks), total=len(text_chunks))
+        if progress_cb: progress_cb(stage="ready", done=total, total=total)
         return manifest
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN); lock.close()
+
+def _synth_encode_with_retry(ch, wf, pad, out_ts, device):
+    """합성→품질게이트→encode(길이게이트). 실패 시 1회 재합성(TTS 분산) 후 재시도.
+    반환: duration 또는 None(2회 실패).
+    NOTE(BLOCKING#1): chunker(Task2)가 SENTENCE_CHAR_CAP 으로 이미 길이를 1차 제한하므로
+    post-encode 과길이는 모델 이상치다. upfront-publish 모델(전체 chunks 고정 id)을 깨지 않기 위해
+    '재분할'(동적 chunk 삽입) 대신 '재합성'으로 1회 재시도하고, 그래도 초과면 failed_partial.
+    (synth_chunk/_chunk_ok/encode_segment 는 모듈 전역 — 테스트 monkeypatch 가능)"""
+    for attempt in (1, 2):
+        synth_chunk(ch["text"], wf, device=device)
+        if not _chunk_ok(wf, ch["text"]):
+            continue                                     # 품질게이트 실패 → 재합성
+        try:
+            return encode_segment(wf, pad, out_ts)       # 길이게이트 통과 시 duration
+        except ValueError:
+            continue                                     # 과길이 → 재합성(분산으로 짧아질 수 있음)
+    return None
 
 def _publish_manifest(path, manifest):
     tmp = path + ".tmp"
@@ -661,28 +676,83 @@ def _fail_partial(playlist, man_path, manifest, reason):
     _publish_manifest(man_path, manifest)
     raise RuntimeError(f"partial: {reason}")
 
+def _version_sha(name):
+    """'<base>_ko_audio.<sha12>' 또는 '<base>_ko_audio.<sha12>.mp3' → sha12."""
+    import re
+    m = re.search(r"_ko_audio\.([0-9a-f]{12})(?:\.mp3)?$", name)
+    return m.group(1) if m else None
+
 def _cleanup_old_versions(adir, base, keep_sha12, keep=2):
+    """HLS 디렉터리 + mp3 를 version(sha12) 단위로 묶어 최근 keep 버전 보존, 나머지 삭제.
+    (active token TTL 보다 짧게 삭제 안 하려면 keep>=2 권장 — 직전 버전 grace.)"""
     import glob
-    dirs = sorted(glob.glob(os.path.join(adir, f"{base}_ko_audio.*")),
-                  key=lambda p: os.path.getmtime(p), reverse=True)
-    for p in dirs:
-        if os.path.isdir(p) and keep_sha12 not in os.path.basename(p):
-            if dirs.index(p) >= keep:                   # 최근 keep 버전 보존(TTL 단순화)
-                shutil.rmtree(p, ignore_errors=True)
+    versions = {}   # sha12 -> (mtime, [paths])
+    for p in glob.glob(os.path.join(adir, f"{base}_ko_audio.*")):
+        sha = _version_sha(os.path.basename(p))
+        if not sha:
+            continue
+        versions.setdefault(sha, [0.0, []])
+        versions[sha][1].append(p)
+        try: versions[sha][0] = max(versions[sha][0], os.path.getmtime(p))
+        except OSError: pass
+    ordered = sorted(versions.items(), key=lambda kv: kv[1][0], reverse=True)
+    for idx, (sha, (_, paths)) in enumerate(ordered):
+        if sha == keep_sha12 or idx < keep:
+            continue
+        for p in paths:                                  # 구버전 HLS dir + mp3 함께 정리
+            if os.path.isdir(p): shutil.rmtree(p, ignore_errors=True)
+            else:
+                try: os.remove(p)
+                except OSError: pass
 ```
 
 > 주의: `_fail_partial` 는 `RuntimeError` 를 raise 하므로 `_worker`(main.py)가 잡아 status 를 덮지 않도록, main.py 의 `_worker` 는 manifest 가 이미 `failed_partial` 이면 `_jobs` stage 를 `failed_partial` 로 둔다(Task 7 에서 반영).
+> **heading 정합(Codex 정합성 메모):** MVP `job.py` 는 heading 도 합성하므로 본 플랜도 **heading 포함 전체 chunk** 를 세그먼트화한다(`kind!="text" continue` 제거). heading chunk 도 `start_sec/end_sec` 가 채워지고 `/audio/html` 에서 `<hN>` 로 렌더된다.
+> **과길이 처리(BLOCKING#1):** 스펙 §5.3 의 "재분할 1회 재시도" 를 upfront-publish 모델과 양립시키기 위해 **재합성(TTS 분산) 1회**로 구현한다. Task 0 cap 을 보수적으로 잡아 과길이를 사전 차단하는 것이 1차 방어이고, 재합성은 안전망이다.
 
-- [ ] **Step 2: Sanity import**
+- [ ] **Step 2: Write unit tests (GPU 불요 — synth/encode mock)**
 
-Run: `cd tts_service && /tmp/cbx-venv/bin/python -c "import app.job; print('job import OK')"`
-Expected: `job import OK`
+```python
+# tts_service/tests/test_job.py
+import os
+from app import job
 
-- [ ] **Step 3: Commit**
+def test_cleanup_keeps_recent_versions(tmp_path):
+    adir = tmp_path; base = "P"
+    for sha in ("aaaaaaaaaaaa","bbbbbbbbbbbb","cccccccccccc"):
+        os.makedirs(adir/f"{base}_ko_audio.{sha}")
+        (adir/f"{base}_ko_audio.{sha}.mp3").write_bytes(b"x")
+    # keep_sha12=현재버전, keep=2 → 현재 + 최근1 보존, 가장 오래된 1 삭제(dir+mp3)
+    os.utime(adir/"P_ko_audio.aaaaaaaaaaaa", (1,1))   # 가장 오래됨
+    job._cleanup_old_versions(str(adir), base, keep_sha12="cccccccccccc", keep=2)
+    assert (adir/"P_ko_audio.cccccccccccc").exists()
+    assert not (adir/"P_ko_audio.aaaaaaaaaaaa").exists()
+    assert not (adir/"P_ko_audio.aaaaaaaaaaaa.mp3").exists()   # mp3 도 함께 정리
+
+def test_synth_encode_retry_then_fail(monkeypatch, tmp_path):
+    calls = {"n": 0}
+    monkeypatch.setattr(job, "synth_chunk", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(job, "_chunk_ok", lambda *a, **k: True)
+    def always_over(*a, **k):
+        calls["n"] += 1; raise ValueError("segment exceeds TARGETDURATION")
+    monkeypatch.setattr(job, "encode_segment", always_over)
+    out = job._synth_encode_with_retry({"text":"x"}, str(tmp_path/"w.wav"), 0.1, str(tmp_path/"s.ts"), "cpu")
+    assert out is None and calls["n"] == 2          # 1회 재시도 후 None
+```
+
+Run: `cd tts_service && python -m pytest tests/test_job.py -v`
+Expected: FAIL → 구현 후 PASS (2 passed). `_synth_encode_with_retry` 내부 `from app.synth import synth_chunk` 를 모듈 전역 `synth_chunk` 참조로 바꿔 monkeypatch 가능하게(이미 job.py 상단 import 있음 — 로컬 import 제거).
+
+- [ ] **Step 3: Sanity import + 테스트 통과**
+
+Run: `cd tts_service && /tmp/cbx-venv/bin/python -c "import app.job; print('job import OK')" && python -m pytest tests/test_job.py -v`
+Expected: `job import OK` + PASS
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add tts_service/app/job.py
-git commit -m "feat(hls): incremental segment/playlist/manifest publish + file lock + partial/TTL"
+git add tts_service/app/job.py tts_service/tests/test_job.py
+git commit -m "feat(hls): incremental publish + heading-inclusive + over-length re-synth retry + version TTL cleanup"
 ```
 
 ---
@@ -743,7 +813,15 @@ def should_run(jobs, gpu_lock_path):
     fh.close()                       # 즉시 해제(점유 확인용)
     return True
 
+def _sha256_file(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(65536), b""): h.update(b)
+    return h.hexdigest()
+
 def find_candidate(outputs_root):
+    from app.manifest import is_fresh_for_hls            # HIGH#4: sha 기반 freshness
     for d in sorted(glob.glob(os.path.join(outputs_root, "*")),
                     key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0, reverse=True):
         if not os.path.isdir(d): continue
@@ -755,8 +833,8 @@ def find_candidate(outputs_root):
         if os.path.exists(man):
             try:
                 m = json.load(open(man))
-                fresh_hls = (m.get("schema_version",1) >= 2 and m.get("status")=="complete"
-                             and m.get("audio",{}).get("hls"))
+                cur_sha = _sha256_file(mds[0])           # 소스 sha 계산해 버전 비교
+                fresh_hls = is_fresh_for_hls(m, cur_sha)  # schema>=2 + complete + hls + sha 일치
             except Exception: pass
         if not fresh_hls:
             return {"paper_dir": d, "src_md": mds[0]}
@@ -891,6 +969,18 @@ def test_hls_paths_resolve(tmp_path, monkeypatch):
     seg = a.hls_segment_path("P", "seg_000000.ts")
     assert seg.parent.name == "P_ko_audio.abc123def456"
     assert a.hls_segment_path("P", "../../etc") is None      # traversal 방어
+
+def test_reconcile_stale_streaming_to_failed(tmp_path, monkeypatch):
+    paper = tmp_path/"P"; (paper/"audio").mkdir(parents=True)
+    (paper/"P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper/"audio"/"P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"streaming","heartbeat":"2000-01-01T00:00:00+00:00",'
+        '"source":{"sha256":"s"},"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}},"chunks":[]}')
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    assert a.reconcile_stale("P") is True                    # 오래된 heartbeat → failed 전이
+    import json as _j
+    assert _j.loads((paper/"audio"/"P_ko_audio.manifest.json").read_text())["status"] == "failed"
+    assert a.reconcile_stale("P") is False                   # 이미 failed → no-op
 ```
 
 - [ ] **Step 2: Run to verify fail**
@@ -945,7 +1035,30 @@ def source_id_and_sha(name):                   # 토큰 바인딩용
     if not man: return None, None
     src = (man.get("source") or {})
     return src.get("path"), (src.get("sha256") or "")[:12]
+
+def reconcile_stale(name, threshold_sec=1800):
+    """BLOCKING#4 / 스펙 §8.4: status='streaming' 인데 heartbeat 가 threshold(기본 30분)
+    이상 멈췄으면 'failed' 로 atomic 전이(사이드카 재시작 등으로 진행 유실된 케이스). 전이 시 True."""
+    from datetime import datetime, timezone
+    p = manifest_path(name)
+    if not p or not p.exists(): return False
+    try:
+        man = json.loads(p.read_text())
+    except Exception:
+        return False
+    if man.get("status") != "streaming": return False
+    hb = man.get("heartbeat")
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(hb)).total_seconds() if hb else 1e9
+    except Exception:
+        age = 1e9
+    if age < threshold_sec: return False
+    man["status"] = "failed"
+    tmp = str(p) + ".tmp"; Path(tmp).write_text(json.dumps(man, ensure_ascii=False)); os.replace(tmp, p)
+    return True
 ```
+
+> `reconcile_stale` 는 `/audio/manifest`·`/audio/stream-url` 핸들러 및 sweep candidate 진입 시 호출(Task 9 에서 stream-url 에 이미 추가; `/audio/manifest` 핸들러에도 `audio_svc.reconcile_stale(name)` 한 줄 추가).
 
 config.py 에 추가:
 
@@ -1022,97 +1135,139 @@ def test_stream_url_then_playlist_then_seg(tmp_path, monkeypatch):
 Run: `cd viewer && python -m pytest tests/test_audio_api.py::test_stream_url_then_playlist_then_seg -v`
 Expected: FAIL (404 — 라우트 없음)
 
-- [ ] **Step 3: Implement (api.py 에 추가/수정)**
+- [ ] **Step 3a: Create viewer 토큰 사본 (BLOCKING#3 — import 경로 고정)**
+
+viewer 는 `tts_service/app/segtoken.py` 를 import 할 수 없다(별 컨테이너). **byte-identical 복제**:
+
+```bash
+cp tts_service/app/segtoken.py viewer/app/services/tts_token.py
+```
+
+drift 방지 test vector 를 viewer 에도 둔다(`viewer/tests/test_tts_token.py` = `tts_service/tests/test_segtoken.py` 와 동일 assert, import 만 `from app.services.tts_token import mint, verify`).
+
+- [ ] **Step 3b: Implement (api.py 에 추가/수정)**
 
 ```python
-# viewer/app/routers/api.py 에 추가
+# viewer/app/routers/api.py 상단 import 에 추가
 from ..services import audio as audio_svc
-from ..config import settings
+from ..services.tts_token import mint as _tok_mint, verify as _tok_verify   # ★ 정확한 경로
+from ..dependencies import get_current_user_page                            # ★ 누락 import
 from fastapi import Query
 from fastapi.responses import Response, FileResponse
 import time
 
+def _segment_ttl(name):
+    # HIGH#6: max(AUDIO_TOKEN_TTL, duration + resume_grace) — VOD 1회 fetch 후 장시간 커버
+    man = audio_svc._manifest_dict(name) or {}
+    dur = (man.get("audio") or {}).get("duration_sec") or 0
+    return int(max(settings.AUDIO_TOKEN_TTL, dur + settings.AUDIO_RESUME_GRACE))
+
 def _audio_token(kind, name, ttl):
-    from app.tts_token import mint   # 또는 viewer 로컬 사본(아래 주석)
     sid, sha = audio_svc.source_id_and_sha(name)
-    return mint(settings.audio_secret, kind=kind, source_id=sid or "", sha12=sha or "", ttl=ttl)
+    return _tok_mint(settings.audio_secret, kind=kind, source_id=sid or "", sha12=sha or "", ttl=ttl)
 
 @router.get("/papers/{name:path}/audio/stream-url")
 async def audio_stream_url(name: str, _user: str = Depends(get_current_user_api)):
+    audio_svc.reconcile_stale(name)                       # BLOCKING#4: stale streaming 복구
     if not audio_svc.hls_playlist_path(name): raise HTTPException(404)
     ptoken = _audio_token("playlist", name, settings.AUDIO_PTOKEN_TTL)
     return {"ptoken": ptoken, "url": f"/api/papers/{name}/audio/stream.m3u8?ptoken={ptoken}"}
 
 @router.get("/papers/{name:path}/audio/stream.m3u8")
 async def audio_stream(name: str, ptoken: str | None = None,
-                       user_cookie: str | None = Depends(get_current_user_page)):
-    # ptoken(쿠키 비의존) 또는 쿠키 인증 중 하나
+                       user_cookie=Depends(get_current_user_page)):
     sid, sha = audio_svc.source_id_and_sha(name)
     if ptoken:
-        from app.tts_token import verify
-        ok, _ = verify(settings.audio_secret, ptoken, "playlist", sid or "", sha or "", time.time())
+        ok, _r = _tok_verify(settings.audio_secret, ptoken, "playlist", sid or "", sha or "", time.time())
         if not ok: raise HTTPException(403, "bad ptoken")
     elif not user_cookie:
         raise HTTPException(401)
     pl = audio_svc.hls_playlist_path(name)
     if not pl: raise HTTPException(404)
-    seg_tok = _audio_token("segment", name, settings.AUDIO_TOKEN_TTL + settings.AUDIO_RESUME_GRACE)
+    man = audio_svc._manifest_dict(name) or {}
+    streaming = man.get("status") == "streaming"
+    seg_tok = _audio_token("segment", name, _segment_ttl(name))
     body = []
     for line in pl.read_text().splitlines():
         if line.startswith("seg/"):
             line = f"{line}?token={seg_tok}"
         body.append(line)
+    # HIGH#6 cache 분리: streaming = no-store, complete tokenized = no-cache
+    cache = "no-cache, no-store" if streaming else "private, no-cache"
     return Response("\n".join(body) + "\n", media_type="application/vnd.apple.mpegurl",
-                    headers={"Cache-Control": "private, no-cache"})
+                    headers={"Cache-Control": cache})
 
 @router.get("/papers/{name:path}/audio/seg/{seg}")
 async def audio_seg(name: str, seg: str, token: str = Query(...)):
-    from app.tts_token import verify
     sid, sha = audio_svc.source_id_and_sha(name)
-    ok, _ = verify(settings.audio_secret, token, "segment", sid or "", sha or "", time.time())
+    ok, _r = _tok_verify(settings.audio_secret, token, "segment", sid or "", sha or "", time.time())
     if not ok: raise HTTPException(403, "bad token")
     p = audio_svc.hls_segment_path(name, seg)
     if not p: raise HTTPException(404)
-    return FileResponse(p, media_type="video/mp2t",
+    return FileResponse(p, media_type="video/mp2t",                  # segment 파일만 immutable cache
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})
 ```
 
-> **토큰 모듈 공유:** viewer 는 `tts_service/app/segtoken.py` 를 import 할 수 없으므로(별 컨테이너), 동일 로직을 `viewer/app/services/tts_token.py` 로 **복제**한다(segtoken.py 와 byte-identical). 위 import 경로 `app.tts_token` 을 그 사본으로. (DRY 예외: 컨테이너 경계.)
+- [ ] **Step 3c: 기존 `/audio/file` 을 v1/v2 mp3 폴백으로 (HIGH#2)**
 
-`/audio/html` 의 409 제거:
-
-```python
-# 기존 audio_html 핸들러에서:
-#   if manifest.get("status") != "complete": raise HTTPException(409, "not ready")
-# 를 아래로 교체:
-    if manifest.get("status") not in ("streaming","complete","failed_partial"):
-        raise HTTPException(409, "not ready")
-```
-
-로그 redaction (create_app 또는 미들웨어):
+기존 `audio_file` 핸들러가 `audio_svc.audio_file_path()`(v1 전용)를 호출 → `mp3_file_path()`(v1+v2)로 교체:
 
 ```python
-# viewer/app/main.py create_app() 에 미들웨어 추가
-import re as _re
-@app.middleware("http")
-async def _redact_token_logs(request, call_next):
-    # uvicorn access log 는 path 를 그대로 찍으므로, query token 노출 축소 위해
-    # access log 포맷터에서 ?token=/?ptoken= 마스킹(배포 시 uvicorn log config 로도 가능)
-    return await call_next(request)
+# 기존 audio_file 핸들러 본문에서 audio_svc.audio_file_path(name) → audio_svc.mp3_file_path(name)
+    p = audio_svc.mp3_file_path(name)
+    if not p or not p.exists(): raise HTTPException(404)
+    return FileResponse(p, media_type="audio/mpeg")
 ```
 
-> 실제 redaction 은 uvicorn `--access-log` 포맷 또는 reverse proxy 에서 `token`/`ptoken` 마스킹. 미들웨어로는 path 재작성이 어렵우므로, **배포 노트**로 "uvicorn access log 비활성 또는 proxy 마스킹"을 docker-compose 주석에 남긴다(Task 10).
+- [ ] **Step 3d: `/audio/html` 409 완화 + 로그 redaction (HIGH#1, 실제 구현)**
 
-- [ ] **Step 4: Run to verify pass**
+`/audio/html`: `if manifest.get("status") not in ("streaming","complete","failed_partial"): raise HTTPException(409)`.
 
-Run: `cd viewer && JWT_SECRET_KEY=$(python -c "print('x'*48)") python -m pytest tests/test_audio_api.py -v`
+로그 redaction — **uvicorn access logger 에 실제 필터 wiring**(viewer `main.py` `create_app()` 시작부):
+
+```python
+# viewer/app/main.py create_app() 에 추가
+import logging, re as _re
+class _TokenRedactFilter(logging.Filter):
+    _RE = _re.compile(r"((?:p?token)=)[^&\s\"']+")
+    def filter(self, record):
+        if record.args:
+            record.args = tuple(self._RE.sub(r"\1REDACTED", str(a)) for a in record.args)
+        record.msg = self._RE.sub(r"\1REDACTED", str(record.msg))
+        return True
+logging.getLogger("uvicorn.access").addFilter(_TokenRedactFilter())
+```
+
+- [ ] **Step 4: Run tests (TestClient + redact filter)**
+
+```python
+# viewer/tests/test_audio_api.py 에 추가
+def test_audio_file_v2_fallback(tmp_path, monkeypatch):
+    paper = tmp_path/"outputs"/"P"; (paper/"audio").mkdir(parents=True)
+    (paper/"P_ko_audio.md").write_text("# t\n\n본문.")
+    (paper/"audio"/"P_ko_audio.manifest.json").write_text(
+        '{"schema_version":2,"status":"complete","source":{"path":"P","sha256":"abc123def456ff"},'
+        '"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":"P_ko_audio.abc.mp3"}},"chunks":[]}')
+    (paper/"audio"/"P_ko_audio.abc.mp3").write_bytes(b"\xff\xfb")
+    c = _client(monkeypatch, tmp_path); c.post("/api/login", json={"username":"admin","password":"admin"})
+    assert c.get("/api/papers/P/audio/file").status_code == 200
+
+def test_redact_filter_masks_token():
+    from app.main import _TokenRedactFilter   # create_app 정의 시점에 따라 노출 위치 조정
+    import logging
+    rec = logging.LogRecord("x",20,"",0,'GET /a?token=SECRET&ptoken=Y',(),None)
+    _TokenRedactFilter().filter(rec)
+    assert "SECRET" not in rec.getMessage() and "token=REDACTED" in rec.getMessage()
+```
+
+Run: `cd viewer && JWT_SECRET_KEY=$(python -c "print('x'*48)") python -m pytest tests/test_audio_api.py tests/test_tts_token.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add viewer/app/routers/api.py viewer/app/services/tts_token.py viewer/tests/test_audio_api.py
-git commit -m "feat(hls): viewer stream-url/playlist(token inject)/segment(token verify) + html streaming"
+git add viewer/app/routers/api.py viewer/app/services/tts_token.py viewer/app/main.py viewer/tests/test_audio_api.py viewer/tests/test_tts_token.py
+git commit -m "feat(hls): stream-url/playlist/segment endpoints + v2 mp3 fallback + token redaction + segment TTL"
 ```
 
 ---
@@ -1173,12 +1328,12 @@ git commit -m "feat(hls): compose env (sweep off default, audio token secret) + 
 
 ---
 
-## Self-Review 결과
+## Self-Review 결과 (Codex 플랜 리뷰 R1 반영)
 
-- **Spec coverage**: §5 세그먼트/playlist→Task3 · §4 manifest v2→Task4 · §7 token→Task1,9 · §5.3 sub-split→Task2 · §2 증분 publish→Task5 · §7 sweep→Task6,7 · §9 API→Task8,9 · §8 file lock/TTL/stale→Task5(+§8.4 stale 는 viewer 접근 시 — Task9 후속 or 플랜2 메모) · §12.0 실측→Task0 · §13 하위호환→Task8,9. 실기기 preflight(§12.3)·프론트(§10)→Plan 2.
-- **Placeholder scan**: 모든 코드 스텝 실제 코드. `TARGETDURATION`/`SENTENCE_CHAR_CAP`/음량 필터는 Task 0 결정값으로 치환 명시(플레이스홀더 기본값 표기).
-- **Type consistency**: chunk 키(sentence_group_id/sub_index/sub_count/display_sentence_index/start_sec/end_sec) Task2↔4↔5 일치. token mint/verify 시그니처 Task1↔9 일치. manifest `audio.hls.playlist`/`audio.mp3.file` Task4↔8↔9 일치.
+- **Spec coverage**: §5 세그먼트/playlist→Task3 · §4 manifest v2→Task4 · §7 token(playlist+segment)→Task1,9 · §5.3 sub-split→Task2 · §2 증분 publish(heading 포함)→Task5 · 과길이 재합성 재시도→Task5 · §7 sweep(sha freshness)→Task6,7 · §9 API(stream-url/m3u8/seg, v2 mp3 폴백, cache 분리)→Task9 · §8 file lock/TTL(mp3 포함)→Task5 · §8.4 stale 복구→Task8(`reconcile_stale`, Task9 endpoint 호출) · §7 로그 redaction(실제 필터)→Task9 · §12.0 실측(전체 표본+가드)→Task0 · §13 하위호환(v1/v2)→Task8,9. 실기기 preflight(§12.3)·프론트(§10)→Plan 2.
+- **Codex BLOCKING 반영**: #1 과길이 재시도→Task5 `_synth_encode_with_retry` · #2 streaming mount→Plan2 Task2b · #3 token import 경로/`get_current_user_page`→Task9 Step3a/3b · #4 stale 복구→Task8. **HIGH 9**: 로그 redaction 실제 필터·v2 mp3 폴백·v1 fresh 테스트·sweep sha·TTL mp3+버전그룹·segment TTL max·failed_partial(Plan2)·프론트 자동테스트(Plan2)·Task0 표본확대+가드.
+- **Placeholder scan**: 모든 코드 스텝 실제 코드. `TARGETDURATION`/`SENTENCE_CHAR_CAP`/음량은 Task0 치환 + 커밋 전 grep 가드.
+- **Type consistency**: chunk 키(sentence_group_id/sub_index/sub_count/display_sentence_index/start_sec/end_sec) Task2↔4↔5↔Plan2 일치. token mint/verify(kind 포함) Task1↔9 일치. manifest `audio.hls.playlist`/`audio.mp3.file` Task4↔8↔9 일치. `_manifest_dict`/`reconcile_stale`/`mp3_file_path`/`source_id_and_sha` Task8↔9 일치.
 
-## 미해결 → Plan 2 (프론트엔드) / 후속
-- stale streaming 복구(§8.4)의 viewer 측 트리거(manifest 접근 시 heartbeat 검사) — Plan 2 또는 후속 태스크.
-- 프론트 HLS 부착·streaming mount·그룹 하이라이트·401 remount·hls.js·실기기 preflight → Plan 2.
+## 미해결 → Plan 2 (프론트엔드)
+- 프론트 HLS 부착·생성 중 streaming mount·그룹 하이라이트·401 remount·failed_partial·hls.js·자동테스트·실기기 preflight → Plan 2.
