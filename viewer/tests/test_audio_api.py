@@ -178,3 +178,20 @@ def test_reconcile_stale_keeps_fresh_heartbeat(tmp_path, monkeypatch):
     assert a.reconcile_stale("P") is False
     import json as _j
     assert _j.loads((paper / "audio" / "P_ko_audio.manifest.json").read_text())["status"] == "streaming"
+
+
+def test_reconcile_stale_none_heartbeat_uses_mtime(tmp_path, monkeypatch):
+    # heartbeat 부재 + 파일 방금 생성(mtime 최근) → stale 아님(죽이지 않음). Codex 방어 제안.
+    paper = tmp_path / "P"; (paper / "audio").mkdir(parents=True)
+    (paper / "P_ko_audio.md").write_text("# t\n\n본문.")
+    mp = paper / "audio" / "P_ko_audio.manifest.json"
+    mp.write_text(
+        '{"schema_version":2,"status":"streaming","heartbeat":null,'
+        '"source":{"sha256":"s"},"audio":{"hls":{"playlist":"stream.m3u8"},"mp3":{"file":null}},"chunks":[]}')
+    monkeypatch.setattr(a, "_resolve_paper_dir", lambda name: paper)
+    assert a.reconcile_stale("P") is False                       # 최근 mtime → 유지
+    # 오래된 mtime(2000년) → heartbeat 없으니 stale 로 전이
+    import os as _os
+    old = 946684800  # 2000-01-01
+    _os.utime(mp, (old, old))
+    assert a.reconcile_stale("P") is True

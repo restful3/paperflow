@@ -1,4 +1,4 @@
-import json, os, re as _re
+import json, os, re as _re, time
 from html import escape
 from pathlib import Path
 
@@ -133,7 +133,12 @@ def reconcile_stale(name, threshold_sec=1800):
     if man.get("status") != "streaming": return False
     hb = man.get("heartbeat")
     try:
-        age = (datetime.now(timezone.utc) - datetime.fromisoformat(hb)).total_seconds() if hb else 1e9
+        if hb:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(hb)).total_seconds()
+        else:
+            # heartbeat 부재(구버전/중단된 쓰기/막 생성) → 파일 mtime 을 last-activity 대용으로.
+            # 방금 쓰인 manifest 를 stale 로 오판해 죽이지 않도록(Codex 방어 제안).
+            age = max(0.0, time.time() - p.stat().st_mtime)
     except Exception:
         age = 1e9
     if age < threshold_sec: return False

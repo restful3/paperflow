@@ -82,6 +82,10 @@ services:
       - SWEEP_INTERVAL=${SWEEP_INTERVAL:-60}
       - SWEEP_MAX_PAPERS=${SWEEP_MAX_PAPERS:-3}
       - AUDIO_TOKEN_SECRET=${AUDIO_TOKEN_SECRET:-}
+      # 정리 grace = 토큰 TTL+grace. viewer 와 같은 값을 받아야 viewer 가 발급한 토큰 유효 동안
+      # tts 가 구버전 세그먼트를 지우지 않는다(Codex MEDIUM). 기본값은 양쪽 코드가 동일.
+      - AUDIO_TOKEN_TTL=${AUDIO_TOKEN_TTL:-43200}
+      - AUDIO_RESUME_GRACE=${AUDIO_RESUME_GRACE:-3600}
     deploy:
       resources:
         reservations:
