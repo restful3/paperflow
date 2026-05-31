@@ -733,7 +733,7 @@
         <div x-show="audioMode && audioReady"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800 shadow'">
-          <audio x-ref="audioEl" :src="audioSrc()" preload="metadata"
+          <audio x-ref="audioEl" preload="metadata"
                  @timeupdate="onTimeUpdate()" @play="audioPlaying=true" @pause="audioPlaying=false"
                  @error="onAudioError()"></audio>
           <button @click="togglePlay()" class="px-2 py-1 rounded hover:bg-sky-500/20 text-lg leading-none"
@@ -1265,6 +1265,11 @@ function viewerApp() {
     audioCurChunk: -1,
     audioFollow: true,          // auto-follow 스크롤
     audioRate: 1.0,
+    // ── HLS streaming (Plan 2) ──
+    audioIsHls: false,
+    audioHls: null,             // hls.js 인스턴스(비-iOS)
+    audioStreamUrl: '',         // signed playlist URL
+    _audioMounted: false,       // 중복 mount 방지(streaming 중 재호출 대비)
     _lisT: null,
     location: '{{ location }}',
     appViewportHeight: null,
@@ -1918,15 +1923,40 @@ function viewerApp() {
     // ── Live TTS: load / generate / poll ──
     async loadAudio() {
       const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
-      if (r && r.ok) {
-        this.audioManifest = await r.json();
-        this.audioReady = this.audioManifest.status === 'complete';
-        if (this.audioReady) {
-          await this.mountAudioHtml();         // 서버 span-HTML이 audio 모드 본문
-          this.setupMediaSession();
-        }
+      if (!r || !r.ok) { this.audioReady = false; return; }
+      this.audioManifest = await r.json();
+      const hls = this.audioManifest.audio && this.audioManifest.audio.hls;
+      this.audioIsHls = !!hls;
+      const st = this.audioManifest.status;
+      // streaming(생성 중)에서도 첫 세그먼트부터 mount. complete/failed_partial 도 재생.
+      this.audioReady = ['streaming', 'complete', 'failed_partial'].includes(st);
+      if (!this.audioReady) return;
+      if (this._audioMounted) { if (st === 'streaming') this.pollStreamingManifest(); return; }  // 중복 mount 방지
+      await this.mountAudioHtml();             // 서버 span-HTML이 audio 모드 본문(전체 chunks)
+      if (this.audioIsHls) {
+        await this.attachHls();                // 425(세그먼트 0)면 audioReady=false → 다음 폴링 재시도
       } else {
-        this.audioReady = false;               // 미생성 → 생성 버튼 노출(정적 텍스트는 baseline 유지)
+        this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';   // v1 단일 mp3 폴백
+      }
+      if (this.audioReady) { this._audioMounted = true; this.setupMediaSession(); }
+      if (st === 'streaming') this.pollStreamingManifest();   // 증분 timing 머지
+    },
+    async attachHls() {
+      // signed playlist URL(쿠키 비의존 1급 경로 — iOS AVPlayer). 세그먼트 0이면 stream-url 425.
+      const su = await apiFetch('/api/papers/' + name + '/audio/stream-url');
+      if (!su || !su.ok) { this.audioReady = false; this._audioMounted = false; return; }  // 425 포함 → 재시도
+      this.audioStreamUrl = (await su.json()).url;
+      const el = this.$refs.audioEl;
+      if (this.audioHls) { this.audioHls.destroy(); this.audioHls = null; }
+      if (el.canPlayType('application/vnd.apple.mpegurl')) {
+        el.src = this.audioStreamUrl;          // iOS/Safari 네이티브 HLS
+      } else if (window.Hls && Hls.isSupported()) {
+        const hls = new Hls({ xhrSetup: (xhr) => { xhr.withCredentials = true; } });
+        hls.loadSource(this.audioStreamUrl); hls.attachMedia(el);
+        this.audioHls = hls;
+        this.setupHlsErrorHandling(hls);       // 토큰 만료/네트워크 에러 분기
+      } else if (this.audioManifest.audio.mp3 && this.audioManifest.audio.mp3.file) {
+        el.src = '/api/papers/' + name + '/audio/file';   // HLS 불가 → mp3 폴백
       }
     },
     async mountAudioHtml() {
@@ -1948,9 +1978,31 @@ function viewerApp() {
       const r = await apiFetch('/api/papers/' + name + '/audio/status');
       const st = await r.json();
       this.audioJobStage = st.stage; this.audioJobDone = st.done; this.audioJobTotal = st.total;
+      // ★ 생성 중(streaming)에도 mount 시도 — manifest+playlist 준비되면 첫 세그먼트부터 재생
+      if (!this._audioMounted && ['segmenting', 'synthesizing', 'stitching'].includes(st.stage)) {
+        await this.loadAudio();              // streaming 이면 mount(아직 425/404 면 다음 폴링 재시도)
+      }
       if (st.stage === 'ready') { this.audioGenerating = false; await this.loadAudio(); return; }
+      if (st.stage === 'failed_partial') {   // 앞부분만 mount + 폴링 종료
+        this.audioGenerating = false; showToast('일부만 생성됨(나머지 실패)', 'warning');
+        await this.loadAudio(); return;
+      }
       if (st.stage === 'failed') { this.audioGenerating = false; showToast('오디오 생성 실패: ' + (st.error || ''), 'error'); return; }
       setTimeout(() => this.pollAudioJob(), 1500);
+    },
+    async pollStreamingManifest() {
+      if (!this.audioManifest || this.audioManifest.status !== 'streaming') return;
+      const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
+      if (r && r.ok) {
+        const m = await r.json();
+        // id-keyed 머지: 기존 chunks 의 timing 만 갱신(텍스트/순서 불변, 중복 append 금지)
+        const byId = {}; this.audioManifest.chunks.forEach(c => byId[c.id] = c);
+        m.chunks.forEach(c => { if (byId[c.id]) { byId[c.id].start_sec = c.start_sec; byId[c.id].end_sec = c.end_sec; } });
+        this.audioManifest.status = m.status;
+        this.audioManifest.audio.duration_sec = m.audio.duration_sec;
+        if (m.audio.mp3) this.audioManifest.audio.mp3 = m.audio.mp3;
+      }
+      if (this.audioManifest.status === 'streaming') setTimeout(() => this.pollStreamingManifest(), 3000);
     },
 
     // ── Live TTS: playback controls ──
@@ -1965,10 +2017,11 @@ function viewerApp() {
       if (a.paused) { a.playbackRate = this.audioRate; a.play().catch(e => showToast('재생 실패: ' + e.message, 'error')); }
       else a.pause();
     },
-    chunkAt(t) {                       // currentTime → chunk index
+    chunkAt(t) {                       // start_sec 채워진 chunk 중 최신(streaming: 미생성 chunk 는 null)
       const cs = this.audioManifest.chunks;
-      for (let i = cs.length - 1; i >= 0; i--) if (t >= cs[i].start_sec) return i;
-      return 0;
+      for (let i = cs.length - 1; i >= 0; i--)
+        if (cs[i].start_sec != null && t >= cs[i].start_sec) return i;
+      return -1;
     },
     seekToChunk(i) {
       const cs = this.audioManifest && this.audioManifest.chunks;
@@ -1977,9 +2030,29 @@ function viewerApp() {
     },
     prevSentence() { this.seekToChunk(this.audioCurChunk - 1); },
     nextSentence() { this.seekToChunk(this.audioCurChunk + 1); },
+    async remountAudio() {
+      const t = this.$refs.audioEl.currentTime;
+      await this.attachHls();                 // 새 signed URL 로 재부착(토큰 만료 복구)
+      this.$nextTick(() => { try { this.$refs.audioEl.currentTime = t; } catch (e) {} });
+    },
     async onAudioError() {
-      // B4: 버전드 파일이 재생성으로 정리돼 404면 manifest/html을 다시 로드해 최신 버전과 정합.
-      await this.loadAudio();
+      // HLS 네이티브 경로의 segment 401/403 은 audio error 로 표면화 → remount.
+      // v1(mp3): 버전드 파일이 재생성으로 정리돼 404면 manifest/html 재로드.
+      if (this.audioIsHls) await this.remountAudio();
+      else await this.loadAudio();
+    },
+    setupHlsErrorHandling(hls) {
+      hls.on(Hls.Events.ERROR, (evt, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          this.remountAudio();                // MANIFEST/FRAG load error(토큰 만료 등) → 새 signed URL
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
+          const mp3 = this.audioManifest.audio && this.audioManifest.audio.mp3;   // 복구 불가 → mp3 폴백
+          if (mp3 && mp3.file) { this.audioIsHls = false; this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file'; }
+        }
+      });
     },
     onMarkdownClick(e) {
       this.onSentenceTap(e);                 // 오디오 모드면 그 문장부터 재생
@@ -1997,17 +2070,23 @@ function viewerApp() {
     onTimeUpdate() {
       if (!this.audioManifest) return;
       const i = this.chunkAt(this.$refs.audioEl.currentTime);
-      if (i === this.audioCurChunk) return;
+      if (i < 0 || i === this.audioCurChunk) return;
       this.audioCurChunk = i;
       // document 기준 조회: Alpine은 이벤트 핸들러에서 this.$el을 <audio>(자식 없음)로 해석할 수 있음
       document.querySelectorAll('[data-tts-chunk].tts-active').forEach(n => {
         n.classList.remove('tts-active'); n.removeAttribute('aria-current');
       });
-      const cur = document.querySelector('[data-tts-chunk="' + i + '"]');
-      if (cur) {
-        cur.classList.add('tts-active'); cur.setAttribute('aria-current', 'true');
-        if (this.audioFollow) cur.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // v2: 같은 sentence_group 의 모든 sub-span 강조(긴 문장 = 한 문장처럼). v1(그룹 없음): 단일 chunk.
+      const gid = this.audioManifest.chunks[i].sentence_group_id;
+      const targets = (gid == null)
+        ? [this.audioManifest.chunks[i]]
+        : this.audioManifest.chunks.filter(c => c.sentence_group_id === gid);
+      let firstEl = null;
+      targets.forEach(c => {
+        const el = document.querySelector('[data-tts-chunk="' + c.id + '"]');
+        if (el) { el.classList.add('tts-active'); el.setAttribute('aria-current', 'true'); firstEl = firstEl || el; }
+      });
+      if (firstEl && this.audioFollow) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       this.throttledSaveListening();
     },
 
@@ -2016,14 +2095,20 @@ function viewerApp() {
       clearTimeout(this._lisT);
       this._lisT = setTimeout(() => this.saveListening(), 2000);
     },
+    _audioVersion() {       // 아티팩트 버전(v2 audio.version, v1 은 source.sha256 폴백)
+      const m = this.audioManifest;
+      return (m && m.audio && m.audio.version) || (m && m.source && m.source.sha256) || '';
+    },
     async saveListening() {
       if (!this.audioManifest || !this.$refs.audioEl) return;
       const a = this.$refs.audioEl;
       const dur = (this.audioManifest.audio && this.audioManifest.audio.duration_sec) || 1;
+      const cur = this.audioCurChunk >= 0 ? this.audioManifest.chunks[this.audioCurChunk] : null;
       await apiFetch('/api/papers/' + name + '/audio/position', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          audio_version: (this.audioManifest.source && this.audioManifest.source.sha256) || '',
+          audio_version: this._audioVersion(),
+          sentence_group_id: cur ? cur.sentence_group_id : null,
           chunk_id: this.audioCurChunk, time_sec: a.currentTime,
           percent: Math.round(a.currentTime / dur * 100)
         })
@@ -2033,9 +2118,11 @@ function viewerApp() {
       const r = await apiFetch('/api/papers/' + name + '/audio/position');
       if (!r || !r.ok) return;
       const p = await r.json();
-      const ver = (this.audioManifest.source && this.audioManifest.source.sha256) || '';
-      if (p && p.time_sec && p.audio_version === ver && this.$refs.audioEl) {
-        this.$refs.audioEl.currentTime = p.time_sec;   // 이어듣기
+      const dur = (this.audioManifest.audio && this.audioManifest.audio.duration_sec) || 0;
+      // streaming 중엔 저장 시점이 아직 미생성일 수 있으니 time_sec <= duration_sec 일 때만 복원.
+      if (p && p.time_sec && p.audio_version === this._audioVersion() &&
+          p.time_sec <= dur && this.$refs.audioEl) {
+        this.$refs.audioEl.currentTime = p.time_sec;   // 이어듣기(생성 완료분 내)
       }
     },
 
