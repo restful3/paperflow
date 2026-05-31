@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    # Live TTS sidecar (Chatterbox-Multilingual)
+    TTS_SERVICE_URL: str = "http://paperflow-tts:8100"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

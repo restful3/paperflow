@@ -10,6 +10,8 @@ from ..auth import create_token, set_auth_cookie, clear_auth_cookie
 from ..config import settings
 from ..dependencies import get_current_user_api
 from ..services import papers as paper_svc
+from ..services import audio as audio_svc
+import httpx
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -615,5 +617,71 @@ async def cancel_processing_file(
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"ok": True, "message": msg}
+
+
+# ── Live TTS (audio) ──────────────────────────────────────────────────────────
+
+@router.post("/papers/{name:path}/audio/jobs")
+async def audio_job(name: str, _user: str = Depends(get_current_user_api)):
+    d = audio_svc._resolve_paper_dir(name)
+    if not d:
+        raise HTTPException(404, "paper not found")
+    src = next(iter(d.glob("*_ko_audio.md")), None)
+    if not src:
+        raise HTTPException(404, "no _ko_audio.md")
+    async with httpx.AsyncClient() as c:
+        r = await c.post(f"{settings.TTS_SERVICE_URL}/jobs",
+                         json={"paper_dir": str(d), "src_md": str(src)}, timeout=30)
+    return r.json()
+
+
+@router.get("/papers/{name:path}/audio/status")
+async def audio_status(name: str, _user: str = Depends(get_current_user_api)):
+    d = audio_svc._resolve_paper_dir(name)
+    if not d:
+        raise HTTPException(404)
+    async with httpx.AsyncClient() as c:
+        r = await c.get(f"{settings.TTS_SERVICE_URL}/jobs", params={"paper_dir": str(d)}, timeout=10)
+    return r.json()
+
+
+@router.get("/papers/{name:path}/audio/manifest")
+async def audio_manifest(name: str, _user: str = Depends(get_current_user_api)):
+    p = audio_svc.manifest_path(name)
+    if not p or not p.exists():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="application/json")
+
+
+@router.get("/papers/{name:path}/audio/file")
+async def audio_file(name: str, file: str | None = None, _user: str = Depends(get_current_user_api)):
+    # B4: 프론트가 로드한 manifest의 audio.file을 명시하면 그 버전드 파일을 서빙(timeline 정합).
+    #     생략 시 현재 manifest가 가리키는 파일. 어느 경우든 traversal 방어 + 존재 검증.
+    cur = audio_svc.audio_file_path(name)                 # 현재 manifest의 audio.file
+    if not cur:
+        raise HTTPException(404)
+    target = cur
+    if file:
+        import re as _re
+        if not _re.fullmatch(r"[^/\\]+_ko_audio\.[0-9a-f]{12}\.mp3", file):
+            raise HTTPException(400, "bad file")
+        cand = cur.parent / file
+        if not audio_svc._under_audio_dir(cand, cur.parent):
+            raise HTTPException(400, "path")
+        target = cand
+    if not target.exists():
+        raise HTTPException(404)      # 정리된 구버전 → 프론트가 onAudioError로 재로드
+    return FileResponse(target, media_type="audio/mpeg")  # Starlette가 Range 처리
+
+
+@router.get("/papers/{name:path}/audio/progress")
+async def get_audio_progress(name: str, _user: str = Depends(get_current_user_api)):
+    return audio_svc.get_listening_progress(name)
+
+
+@router.post("/papers/{name:path}/audio/progress")
+async def save_audio_progress(name: str, payload: dict, _user: str = Depends(get_current_user_api)):
+    audio_svc.save_listening_progress(name, payload)
+    return {"ok": True}
 
 
