@@ -3,9 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Referrer-Policy: HLS query token(?token/?ptoken) 외부 유출 축소 -->
+  <meta name="referrer" content="same-origin">
   <title>{% block title %}PaperFlow{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- hls.js (비-iOS HLS 폴백). pinned + SRI. iOS/Safari 는 네이티브라 불필요. -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"
+          integrity="sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none !important; }
