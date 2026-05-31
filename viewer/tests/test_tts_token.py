@@ -1,3 +1,4 @@
+import base64
 import time
 
 from app.services.tts_token import mint, verify
@@ -6,6 +7,13 @@ from app.services.tts_token import mint, verify
 # to tts_service/app/segtoken.py (separate containers, no shared import).
 
 SECRET = "x" * 48
+
+
+def _tamper(token):
+    """서명 마지막 바이트를 결정적으로 뒤집는다(trailing base64 비트 변조의 flakiness 회피)."""
+    raw = bytearray(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+    raw[-1] ^= 0xFF
+    return base64.urlsafe_b64encode(bytes(raw)).decode().rstrip("=")
 
 
 def test_roundtrip_playlist_and_segment():
@@ -31,5 +39,5 @@ def test_wrong_kind_or_sha_rejected():
 
 def test_tamper_rejected():
     t = mint(SECRET, kind="segment", source_id="p", sha12="s", ttl=60)
-    bad = t[:-2] + ("aa" if not t.endswith("aa") else "bb")
+    bad = _tamper(t)
     assert not verify(SECRET, bad, kind="segment", source_id="p", sha12="s", now=time.time())[0]
