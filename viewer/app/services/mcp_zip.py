@@ -39,11 +39,13 @@ def build_zip_stream(
                 # PDF gated
                 if name.lower().endswith(".pdf") and not include_pdf:
                     continue
-                # _ko.md and _ko_explained.md gated by include_translation
+                # _ko.md, _ko_explained.md, _ko_audio.md gated by include_translation
                 lower = name.lower()
                 if lower.endswith("_ko.md") and not include_translation:
                     continue
                 if lower.endswith("_ko_explained.md") and not include_translation:
+                    continue
+                if lower.endswith("_ko_audio.md") and not include_translation:
                     continue
                 zf.write(entry, arcname=name)
             elif entry.is_dir() and entry.name in ("images",):

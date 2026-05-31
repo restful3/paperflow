@@ -525,6 +525,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         "md_en": False,
         "md_ko_explained": False,
         "md_en_explained": False,
+        "md_ko_audio": False,
         "md_lint_report": False,
     }
     for f in paper_dir.iterdir():
@@ -538,6 +539,8 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
             files["md_en_explained"] = True
         elif f.name.endswith("_mdlint_report.json"):
             files["md_lint_report"] = True
+        elif f.name.endswith("_ko_audio.md"):
+            files["md_ko_audio"] = True
         elif f.name.endswith("_ko.md"):
             files["md_ko"] = True
         elif f.name.endswith(".md"):
@@ -767,6 +770,8 @@ def _resolve_result(paper_dir: Path, location: str) -> dict:
             formats["md_ko_explained"] = True
         elif f.name.endswith("_explained.md"):
             formats["md_en_explained"] = True
+        elif f.name.endswith("_ko_audio.md"):
+            formats["md_ko_audio"] = True
         elif f.name.endswith("_ko.md"):
             formats["md_ko"] = True
         elif f.name.endswith(".md"):
@@ -923,7 +928,23 @@ def get_md_en_path(name: str) -> Path | None:
     if not paper_dir:
         return None
     for f in paper_dir.iterdir():
-        if f.name.endswith(".md") and not f.name.endswith("_ko.md") and not f.name.endswith("_explained.md"):
+        if (
+            f.name.endswith(".md")
+            and not f.name.endswith("_ko.md")
+            and not f.name.endswith("_explained.md")
+            and not f.name.endswith("_ko_audio.md")
+        ):
+            return f
+    return None
+
+
+def get_md_ko_audio_path(name: str) -> Path | None:
+    """Get Korean audio (listen-optimized) markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    for f in paper_dir.iterdir():
+        if f.name.endswith("_ko_audio.md"):
             return f
     return None
 
@@ -966,12 +987,21 @@ def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
     target = None
     if md_type == "ko":
         for f in paper_dir.iterdir():
-            if f.name.endswith("_ko.md") and not f.name.endswith("_ko_explained.md"):
+            if (
+                f.name.endswith("_ko.md")
+                and not f.name.endswith("_ko_explained.md")
+                and not f.name.endswith("_ko_audio.md")
+            ):
                 target = f
                 break
     else:
         for f in paper_dir.iterdir():
-            if f.name.endswith(".md") and not f.name.endswith("_ko.md") and not f.name.endswith("_explained.md"):
+            if (
+                f.name.endswith(".md")
+                and not f.name.endswith("_ko.md")
+                and not f.name.endswith("_explained.md")
+                and not f.name.endswith("_ko_audio.md")
+            ):
                 target = f
                 break
 
