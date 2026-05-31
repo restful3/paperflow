@@ -1,47 +1,94 @@
-# 세션 핸드오프 — paper-audio-korean 듣기 낭독판 스킬 + 뷰어 통합
-_최종 갱신: 2026-05-31 13:10 KST_
+# 세션 핸드오프 — PaperFlow 한국어 TTS (MVP 배포 + HLS Plan 1·2 구현·검증 완료)
+_최종 갱신: 2026-05-31 (HLS 백엔드 Plan 1 + 프론트 Plan 2 구현·Codex리뷰·통합/Playwright 검증 완료)_
 
 ## 🎯 목표
-해설판(`_ko_explained.md`)을 아이폰 음성으로 들었을 때 이해되는 한국어 낭독판(`<basename>_ko_audio.md`)으로 변환하는 `paper-audio-korean` 스킬을 만들고, 뷰어에서 "듣기" 토글로 보이게 한다 (시각장애인용 오디오 디스크립션 원칙: 수식·표·그림·코드를 placeholder 아닌 자연어로).
+`_ko_audio.md`(한국어 낭독 텍스트)를 뷰어에서 듣는 기능. **두 단계**:
+1. **라이브 TTS MVP**(배치 합성→단일 mp3) — **구현·검증·배포 완료, 동작 중.**
+2. **HLS 실시간 스트리밍**(첫 문장부터 점진 재생) — **백엔드 Plan 1 + 프론트 Plan 2 구현·검증 완료. 남은 것: 실기기(iPhone) preflight 만.**
 
 ## ✅ 완료
-- **paper-audio-korean 스킬** 작성: `.claude/skills/paper-audio-korean/SKILL.md` (코덱스 3라운드 리뷰 REFINE→REFINE→GO 반영)
-- **뷰어 1급 포맷 통합** (commit `a402fbd`): 백엔드(papers.py `md_ko_audio` 감지 + `get_md_ko_audio_path` + en경로/save/RAG 제외 + mcp_zip 게이팅 + api 엔드포인트 + pages 템플릿 변수) + 프론트(viewer.html "듣기" 토글 2곳, KO전용, Easy와 상호배타) + **TDD 테스트 `tests/test_papers_audio.py` 5개**. **전체 161 passed (회귀 0)**.
-- **LongLM 전체 낭독판 생성**(스모크): `outputs/LLM Maybe LongLM SelfExtend.../...­_ko_audio.md` (589줄/90KB) + `_ko_audio.meta.json` sidecar. CRITICAL grep 위반 0건. 서브에이전트 5개 병렬 변환 후 메인이 조립.
-- **라이브 검증**: viewer 재빌드·재시작 완료, `/api/papers/{name}/md-ko-audio` → HTTP 200 90738 bytes, 뷰어 페이지 `hasMdKoAudio: true` + 듣기 토글 렌더 확인.
-- **문서 정합화** (commit `6986394`): README/CLAUDE.md를 B-full로 정정, 스펙·계획·코덱스 리뷰 트레일 3개 추가.
+### A. 라이브 TTS MVP (구현·검증·배포 — 동작 중)
+- Plan 1 백엔드 10태스크 + Plan 2 프론트 8태스크 전부 TDD 구현·커밋. tts 사이드카(`tts_service/`, Chatterbox-Multilingual) 신규 + viewer 오디오 플레이어.
+- Docker 3컨테이너 가동: `paperflow-tts`(9.45GB), `paperflow-viewer`, `paperflow-converter`. **`http://localhost:8090`** 듣기 토글 → ▶ 재생.
+- 통합 스모크 PASS("The next evolution of the Agents SDK", 256문장→26.7분 오디오). 끝부분 샘플 `_tail30s_sample.mp3`(임시).
+- 프론트 Playwright 검증: 로그인→듣기→재생+하이라이트→prev/next→탭→이어듣기 전부 ✅.
+- **테스트 중 발견·수정한 버그 3건**: ① 라우트 섀도잉(`/audio/progress`→`/audio/position`) ② 하이라이트 미표시(`this.$el`→`document` + `audioCurChunk=-1` 리셋) ③ chunker `re.sub` raw `\x00` `bad escape`.
+- **MVP 후속 픽스**: ① 빈 `.jobs/` 정리 ② 캐시히트 job이 `segmenting`에 멈추던 버그(`_worker`가 `run_job` 반환 후 `ready` 보장) ③ `.dockerignore`에 `model_cache/` 추가(converter 빌드 6분→2.5초).
+
+### B. HLS 백엔드 Plan 1 (구현·통합 스모크 완료 — main 직접 커밋)
+- **전 11개 태스크(Task 0\~10) TDD 구현·커밋.** tts: `segtoken.py`/`hls.py`/`sweep.py` 신규 + `chunker.py`/`manifest.py`/`job.py`/`main.py` 수정. viewer: `services/audio.py`(v1/v2 경로·reconcile)·`routers/api.py`(stream-url/m3u8/seg)·`main.py`(로그 redaction)·`services/tts_token.py`(segtoken byte-identical 복제). compose에 SWEEP_*/AUDIO_TOKEN_SECRET env.
+- **Task 0 실측 결정**(`docs/research/2026-05-31-hls-tts-measurement.md`): n=200 표본 → **TARGETDURATION=16s, SENTENCE_CHAR_CAP=85자**, 세그먼트 음량 `alimiter=limit=0.95`. glitch(모델 토큰반복) 5.5%는 길이게이트+재합성으로 처리, cap엔 정상 worst sec/char(0.1692) 사용.
+- **테스트**: tts 30 passed, viewer audio+token 16 passed.
+- **통합 스모크 PASS**(실 합성): 업프런트 223청크 publish→status=streaming, 증분 타이밍, stream-url ptoken, playlist 토큰 주입, 세그먼트 **Range 206**(video/mp2t), bad-token **403**.
+- **스모크 중 발견·수정한 버그 1건**: `reconcile_stale`가 갓 시작한(heartbeat=None) streaming manifest를 즉시 failed로 뒤집어 failed↔streaming 깜빡임 → `run_job`이 **생성 시점에 heartbeat 설정**(commit a7d92a7) + viewer 회귀 테스트.
+- **커밋 트레일**(main): 1472836(측정) · 6893c5b(segtoken) · 9a2eaac(chunker) · 2a9e840(hls) · a22fb38(manifest v2) · f7b3a26(job) · dbe361a(sweep) · d303f06(main) · 1ce63b5(viewer audio) · 3518ca7(viewer api) · a7d92a7(heartbeat fix) · e9f7308(compose).
+- 미반영: 스펙 §5.3의 "재분할 1회" 는 플랜대로 **재합성(TTS 분산) 1회**로 구현(upfront-publish 모델 유지). sweep 기본 OFF.
+
+### C. Codex 백엔드 리뷰 (peer-council, 회의실=paperflow 세션) — 전부 반영·검증
+- **Finding 1 (BLOCKING)**: `encode_segment` 가 MPEG-TS `format.duration`(AAC priming/PTS로 ~0.25s 과소보고 → 누적 분 단위 드리프트 + 게이트 허술)을 씀 → **입력 wav+pad 권위 클록**으로 변경(stitch mp3와 동일 클록). 실 세그먼트로 EXTINF가 decoded와 ~0.05~0.08s(priming)까지 근접 확인. commit 0c89ab8.
+- **Finding 2 (HIGH→재논의 후 MEDIUM)**: HLS dir/mp3/token 이 source sha 만으로 키잉 → model/cache-key 변경 재생성이 immutable 경로 덮어씀. Codex 재논의 결과 단일사용자 v1 blocker 아님이나 사용자 결정으로 **지금 수정**: `artifact_version = sha256(source_sha + CACHE_KEY_FIELDS)[:12]` 를 manifest.audio.version 에 저장→dir/mp3/token 바인딩(viewer 는 audio.version 으로 해석, v1 은 source sha 폴백). generation counter 는 v1 over-engineering이라 제외(same-source 재시도 오버랩은 v1 범위 밖). commit 5ff1ca0, e2e 검증(dir==manifest==expected digest).
+- **Finding 3 (MEDIUM)**: cleanup grace 가 tts env TTL 을 읽는데 compose 미전달 → `AUDIO_TOKEN_TTL`/`AUDIO_RESUME_GRACE` 를 tts 에도 전달. commit 0c89ab8.
+- **하드닝**: `reconcile_stale` 가 heartbeat 부재 시 manifest mtime 폴백(0c89ab8). flaky `test_tamper_rejected`(trailing base64 변조) → 결정적 byte-flip(a056a60).
+- **Codex가 OK 한 것**: Task0 결정(16/85), heartbeat 픽스, 잠금 중첩, failed_partial, sweep denylist, traversal 이중가드, cache 헤더, 로그 redaction.
+- 회의록: `council minutes`(paperflow 세션). 캡처: /tmp/codex_response_20260531_193701.txt(리뷰), _195152.txt(Finding2 재논의).
+- **백엔드 최종 테스트**: tts 32 passed(×3 안정), viewer 18 passed(×3). 통합 스모크 PASS.
+
+### D. HLS 프론트엔드 Plan 2 (구현·Playwright 검증 완료 — main 직접 커밋)
+- **7태스크 구현**: base.html(hls.js 1.5.17 pinned+SRI, `referrer=same-origin`) + viewer.html `viewerApp()` HLS 플레이어.
+  - `attachHls()`: 네이티브(`<audio src>`, iOS 1급 경로) / hls.js(withCredentials) 분기, signed playlist URL(`/audio/stream-url`); v1 단일 mp3 폴백.
+  - 생성 중 streaming mount(첫 세그먼트부터; `pollAudioJob` 이 segmenting/synthesizing 중에도 mount, 425 → 재시도).
+  - `pollStreamingManifest()`: id-keyed timing 머지(중복 append 금지).
+  - `onTimeUpdate()`: v2 sentence_group 전체 강조 / v1(그룹 없음) 단일 chunk 폴백; `chunkAt` 은 start_sec=null 건너뜀.
+  - `remountAudio`/`onAudioError`/`setupHlsErrorHandling`: 토큰 만료 remount(네이티브+hls.js), fatal 시 mp3 폴백.
+  - 이어듣기: `audio.version` + currentTime, streaming-safe(time_sec ≤ duration_sec).
+- **Playwright 검증 PASS**(실 브라우저, 네이티브 HLS 경로 = iOS 경로): audioIsHls·stream-url 호출·m3u8+세그먼트 토큰 fetch·**실재생+그룹 하이라이트**(currentTime 5.9s)·id-keyed merge(282청크 중복0)·토큰만료 remount(stream-url 재발급)·425/200 게이팅. 4 hard assert PASS.
+- **커밋**(main): 283d241(base.html hls.js+SRI), 704fd8b(viewer HLS 플레이어), 54ead15(Codex 리뷰 픽스).
+- 플랜 대비 보강: onTimeUpdate 의 v1(sentence_group 없는 기존 manifest) 단일-chunk 폴백 추가(플랜 코드는 v1에서 전체강조 버그 가능) — 직접 수정.
+
+#### Codex 프론트 리뷰 — 전부 반영·Playwright 검증 (commit 54ead15)
+- **HIGH#1**: `<audio>` 가 `x-if="view==='md'"` 아래라 PDF/split/편집 전환 시 DOM 파괴되는데 `_audioMounted` 가 true 로 남아 복귀 시 빈 플레이어(내가 `:src` 제거하며 만든 회귀). → `reattachAudio()` 를 audio 엘리먼트 `x-init` 로 연결, 재생성된 엘리먼트에 재부착. 검증: 전환→파괴 확인, 복귀→source 재부착 확인.
+- **HIGH#2**: remount 무한루프 위험(403/네트워크 지속 실패 시 stream-url 난타) → `remountAudio` 가 30s 창 3회 캡 후 mp3 폴백/중단. 검증: 6회 강제실패 → attachHls 3회만 시도.
+- **MEDIUM**: `seekToChunk` 가 미생성 streaming chunk(start_sec=null)에 0.001 로 점프 → null 가드.
+- **Cleanup**: `:src` 제거로 dead 가 된 `audioSrc()` 삭제.
+- **Codex가 OK**: 폴링 race 없음, 토큰 노출 수용가능(same-origin+no-referrer), withCredentials+token 무해, v1/v2 폴백.
+- **Playwright 8/8 PASS**(네이티브=iOS 경로): audioIsHls·stream-url·id-keyed merge·재생+그룹하이라이트·뷰전환 재부착·remount 백오프·게이팅. 캡처 /tmp/codex_response_20260531_203402.txt.
+
+## ✅ 남은 것 (BLOCKING — 자동화 불가, 수동)
+- **실기기 iPhone Safari preflight**(스펙 §12.3): signed token 으로 m3u8/segment 쿠키없이 통과 · 첫 audible(1\~3 세그) · 잠금화면/백그라운드/네트워크전환 지속재생 · 완료 VOD seek · MediaSession/AirPods. 통과 시 HLS 기능 GA.
 
 ## 🔄 진행 중
-없음. (audio 기능 작업은 코드·문서·스모크·검증까지 일단락)
+- 없음. (스모크 검증용 백그라운드 합성 job 1건이 GPU에서 실행 중일 수 있음 — "Anthropic launches enterprise..." 논문. 멈추려면 `docker compose restart paperflow-tts`.)
 
 ## ⏭️ 다음 단계
-1. (선택) 다른 논문에도 `paper-audio-korean` 적용 — batch 모드로 `_ko_audio.md` 없는 해설판부터.
-2. (선택) 큰 장(예: 4장)은 서브에이전트 출력 한계 근처 — 더 큰 논문은 더 잘게 분할 변환.
-
-(완료: paper-explainer batch 필터 + 이름 수정 커밋 `879d7a6`.)
+1. **실기기 iPhone Safari preflight**(위 "남은 것", 스펙 §12.3) — 유일한 BLOCKING. 통과 시 HLS GA.
+   - 백엔드·프론트 모두 구현·Codex리뷰·Playwright(네이티브 경로) 검증 완료. 남은 건 실제 iPhone 동작뿐.
+2. (선택) v1.1: artifact_version generation counter(same-source 재시도 오버랩), sweep 완전 preemption.
 
 ## 🧠 대화에만 있던 핵심 컨텍스트
-- **결정 (B-full)**: 출력 위치를 처음엔 `audio/` 하위 디렉터리(백엔드 변경 0)로 설계했으나, 사용자가 "해설판처럼 파일명으로 구분 + 뷰어에서 보이게"를 택해 **폴더 직하위 `_ko_audio.md` + viewer/MCP 1급 포맷 통합**으로 전환. 스펙/계획 상단에 전환 주석 있음.
-- **발견 (파일 감지 충돌)**: 새 suffix `_ko_audio.md`는 `papers.py`의 `elif` 사슬에서 `_ko.md`/`_explained.md`에 안 걸려 마지막 `.md` catch-all로 떨어져 **영어 원문(`md_en`)으로 오분류** → `get_md_en_path`/`save_markdown(en)`이 덮어쓸 위험. 코덱스 R1 High #1, 실제 코드로 검증됨. 해결: 전용 `md_ko_audio` 분기 + 5개 호출처 제외.
-- **발견 (paper-explainer marker 없음)**: paper-explainer는 completion marker를 안 쓰고 기존 해설판에도 없음 → 해설판 완료 판정은 marker가 아니라 **legacy validation**(존재+비어있지않음+제목+heading coverage)으로. marker/sidecar는 audio 산출물에만.
-- **결정 (서브에이전트 하이브리드)**: 긴 변환은 서브에이전트가 **텍스트만 반환**(파일 안 씀 — 프로젝트 교훈: 백그라운드 서브에이전트 파일쓰기 불가 + 32K 출력한계), 메인이 조립·검증·rename. 일관성은 **공유 낭독 사전**(LLM→엘엘엠, RoPE→로프, SelfExtend→셀프익스텐드 등)으로 통일.
-- **결정 (TTS 노이즈 방지)**: 최종 `.md`엔 YAML·HTML comment 메타 금지(일부 뷰어가 낭독). 완료 메타는 sidecar `_ko_audio.meta.json`(status + source mtime/size/sha256).
-- **테스트 산출물 주의**: LongLM `_ko_audio.md`/`.meta.json`은 `outputs/`(gitignored)에 있어 디스크엔 남지만 git엔 없음. /clear로 사라지지 않음.
-- **공개 URL**: 뷰어 공개 도메인 `https://paper.restful3.store` (메모리에 저장됨). 듣기판: `https://paper.restful3.store/viewer/LLM%20Maybe%20LongLM%20SelfExtend%20LLM%20Context%20Window%20Without%20Tuning` → "듣기" 토글.
+- **왜 HLS인가**: 단일 `<audio>` mp3는 "재생 중 파일 append" 불가(고정 Content-Length), iPhone Safari는 오디오 MSE 사실상 미지원 → HLS(Apple 네이티브 progressive)가 무빙 윈도우의 정답. 사용자가 "무빙 스티치" 아이디어를 냈고 그게 HLS로 귀결됨.
+- **왜 signed token(쿠키 아님)**: iOS 네이티브 AVPlayer는 playlist/segment를 AppleCoreMedia 경로로 가져가 HttpOnly/SameSite 쿠키가 안 붙을 수 있음 → HMAC signed token(playlist+segment 2종, paper×버전 바인딩)을 1급 설계로. signed playlist URL(`/audio/stream-url`→`?ptoken=`)이 iOS 1급 경로.
+- **과길이 처리 절충**: 스펙 §5.3은 "재분할 1회 재시도"지만, upfront-publish(전체 chunks 고정 id) 모델을 깨지 않으려 **"재합성(TTS 분산) 1회"**로 구현. Task0 cap이 1차 방어. Codex 수용함.
+- **heading 버그**: 내 초안 job.py가 `kind!="text" continue`로 heading 제외하며 "MVP 동일"이라 적었으나, **실제 MVP는 heading도 합성** → 수정(heading 포함 전체 chunk).
+- **sweep 기본 OFF**: foreground preemption 미보장이라 v1은 `SWEEP_ENABLED=false`+캡. 완전 preemption은 v1.1.
+- **Codex 채널**: `peer-council` 스킬(`council ask codex`)을 씀 — tmux `codex` 윈도우가 아니라 **상시 `peer-council-codex.service`**(허브 `~/.peer-council/hub.db`). 사용자가 "지금대로 council 서비스" 유지 선택. 회의록 세션 `hls-tts-spec`.
+- **MVP 핵심**: 단일 stitched mp3 + manifest(문장 timeline) + 단일 `<audio>`+currentTime 하이라이트. `_ko_audio.md`는 paper-audio-korean 스킬이 디스크에 직접 생성(배치 파이프라인 아님).
+- **실측**: Chatterbox RTF ~0.59, 0.35청크/s. 854문장 = ~40분(MVP 단일mp3의 대기 문제 → HLS 동기).
 
 ## ⚠️ 클리어 전 주의
-- **커밋 안 됨**: `M HANDOFF.md`(이 파일, 상태 파일이라 미커밋 정상). 이번 세션 코드·스킬·문서는 전부 커밋됨(`a402fbd`/`6986394`/`879d7a6`). `?? HANDOFF.md.bak_20260526_143812`, `?? docs/superpowers/plans/2026-05-26-...-mcp-plan.md`(이전 세션 잔여, 무관).
-- **백그라운드**: codex polling tasks(`b3jzqhorm`/`bc9277l5o`/`bnxxq3e4z`) 모두 completed. tmux `paperflow:codex` 윈도우 idle 상태로 살아있음(스펙 리뷰 3라운드 사용). Docker `paperflow_viewer`(audio 기능 반영된 새 이미지로 재시작, Up ~37분)·`paperflow_converter` 실행 중.
-- **미완료 todo**: 없음 (이번 세션 Task #1-7 모두 completed).
+- **커밋 안 됨(전부 이번 세션 작업 아님 — 건드리지 말 것)**:
+  - `.gitignore`(M), PNG 17개 삭제(D), `test_container_tui.txt`(D), `docs/superpowers/plans/2026-05-26-*-plan.md`(??) — **기존 워킹트리 상태, 이번 세션 무관.**
+  - `HANDOFF.md`(M) — 방금 이 파일 갱신(상태 파일, 커밋은 사용자 결정).
+  - `_tail30s_sample.mp3`(??) — MVP 끝부분 샘플(임시, gitignore 대상 아님 — 원하면 삭제 가능).
+- **이번 세션 산출물은 전부 커밋됨**(24커밋: MVP 구현/픽스 + HLS spec/plan/review).
+- **백그라운드**: 활성 셸 없음(빌드·폴링 전부 완료). docker 3컨테이너 실행 중(정상). `peer-council-codex.service` 상시(클리어 후 유지).
+- **임시(휘발성)**: `/tmp/cbx-venv`(Chatterbox venv), `/tmp/pwverify`(playwright venv) — 재부팅 시 소실. 모델 가중치는 `~/.cache/huggingface`·`./model_cache`.
+- **미완료 todo**: 없음.
 
 ## 📂 관련 파일
-- `.claude/skills/paper-audio-korean/SKILL.md` — 스킬 본체 (커밋됨 `a402fbd`)
-- `viewer/app/services/papers.py` — `md_ko_audio` 감지 + `get_md_ko_audio_path` + 제외 (커밋됨)
-- `viewer/app/services/chat.py`, `mcp_zip.py`, `routers/api.py`, `routers/pages.py` — audio 통합 (커밋됨)
-- `viewer/app/templates/viewer.html` — "듣기" 토글 + audioMode 상태/로드 (커밋됨)
-- `viewer/tests/test_papers_audio.py` — 5 테스트 (커밋됨). settings stale binding은 `_rebind_settings` 픽스처로 해결.
-- `README.md` / `CLAUDE.md` — paper-audio-korean + `_ko_audio.md` 정책 (커밋됨 `6986394`)
-- `docs/superpowers/specs|plans/2026-05-31-paper-audio-korean-*` — 스펙·계획 (B-full 전환 주석, 커밋됨)
-- `docs/reviews/2026-05-31-paper-audio-korean-spec-codex{,-2,-3}.md` — 코덱스 리뷰 트레일 (커밋됨)
-- `.claude/skills/paper-explainer/SKILL.md` — batch 필터 + 이름 수정 (커밋됨 `879d7a6`)
-- `outputs/LLM Maybe LongLM.../..._ko_audio.md` + `.meta.json` — 스모크 산출물 (gitignored, 디스크 only)
+- `docs/superpowers/specs/2026-05-31-paperflow-hls-streaming-design.md` — HLS 스펙 R2(승인)
+- `docs/superpowers/plans/2026-05-31-paperflow-hls-streaming-backend.md` — HLS Plan 1(백엔드, 승인, Task0 실측부터)
+- `docs/superpowers/plans/2026-05-31-paperflow-hls-streaming-frontend.md` — HLS Plan 2(프론트, 승인)
+- `docs/reviews/2026-05-31-hls-tts-*.md` — Codex 합의 트레일(spec R1/R2, plans R1/R2)
+- `tts_service/app/` — MVP 백엔드(chunker/manifest/stitch/synth/gpulock/job/main). HLS는 여기에 segtoken/hls/sweep 추가 + job/manifest 수정.
+- `viewer/app/{services/audio.py,routers/api.py,config.py,templates/viewer.html}` — MVP 뷰어. HLS는 stream-url/m3u8/seg 추가 + 플레이어 HLS 전환.
+- `docs/superpowers/specs/2026-05-31-paperflow-live-tts-design.md` + `plans/2026-05-31-paperflow-live-tts-{backend,frontend}.md` — MVP 선행 문서(구현 완료).
