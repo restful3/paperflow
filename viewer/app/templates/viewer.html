@@ -736,6 +736,7 @@
           <audio x-ref="audioEl" preload="metadata"
                  x-init="$nextTick(() => reattachAudio())"
                  @timeupdate="onTimeUpdate()" @play="audioPlaying=true" @pause="audioPlaying=false"
+                 @waiting="onAudioStall()" @playing="clearStallTimer()"
                  @error="onAudioError()"></audio>
           <button @click="togglePlay()" class="px-2 py-1 rounded hover:bg-sky-500/20 text-lg leading-none"
                   x-text="audioPlaying ? '⏸' : '▶'" title="재생/일시정지"></button>
@@ -744,7 +745,13 @@
           <select x-model.number="audioRate" @change="$refs.audioEl.playbackRate = audioRate"
                   class="text-xs rounded px-1 py-0.5 bg-transparent border"
                   :class="$store.darkMode.on ? 'border-gray-600' : 'border-gray-300'">
-            <template x-for="r in [0.8,1.0,1.25,1.5,2.0]" :key="r"><option :value="r" x-text="r+'x'"></option></template>
+            <!-- 정적 옵션: x-for 로 만들면 x-model 초기화 시점에 옵션이 없어 첫 항목(0.8)으로 떨어진다.
+                 value 는 x-model.number 가 audioRate(1.0)→"1" 로 매칭하도록 JS 문자열화 형태로 맞춘다. -->
+            <option value="0.8">0.8x</option>
+            <option value="1">1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2.0x</option>
           </select>
           <label class="text-xs flex items-center gap-1 ml-auto"><input type="checkbox" x-model="audioFollow"> 따라가기</label>
         </div>
@@ -1272,6 +1279,7 @@ function viewerApp() {
     audioStreamUrl: '',         // signed playlist URL
     _audioMounted: false,       // 중복 mount 방지(streaming 중 재호출 대비)
     _audioRemountN: 0, _lastRemountAt: 0,   // remount 루프 백오프
+    _stallTimer: null,          // streaming live-edge 스톨 자동 재개 타이머
     _lisT: null,
     location: '{{ location }}',
     appViewportHeight: null,
@@ -2066,6 +2074,27 @@ function viewerApp() {
       const t = this.$refs.audioEl.currentTime;
       await this.attachHls();                 // 새 signed URL 로 재부착(토큰 만료 복구)
       this.$nextTick(() => { try { this.$refs.audioEl.currentTime = t; } catch (e) {} });
+    },
+    onAudioStall() {
+      // 스트리밍(EVENT 플레이리스트) 재생이 합성된 마지막 세그먼트(live edge)를 따라잡아 버퍼 고갈로 멈춤.
+      // 잠시 뒤에도 같은 지점이면 재부착(플레이리스트 재로드+새 토큰 = 수동 듣기 토글과 동일 효과)으로 새 세그먼트 픽업.
+      // 완성본(complete)은 정상 EOF 이므로 제외. v1(비-HLS)도 제외. remountAudio 의 30s/3회 백오프가 무한루프 방지.
+      if (!this.audioIsHls || !this.audioMode || !this.audioReady) return;
+      if (!this.audioManifest || this.audioManifest.status !== 'streaming') return;
+      this.clearStallTimer();
+      const el = this.$refs.audioEl;
+      const at = el ? el.currentTime : 0;
+      this._stallTimer = setTimeout(async () => {
+        this._stallTimer = null;
+        const e = this.$refs.audioEl;
+        if (!e || e.paused) return;              // 사용자가 멈춘 거면 무시
+        if (e.currentTime > at + 0.25) return;   // 그새 정상 재개됐으면 무시
+        if (!this.audioManifest || this.audioManifest.status !== 'streaming') return;  // 그새 완성됐으면 무시
+        await this.remountAudio();               // 여전히 같은 지점 멈춤 → 재부착
+      }, 6000);
+    },
+    clearStallTimer() {
+      if (this._stallTimer) { clearTimeout(this._stallTimer); this._stallTimer = null; }
     },
     async onAudioError() {
       // HLS 네이티브 경로의 segment 401/403 은 audio error 로 표면화 → remount.
