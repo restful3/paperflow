@@ -78,6 +78,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - PF_GPU_LOCK=/data/outputs/.gpu.lock      # converter의 /app/outputs/.gpu.lock 과 동일 호스트 파일
       - PF_OUTPUTS_ROOT=/data/outputs
+      - VOXCPM_VOICE=${VOXCPM_VOICE:-09_chaewon} # 낭독 화자(번들 음성 라이브러리 키). 바꾸면 오디오 재생성.
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  # 12GB 카드 단편화 완화(VoxCPM2 합성 시 ~11.4GB 피크)
       - SWEEP_ENABLED=${SWEEP_ENABLED:-false}
       - SWEEP_INTERVAL=${SWEEP_INTERVAL:-60}
       - SWEEP_MAX_PAPERS=${SWEEP_MAX_PAPERS:-3}
