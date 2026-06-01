@@ -434,6 +434,18 @@ async def save_paper_rating(
     return {"ok": True}
 
 
+# NOTE: greedy `{name:path}` 인 delete_paper 보다 먼저 등록해야 `.../audio` 가 섀도잉되지 않는다.
+@router.delete("/papers/{name:path}/audio")
+async def delete_audio_artifacts(name: str, _user: str = Depends(get_current_user_api)):
+    name = unquote(name)
+    if not audio_svc._resolve_paper_dir(name):
+        raise HTTPException(status_code=404, detail="paper not found")
+    if audio_svc.is_synthesis_active(name):           # 합성 중 디렉터리 삭제=워커 자폭 → 거부
+        raise HTTPException(status_code=409, detail="synthesis in progress; wait until it finishes")
+    audio_svc.delete_audio(name)
+    return {"ok": True}
+
+
 @router.delete("/papers/{name:path}")
 async def delete_paper(name: str, _user: str = Depends(get_current_user_api)):
     name = unquote(name)
@@ -714,6 +726,12 @@ def _playlist_segment_count(name: str) -> int:
 @router.get("/papers/{name:path}/audio/stream-url")
 async def audio_stream_url(name: str, _user: str = Depends(get_current_user_api)):
     audio_svc.reconcile_stale(name)                       # BLOCKING#4: stale streaming 복구
+    # 생성-먼저 정책: 합성 완료 전엔 mount 하지 않는다(VoxCPM2 는 RTF>1 라 라이브 스트리밍이 멈칫).
+    # 완료(complete)/부분완료(failed_partial) 만 재생 허용 → 끊김 없는 VOD + 따라가기 정합.
+    if settings.AUDIO_REQUIRE_COMPLETE:
+        man = audio_svc._manifest_dict(name) or {}
+        if man.get("status") not in ("complete", "failed_partial"):
+            raise HTTPException(425, "synthesis in progress")  # 425 → 프론트 "준비 중" 표시·재시도
     # HIGH#1: 빈 EVENT playlist(세그먼트 0)면 아직 attach 시키지 않음(hls.js/Safari fatal 회피).
     if _playlist_segment_count(name) < 1:
         raise HTTPException(425, "no segments yet")       # 425 Too Early → 프론트 재시도

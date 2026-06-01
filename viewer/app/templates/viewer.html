@@ -735,11 +735,17 @@
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800 shadow'">
           <audio x-ref="audioEl" preload="metadata"
                  x-init="$nextTick(() => reattachAudio())"
-                 @timeupdate="onTimeUpdate()" @play="audioPlaying=true" @pause="audioPlaying=false"
-                 @waiting="onAudioStall()" @playing="clearStallTimer()"
+                 @timeupdate="onTimeUpdate()"
+                 @play="audioBuffering=true"
+                 @playing="audioPlaying=true; audioStarted=true; audioBuffering=false; clearStallTimer()"
+                 @pause="audioPlaying=false; audioBuffering=false"
+                 @waiting="audioBuffering=true; onAudioStall()"
+                 @ended="audioPlaying=false; audioBuffering=false"
                  @error="onAudioError()"></audio>
-          <button @click="togglePlay()" class="px-2 py-1 rounded hover:bg-sky-500/20 text-lg leading-none"
-                  x-text="audioPlaying ? '⏸' : '▶'" title="재생/일시정지"></button>
+          <button @click="togglePlay()" class="px-2 py-1 rounded hover:bg-sky-500/20 text-lg leading-none transition"
+                  :class="(audioReady && !audioStarted && !audioPlaying && !audioBuffering) ? 'animate-pulse ring-2 ring-sky-400 bg-sky-500/20' : ''"
+                  x-text="audioBuffering ? '⏳' : (audioPlaying ? '⏸' : '▶')"
+                  :title="audioBuffering ? '불러오는 중…' : (audioPlaying ? '일시정지' : '재생')"></button>
           <button @click="prevSentence()" class="px-2 py-1 rounded hover:bg-sky-500/20" title="이전 문장">⏮</button>
           <button @click="nextSentence()" class="px-2 py-1 rounded hover:bg-sky-500/20" title="다음 문장">⏭</button>
           <select x-model.number="audioRate" @change="$refs.audioEl.playbackRate = audioRate"
@@ -754,6 +760,7 @@
             <option value="2">2.0x</option>
           </select>
           <label class="text-xs flex items-center gap-1 ml-auto"><input type="checkbox" x-model="audioFollow"> 따라가기</label>
+          <button @click="deleteAudio()" class="px-2 py-1 rounded hover:bg-red-500/20 text-sm" title="오디오 삭제(재생성 필요)">🗑</button>
         </div>
 
         <!-- Live TTS generate prompt (audio mode, not yet generated) -->
@@ -762,9 +769,9 @@
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-sky-50 text-gray-800 border-b border-sky-200'">
           <template x-if="!audioGenerating">
             <button @click="generateAudio()"
-                    class="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition">
-              🎧 오디오 생성
-            </button>
+                    class="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition"
+                    x-text="audioManifest ? '🔄 다시 생성' : '🎧 오디오 생성'"
+                    :title="audioManifest ? '기존(부분/실패) 오디오를 지우고 새로 생성' : '오디오 생성'"></button>
           </template>
           <template x-if="audioGenerating">
             <span class="flex items-center gap-2">
@@ -772,7 +779,7 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
               </svg>
-              <span x-text="'오디오 준비 중 — 곧 자동 재생됩니다 (' + audioJobStage + (audioJobTotal ? ' ' + audioJobDone + '/' + audioJobTotal : '') + ')'"></span>
+              <span x-text="'오디오 준비 중 — 준비되면 ▶ 눌러 재생 (' + audioJobStage + (audioJobTotal ? ' ' + audioJobDone + '/' + audioJobTotal : '') + ')'"></span>
             </span>
           </template>
         </div>
@@ -1269,7 +1276,9 @@ function viewerApp() {
     audioGenerating: false,
     audioJobStage: '',          // segmenting|synthesizing|stitching|validating|ready|failed
     audioJobDone: 0, audioJobTotal: 0,
-    audioPlaying: false,
+    audioPlaying: false,        // 실제 재생 중(소리 남) — 'playing' 이벤트 기준, 'play'(요청) 아님
+    audioBuffering: false,      // play() 요청했으나 아직 소리 안 남(HLS cold-start) — ⏳ 표시
+    audioStarted: false,        // 이번 세션에서 한 번이라도 재생 시작했는지(준비됨 ▶ 강조 해제용)
     audioCurChunk: -1,
     audioFollow: true,          // auto-follow 스크롤
     audioRate: 1.0,
@@ -1278,6 +1287,14 @@ function viewerApp() {
     audioHls: null,             // hls.js 인스턴스(비-iOS)
     audioStreamUrl: '',         // signed playlist URL
     _audioMounted: false,       // 중복 mount 방지(streaming 중 재호출 대비)
+    audioStreamingPlayback: false,  // 생성-먼저 정책: VoxCPM2 는 RTF>1 라 라이브 스트리밍이 멈칫 → 완성 후 mount(끊김 없는 VOD). (백엔드 AUDIO_REQUIRE_COMPLETE 와 일치)
+    audioLeadSec: 45,               // 재생 시작 전 앞서 만들어둘 오디오(초) — 시작 직후 live-edge 추월 방지
+    _streamPollTimer: null,     // pollStreamingManifest 단일 타이머(다중 루프 방지)
+    _jobPolling: false,         // pollAudioJob 중복 시작 방지
+    _jobPollTimer: null,        // pollAudioJob 예약 타이머(detach 시 취소)
+    _mp3ErrN: 0, _mp3ErrAt: 0,  // mp3 로드 에러 백오프(누락 파일 무한 재로드 방지)
+    audioFragStart: {},         // HLS 세그먼트 idx → 실제 미디어 시작초(frag.start). 하이라이트/seek를
+                                // 매니페스트 clock(wav+pad, AAC 와 drift) 대신 실제 재생 타임라인에 정렬.
     _audioRemountN: 0, _lastRemountAt: 0,   // remount 루프 백오프
     _stallTimer: null,          // streaming live-edge 스톨 자동 재개 타이머
     _lisT: null,
@@ -1561,7 +1578,7 @@ function viewerApp() {
         if (!isKo && this.audioMode) {
           this.audioMode = false;
           localStorage.setItem('pf-audio', 'false');
-          if (this.$refs.audioEl) this.$refs.audioEl.pause();
+          this.detachAudio();              // 보조 종료 경로도 깨끗이 분리(stale player 방지)
           this.refreshProgressStats();
         }
         if (this.view !== 'md' && this.view !== 'split') return;
@@ -1894,7 +1911,7 @@ function viewerApp() {
         }
       }
       this.explainedMode = newMode;
-      if (newMode) this.audioMode = false;  // Easy and 듣기 are mutually exclusive
+      if (newMode && this.audioMode) { this.audioMode = false; this.detachAudio(); }  // Easy/듣기 상호배타 + 분리
       localStorage.setItem('pf-explained', newMode ? 'true' : 'false');
       if (newMode) localStorage.setItem('pf-audio', 'false');
       this.refreshProgressStats();
@@ -1919,14 +1936,15 @@ function viewerApp() {
         this.explainedMode = false;  // Easy and 듣기 are mutually exclusive
         localStorage.setItem('pf-explained', 'false');
         if (this.$store?.lang) this.$store.lang.ko = true;  // audio is KO-only
+        this.audioStarted = false; this.audioBuffering = false;  // 재진입 시 준비됨 ▶ 다시 강조
       }
       localStorage.setItem('pf-audio', newMode ? 'true' : 'false');
       this.refreshProgressStats();
       await this.loadMdForCurrentLang();   // 정적 텍스트 baseline(읽기용)
       if (newMode) {
         await this.loadAudio();            // 생성됐으면 서버 span-HTML로 업그레이드(플레이어 활성)
-      } else if (this.$refs.audioEl) {
-        this.$refs.audioEl.pause();        // 듣기 끄면 재생 중지
+      } else {
+        this.detachAudio();                // 듣기 끄면 깨끗이 분리(폴링·소스·타이머·상태 초기화)
       }
       if (this.view === 'split') {
         this.splitMdContent = this.activeMdContent;
@@ -1942,38 +1960,100 @@ function viewerApp() {
       const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
       if (!r || !r.ok) { this.audioReady = false; return; }
       this.audioManifest = await r.json();
-      const hls = this.audioManifest.audio && this.audioManifest.audio.hls;
-      this.audioIsHls = !!hls;
+      const a = this.audioManifest.audio || {};
       const st = this.audioManifest.status;
-      // streaming(생성 중)에서도 첫 세그먼트부터 mount. complete/failed_partial 도 재생.
-      this.audioReady = ['streaming', 'complete', 'failed_partial'].includes(st);
-      if (!this.audioReady) return;
-      if (this._audioMounted) { if (st === 'streaming') this.pollStreamingManifest(); return; }  // 중복 mount 방지
-      await this.mountAudioHtml();             // 서버 span-HTML이 audio 모드 본문(전체 chunks)
-      if (this.audioIsHls) {
-        await this.attachHls();                // 425(세그먼트 0)면 audioReady=false → 다음 폴링 재시도
-      } else {
-        this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';   // v1 단일 mp3 폴백
+      const mp3 = (a.mp3 && a.mp3.file) || a.file;        // v2 audio.mp3.file | v1 audio.file
+      // Option A: 완성된 mp3 만 재생 가능. complete 만으로 믿지 않고 mp3 파일 존재까지 확인.
+      // streaming 은 '재생 가능'이 아니라 '생성 중'(라이브엣지 churn 회피).
+      const playable = (st === 'complete') && !!mp3;
+
+      if (playable) {
+        this.audioIsHls = false;                          // 완성 mp3 단일 파일 재생(stall/remount 없음)
+        this.audioReady = true; this.audioGenerating = false;
+        this.stopStreamPoll();
+        if (this._audioMounted) return;
+        this.audioStarted = false;                        // 새 아티팩트 mount → 준비됨 ▶ 강조
+        await this.mountAudioHtml();
+        this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';
+        this._audioMounted = true; this.setupMediaSession();
+        return;
       }
-      if (this.audioReady) { this._audioMounted = true; this.setupMediaSession(); }
-      if (st === 'streaming') this.pollStreamingManifest();   // 증분 timing 머지
+
+      // 이미 스트리밍 재생 중이면 유지(detach 금지) — timing 머지만. detach 를 먼저 두면 이 분기가 죽어
+      // loadAudio 재호출 시 stream 을 헐고 처음/edge 부터 재시작하게 된다(Codex#3).
+      if (st === 'streaming' && this.audioStreamingPlayback && this._audioMounted) {
+        this.startStreamPoll(); return;
+      }
+      if (this._audioMounted) this.detachAudio();          // 재생가능→생성중/실패 전환 시 옛 소스 정리
+
+      // Option B: 생성 중 스트리밍 재생. lead 버퍼(audioLeadSec)가 쌓이면 시작(시작 직후 추월 방지).
+      if (st === 'streaming' && this.audioStreamingPlayback) {
+        const cks = this.audioManifest.chunks || [];
+        this.audioJobTotal = cks.length;
+        this.audioJobDone = cks.filter(c => c.end_sec != null).length;
+        if ((a.duration_sec || 0) < this.audioLeadSec) {              // 버퍼 미달 → 준비 표시(pollAudioJob 이 1.5s 마다 재시도)
+          this.audioReady = false; this.audioGenerating = true;
+          if (!this._jobPolling) this.pollAudioJob();
+          return;
+        }
+        this.audioIsHls = !!a.hls;                                    // lead 충족 → 스트리밍 재생 시작
+        this.audioReady = true; this.audioGenerating = false; this.audioStarted = false;
+        await this.mountAudioHtml();
+        if (this.audioIsHls) await this.attachHls();
+        else this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';
+        if (this.audioReady) { this._audioMounted = true; this.setupMediaSession(); }
+        this.startStreamPoll();
+        return;
+      }
+
+      // 그 외: 재생 불가. streaming=생성 중(진행률 표시 + 완료 폴링), failed_partial/failed=재생성 필요.
+      this.audioReady = false;
+      this.audioGenerating = (st === 'streaming');
+      if (st === 'streaming') {
+        const cks = this.audioManifest.chunks || [];        // 매니페스트 기반 진행률(상태 API 없어도 견고)
+        this.audioJobTotal = cks.length;
+        this.audioJobDone = cks.filter(c => c.end_sec != null).length;
+        if (!this._jobPolling) this.pollAudioJob();          // 완료까지 대기
+      }
     },
-    async attachHls() {
+    async attachHls(startAt = 0) {
       // signed playlist URL(쿠키 비의존 1급 경로 — iOS AVPlayer). 세그먼트 0이면 stream-url 425.
+      // 항상 명시 위치(startAt: 0=처음, t=재부착 위치)로 시작한다. hls.js startPosition 을 -1(auto)로
+      // 두면 growing EVENT 플레이리스트를 live 로 보고 live-edge 에서 시작할 수 있어 lead 버퍼가 무의미해진다.
+      // 네이티브/mp3 도 loadedmetadata 에서 startAt 로 seek 해 live-edge 시작·첫문장 반복을 막는다.
       const su = await apiFetch('/api/papers/' + name + '/audio/stream-url');
       if (!su || !su.ok) { this.audioReady = false; this._audioMounted = false; return; }  // 425 포함 → 재시도
       this.audioStreamUrl = (await su.json()).url;
       const el = this.$refs.audioEl;
       if (this.audioHls) { this.audioHls.destroy(); this.audioHls = null; }
+      const seekOnce = () => { try { el.currentTime = startAt; } catch (e) {} };   // 항상 startAt 강제(0 포함)
       if (el.canPlayType('application/vnd.apple.mpegurl')) {
         el.src = this.audioStreamUrl;          // iOS/Safari 네이티브 HLS
+        el.addEventListener('loadedmetadata', seekOnce, { once: true });
       } else if (window.Hls && Hls.isSupported()) {
-        const hls = new Hls({ xhrSetup: (xhr) => { xhr.withCredentials = true; } });
+        const hls = new Hls({ startPosition: startAt,   // 명시 위치(live-edge auto 금지)
+                              xhrSetup: (xhr) => { xhr.withCredentials = true; } });
+        this.audioFragStart = {};              // 새 인스턴스 → 매핑 초기화
+        const recordFrag = (e, data) => {      // 세그먼트 idx → 실제 미디어 시작초
+          const f = data && data.frag;
+          if (!f || typeof f.start !== 'number') return;
+          // 키는 파일명(seg_NNNNNN.ts)에서 파싱 — frag.sn(미디어시퀀스 정책)보다 우리 파일 불변식에 견고.
+          const mt = /seg_(\d{6})\.ts/.exec(f.relurl || f.url || '');
+          const idx = mt ? parseInt(mt[1], 10) : f.sn;
+          if (idx != null) this.audioFragStart[idx] = f.start;
+        };
+        hls.on(Hls.Events.FRAG_BUFFERED, recordFrag);
+        hls.on(Hls.Events.FRAG_CHANGED, recordFrag);   // 더 이른 신호(재생 진입 시점)
+        // ENDLIST 없는 growing EVENT 는 hls.js 가 'live'로 보고 startPosition 을 무시한 채 live-edge 에서
+        // 시작한다(앞부분 스킵). MANIFEST_PARSED 후 startAt 으로 명시 seek 해 처음부터 재생되게 강제한다.
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { try { el.currentTime = startAt; } catch (e) {} });
+        el.addEventListener('loadedmetadata', () => { try { el.currentTime = startAt; } catch (e) {} }, { once: true });
         hls.loadSource(this.audioStreamUrl); hls.attachMedia(el);
         this.audioHls = hls;
         this.setupHlsErrorHandling(hls);       // 토큰 만료/네트워크 에러 분기
       } else if (this.audioManifest.audio.mp3 && this.audioManifest.audio.mp3.file) {
         el.src = '/api/papers/' + name + '/audio/file';   // HLS 불가 → mp3 폴백
+        el.addEventListener('loadedmetadata', seekOnce, { once: true });
       }
     },
     async reattachAudio() {
@@ -1994,41 +2074,103 @@ function viewerApp() {
       }
     },
     async generateAudio() {
+      if (this.audioManifest) {              // 잔여(부분/실패) 산출물 정리 후 새로 생성("다시 생성")
+        await apiFetch('/api/papers/' + name + '/audio', { method: 'DELETE' });
+        this.audioManifest = null;
+      }
       this.audioGenerating = true; this.audioJobStage = 'segmenting';
       this.audioJobDone = 0; this.audioJobTotal = 0;
       await apiFetch('/api/papers/' + name + '/audio/jobs', { method: 'POST' });
       this.pollAudioJob();
     },
+    async deleteAudio() {
+      if (!confirm('생성된 오디오를 삭제할까요? 다시 들으려면 재생성해야 합니다.')) return;
+      const r = await apiFetch('/api/papers/' + name + '/audio', { method: 'DELETE' });
+      if (!r || !r.ok) { showToast('오디오 삭제 실패', 'error'); return; }
+      this.detachAudio();
+      this.audioManifest = null; this.audioReady = false; this.audioGenerating = false;
+      this.audioJobStage = ''; this.audioJobDone = 0; this.audioJobTotal = 0;
+      this.mdKoAudioContent = '';
+      showToast('오디오 삭제됨 — 다시 생성할 수 있습니다', 'success');
+      await this.loadMdForCurrentLang();   // 본문을 읽기용 baseline 으로 복귀
+    },
     async pollAudioJob() {
-      if (!this.audioMode) { this.audioGenerating = false; return; }   // 모드 이탈 시 폴링 중단
-      const r = await apiFetch('/api/papers/' + name + '/audio/status');
-      const st = await r.json();
+      this._jobPolling = true; this._jobPollTimer = null;
+      if (!this.audioMode) { this._jobPolling = false; this.audioGenerating = false; return; }   // 모드 이탈 시 중단
+      let st = null;
+      try {
+        const r = await apiFetch('/api/papers/' + name + '/audio/status');
+        if (r && r.ok) st = await r.json();
+      } catch (e) { st = null; }
+      if (!st) {                             // 네트워크/인증/sidecar 오류 → 잠시 후 재시도(영구 멈춤 방지)
+        this._jobPollTimer = setTimeout(() => this.pollAudioJob(), 3000); return;
+      }
       this.audioJobStage = st.stage; this.audioJobDone = st.done; this.audioJobTotal = st.total;
-      // ★ 생성 중(streaming)에도 mount 시도 — manifest+playlist 준비되면 첫 세그먼트부터 재생
-      if (!this._audioMounted && ['segmenting', 'synthesizing', 'stitching'].includes(st.stage)) {
-        await this.loadAudio();              // streaming 이면 mount(아직 425/404 면 다음 폴링 재시도)
+      // Option B: 생성 중(활성 stage)에도 lead 버퍼 차면 스트리밍 재생 시도. loadAudio 가 manifest 로드 +
+      // lead 게이트 판단(미달이면 진행률만, 충족이면 mount+재생 후 streamPoll 로 timing 머지).
+      if (this.audioStreamingPlayback && !this._audioMounted &&
+          ['segmenting', 'synthesizing', 'stitching'].includes(st.stage)) {
+        await this.loadAudio();
       }
-      if (st.stage === 'ready') { this.audioGenerating = false; await this.loadAudio(); return; }
-      if (st.stage === 'failed_partial') {   // 앞부분만 mount + 폴링 종료
-        this.audioGenerating = false; showToast('일부만 생성됨(나머지 실패)', 'warning');
-        await this.loadAudio(); return;
+      if (st.stage === 'ready') {
+        this._jobPolling = false; this.audioGenerating = false;
+        if (this._audioMounted && this.audioIsHls) {   // 스트리밍 HLS 재생 중 완료 → ENDLIST VOD 그대로 지속(전환 없음)
+          this.stopStreamPoll(); await this.refreshManifest();   // 최종 timing 머지(끝까지 하이라이트)
+        } else {
+          await this.loadAudio();                       // 미mount → 완성 mp3 재생
+        }
+        return;
       }
-      if (st.stage === 'failed') { this.audioGenerating = false; showToast('오디오 생성 실패: ' + (st.error || ''), 'error'); return; }
-      setTimeout(() => this.pollAudioJob(), 1500);
+      if (st.stage === 'failed_partial') {   // mp3 없음 → 자동으로 재생하지 않음(재생성 필요)
+        this._jobPolling = false; this.audioGenerating = false; this.audioReady = false;
+        showToast('일부만 생성됨 — 재생성이 필요합니다', 'warning'); return;
+      }
+      if (st.stage === 'failed') { this._jobPolling = false; this.audioGenerating = false; this.audioReady = false; showToast('오디오 생성 실패: ' + (st.error || ''), 'error'); return; }
+      if (st.stage === 'preempted') {        // 다른 논문 생성으로 양보됨 → 다시 생성 안내
+        this._jobPolling = false; this.audioGenerating = false; showToast('다른 논문 오디오 생성으로 중단됨 — 다시 생성하세요', 'warning'); return;
+      }
+      if (st.stage === 'none') {             // sidecar가 job 유실(재시작 등) → 폴링 종료(루프 방지). 생성 버튼 재노출.
+        this._jobPolling = false; this.audioGenerating = false; return;
+      }
+      this._jobPollTimer = setTimeout(() => this.pollAudioJob(), 1500);
+    },
+    detachAudio() {                           // 듣기 off / 재생가능→생성중 전환 시 깨끗이 분리
+      this.stopStreamPoll();
+      if (this._jobPollTimer) { clearTimeout(this._jobPollTimer); this._jobPollTimer = null; }
+      this._jobPolling = false;
+      this.clearStallTimer();
+      if (this.audioHls) { try { this.audioHls.destroy(); } catch (e) {} this.audioHls = null; }
+      const el = this.$refs.audioEl;
+      if (el) { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} }
+      this._audioMounted = false; this.audioIsHls = false;
+      this.audioBuffering = false; this.audioPlaying = false;
+      this.audioFragStart = {};
+    },
+    startStreamPoll() {                       // 단일 루프 보장(중복 시작 무시) — 다중 루프 = manifest 폭주 버그
+      if (this._streamPollTimer) return;
+      this.pollStreamingManifest();
+    },
+    stopStreamPoll() {
+      if (this._streamPollTimer) { clearTimeout(this._streamPollTimer); this._streamPollTimer = null; }
+    },
+    async refreshManifest() {                  // 매니페스트 재조회 → 기존 chunks 의 timing 만 머지(remount 없음)
+      const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
+      if (!r || !r.ok) return;
+      const m = await r.json();
+      if (!this.audioManifest) { this.audioManifest = m; return; }
+      const byId = {}; (this.audioManifest.chunks || []).forEach(c => byId[c.id] = c);
+      (m.chunks || []).forEach(c => { if (byId[c.id]) { byId[c.id].start_sec = c.start_sec; byId[c.id].end_sec = c.end_sec; } });
+      this.audioManifest.status = m.status;
+      this.audioManifest.audio.duration_sec = m.audio.duration_sec;
+      if (m.audio.mp3) this.audioManifest.audio.mp3 = m.audio.mp3;
     },
     async pollStreamingManifest() {
+      // mount 후 timing 머지 전용(재생 중 chunk start/end 갱신 → 하이라이트·다음문장). pre-mount 시작은
+      // pollAudioJob 이 lead 게이트로 구동한다(드라이버 단일화). 완료/실패면 머지 종료.
+      this._streamPollTimer = null;
       if (!this.audioManifest || this.audioManifest.status !== 'streaming') return;
-      const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
-      if (r && r.ok) {
-        const m = await r.json();
-        // id-keyed 머지: 기존 chunks 의 timing 만 갱신(텍스트/순서 불변, 중복 append 금지)
-        const byId = {}; this.audioManifest.chunks.forEach(c => byId[c.id] = c);
-        m.chunks.forEach(c => { if (byId[c.id]) { byId[c.id].start_sec = c.start_sec; byId[c.id].end_sec = c.end_sec; } });
-        this.audioManifest.status = m.status;
-        this.audioManifest.audio.duration_sec = m.audio.duration_sec;
-        if (m.audio.mp3) this.audioManifest.audio.mp3 = m.audio.mp3;
-      }
-      if (this.audioManifest.status === 'streaming') setTimeout(() => this.pollStreamingManifest(), 3000);
+      await this.refreshManifest();
+      if (this.audioManifest.status === 'streaming') this._streamPollTimer = setTimeout(() => this.pollStreamingManifest(), 3000);
     },
 
     // ── Live TTS: playback controls ──
@@ -2038,17 +2180,29 @@ function viewerApp() {
       if (a.paused) { a.playbackRate = this.audioRate; a.play().catch(e => showToast('재생 실패: ' + e.message, 'error')); }
       else a.pause();
     },
-    chunkAt(t) {                       // start_sec 채워진 chunk 중 최신(streaming: 미생성 chunk 는 null)
+    _chunkMediaStart(i) {              // chunk i 의 실제 재생 시작초.
       const cs = this.audioManifest.chunks;
-      for (let i = cs.length - 1; i >= 0; i--)
-        if (cs[i].start_sec != null && t >= cs[i].start_sec) return i;
+      // hls.js(=this.audioHls 존재)만 frag.start 로 drift 보정. 네이티브 HLS(iOS, frag 이벤트 없음)·mp3 는
+      // manifest start_sec 폴백(iOS 무하이라이트 회귀 방지 — 드리프트는 감수). mp3 는 manifest 와 동일 clock.
+      if (this.audioIsHls && this.audioHls) return (this.audioFragStart[i] != null) ? this.audioFragStart[i] : null;
+      return (cs[i] && cs[i].start_sec != null) ? cs[i].start_sec : null;
+    },
+    chunkAt(t) {                       // 실제 미디어 타임라인 기준 현재 chunk(HLS drift 보정). HLS 미로드 구간은 skip.
+      const cs = this.audioManifest.chunks;
+      for (let i = cs.length - 1; i >= 0; i--) {
+        const ts = this._chunkMediaStart(i);
+        if (ts != null && t >= ts) return i;
+      }
       return -1;
     },
     seekToChunk(i) {
       const cs = this.audioManifest && this.audioManifest.chunks;
       if (!cs || i < 0 || i >= cs.length) return;
-      if (cs[i].start_sec == null) return;   // streaming 미생성 구간 → no-op(null+0.001=0.001 로 처음 점프 방지)
-      this.$refs.audioEl.currentTime = cs[i].start_sec + 0.001;
+      // HLS: 실제 frag.start 로 seek(drift 보정). 미로드면 manifest start_sec 로 근사(이동 후 frag 로드되며 보정).
+      let target = this._chunkMediaStart(i);
+      if (target == null) target = cs[i].start_sec;
+      if (target == null) return;            // streaming 미생성 구간 → no-op
+      this.$refs.audioEl.currentTime = target + 0.001;
     },
     prevSentence() { this.seekToChunk(this.audioCurChunk - 1); },
     nextSentence() { this.seekToChunk(this.audioCurChunk + 1); },
@@ -2060,7 +2214,22 @@ function viewerApp() {
       this._audioRemountN += 1;
       if (this._audioRemountN > 3) {
         const mp3 = this.audioManifest && this.audioManifest.audio && this.audioManifest.audio.mp3;
-        if (mp3 && mp3.file) {
+        const streaming = this.audioManifest && this.audioManifest.status === 'streaming';
+        if (streaming && !(mp3 && mp3.file)) {
+          // Option B: 생성 중 starve(주로 GPU 경합)는 정상 backpressure → 에러 아님. 버퍼링 표시 후
+          // 합성이 앞설 때까지 대기. 'waiting' 이벤트가 다시 안 올 수 있으므로 명시 타이머로 재시도(재개 보장).
+          this._audioRemountN = 0; this.audioBuffering = true;
+          this.clearStallTimer();
+          this._stallTimer = setTimeout(() => {
+            this._stallTimer = null;
+            if (this.audioMode && this.audioIsHls && this.audioManifest &&
+                this.audioManifest.status === 'streaming' && this.$refs.audioEl && !this.$refs.audioEl.paused) {
+              this.remountAudio();             // 합성이 앞섰으면 새 세그먼트 픽업하며 재개
+            }
+          }, 5000);
+          return;
+        }
+        if (mp3 && mp3.file) {               // 완료본이 생겼으면 안정적인 mp3 로 전환
           this.audioIsHls = false;
           if (this.audioHls) { this.audioHls.destroy(); this.audioHls = null; }
           this.$refs.audioEl.src = '/api/papers/' + name + '/audio/file';
@@ -2072,8 +2241,7 @@ function viewerApp() {
         return;
       }
       const t = this.$refs.audioEl.currentTime;
-      await this.attachHls();                 // 새 signed URL 로 재부착(토큰 만료 복구)
-      this.$nextTick(() => { try { this.$refs.audioEl.currentTime = t; } catch (e) {} });
+      await this.attachHls(t);                // 위치 보존 재부착(이전: 0부터 재버퍼링 → 첫 문장 반복)
     },
     onAudioStall() {
       // 스트리밍(EVENT 플레이리스트) 재생이 합성된 마지막 세그먼트(live edge)를 따라잡아 버퍼 고갈로 멈춤.
@@ -2098,9 +2266,13 @@ function viewerApp() {
     },
     async onAudioError() {
       // HLS 네이티브 경로의 segment 401/403 은 audio error 로 표면화 → remount.
-      // v1(mp3): 버전드 파일이 재생성으로 정리돼 404면 manifest/html 재로드.
-      if (this.audioIsHls) await this.remountAudio();
-      else await this.loadAudio();
+      if (this.audioIsHls) { await this.remountAudio(); return; }
+      // mp3: 버전드 파일이 재생성으로 정리돼 404면 1회 재로드. 반복되면 누락으로 보고 중단(무한 재로드 방지).
+      const now = Date.now();
+      if (now - this._mp3ErrAt > 10000) this._mp3ErrN = 0;
+      this._mp3ErrAt = now; this._mp3ErrN += 1;
+      if (this._mp3ErrN > 2) { this.detachAudio(); this.audioReady = false; showToast('오디오 파일을 불러올 수 없습니다 — 재생성해 주세요', 'error'); return; }
+      await this.loadAudio();
     },
     setupHlsErrorHandling(hls) {
       hls.on(Hls.Events.ERROR, (evt, data) => {
@@ -2191,10 +2363,17 @@ function viewerApp() {
       if (!r || !r.ok) return;
       const p = await r.json();
       const dur = (this.audioManifest.audio && this.audioManifest.audio.duration_sec) || 0;
+      const streaming = this.audioManifest.status === 'streaming';
       // streaming 중엔 저장 시점이 아직 미생성일 수 있으니 time_sec <= duration_sec 일 때만 복원.
+      // 또한 streaming 중 복원 지점이 생성 edge 근처(앞 버퍼 < lead)면 복원하지 않는다 — 복원이 lead 버퍼를
+      // 갉아먹어 live-edge 에서 시작하면 cold-start churn 이 재발한다(처음부터 듣게 두는 편이 안전).
       if (p && p.time_sec && p.audio_version === this._audioVersion() &&
-          p.time_sec <= dur && this.$refs.audioEl) {
-        this.$refs.audioEl.currentTime = p.time_sec;   // 이어듣기(생성 완료분 내)
+          p.time_sec <= dur && this.$refs.audioEl &&
+          !(streaming && (dur - p.time_sec) < this.audioLeadSec)) {
+        const el = this.$refs.audioEl;
+        const seek = () => { try { el.currentTime = p.time_sec; } catch (e) {} };
+        if (el.readyState >= 1) seek();                 // 메타데이터 준비됨 → 즉시
+        else el.addEventListener('loadedmetadata', seek, { once: true });  // 아니면 메타 로드 후(seek 무시 방지)
       }
     },
 

@@ -9,12 +9,14 @@ import json
 from typing import Literal
 from urllib.parse import quote
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from mcp.server.fastmcp import FastMCP
 
 from ..config import settings
 from ..services import mcp_jobs, mcp_zip
+from ..services import audio as audio_svc
 from ..services import papers as paper_svc
 
 
@@ -200,6 +202,99 @@ async def list_jobs(
         limit = 100
     recs = await mcp_jobs.list_jobs(limit=limit, status=status)
     return {"jobs": [r.model_dump() for r in recs]}
+
+
+# ── Audio (Korean TTS narration) ──────────────────────────────────────────────
+async def _tts_json(method: str, path: str, *, timeout: float, **kwargs) -> dict:
+    """Call the tts sidecar and normalize failures into agent-facing ValueErrors
+    (MCP is an agent surface — raw transport/JSON exceptions are unhelpful)."""
+    url = f"{settings.TTS_SERVICE_URL}{path}"
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.request(method, url, timeout=timeout, **kwargs)
+        r.raise_for_status()
+        return r.json()
+    except httpx.HTTPStatusError as e:
+        body = (e.response.text or "")[:200]
+        raise ValueError(f"tts sidecar returned {e.response.status_code}: {body}")
+    except httpx.RequestError as e:
+        raise ValueError(f"tts sidecar unavailable: {e}")
+    except ValueError:                       # r.json() decode (non-JSON body)
+        raise ValueError("tts sidecar returned a non-JSON response")
+
+
+
+# Per-paper key: paper_name (+ optional location). Audio requires the paper in
+# outputs/ with a *_ko_audio.md narration (created by the paper-audio-korean skill —
+# MCP cannot synthesize the narration text). Generate-first: playable only at complete.
+
+@mcp.tool()
+async def generate_audio(paper: str, location: str | None = None) -> dict:
+    """Start Korean TTS audio synthesis for a paper. Async — returns immediately; poll get_audio_status.
+
+    Requires `paper` (folder name) to be in outputs/ and to contain a *_ko_audio.md narration.
+    Raises if the paper is archived, missing, or has no narration (create it with the
+    paper-audio-korean skill first). Audio is playable only once status==complete (generate-first).
+    """
+    d, src = audio_svc.resolve_for_audio(paper, location)
+    tts = await _tts_json("POST", "/jobs", timeout=30,
+                          json={"paper_dir": str(d), "src_md": str(src)})
+    return {"paper": d.name, "tts": tts}
+
+
+@mcp.tool()
+async def get_audio_status(paper: str, location: str | None = None) -> dict:
+    """Audio synthesis progress: tts job stage/done/total + manifest status (complete = playable)."""
+    d, _ = audio_svc.resolve_for_audio(paper, location)
+    job = await _tts_json("GET", "/jobs", timeout=10, params={"paper_dir": str(d)})
+    man = audio_svc._manifest_dict(d.name) or {}
+    return {"paper": d.name, "job": job, "manifest_status": man.get("status")}
+
+
+@mcp.tool()
+async def get_audio_result(paper: str, location: str | None = None) -> dict:
+    """Completed audio result (status, duration_sec, version, chunks). Valid only when
+    status in (complete, failed_partial); raises otherwise."""
+    d, _ = audio_svc.resolve_for_audio(paper, location)
+    man = audio_svc._manifest_dict(d.name) or {}
+    status = man.get("status")
+    if status not in ("complete", "failed_partial"):
+        raise ValueError(f"audio not ready (status={status})")
+    audio = man.get("audio") or {}
+    return {
+        "paper": d.name,
+        "status": status,
+        "duration_sec": audio.get("duration_sec"),
+        "version": audio.get("version"),
+        "chunks": len(man.get("chunks") or []),
+    }
+
+
+@mcp.tool()
+async def delete_audio(paper: str, confirm: bool = False, location: str | None = None) -> dict:
+    """Delete generated audio (audio/ dir + listening progress). DESTRUCTIVE — set confirm=true.
+    Refused while synthesis is actively running (avoids wiping a live worker's output)."""
+    d, _ = audio_svc.resolve_for_audio(paper, location)
+    if not confirm:
+        raise ValueError("destructive operation — pass confirm=true to delete audio")
+    if audio_svc.is_synthesis_active(d.name):
+        raise ValueError("synthesis in progress — wait until it finishes before deleting")
+    ok = audio_svc.delete_audio(d.name)
+    return {"paper": d.name, "deleted": ok}
+
+
+@mcp.tool()
+async def generate_audio_batch(max_papers: int = 100) -> dict:
+    """Sequentially synthesize audio for every outputs/ paper that has a *_ko_audio.md narration
+    but no fresh audio. Single GPU → serial (slow). Async — returns immediately; poll
+    get_audio_batch_status. Reuses the tts sweep."""
+    return await _tts_json("POST", "/sweep", timeout=15, params={"max_papers": max_papers})
+
+
+@mcp.tool()
+async def get_audio_batch_status() -> dict:
+    """Batch audio sweep progress: running, done, current paper, error."""
+    return await _tts_json("GET", "/sweep", timeout=10)
 
 
 # ── ASGI wrapper: Bearer + Origin ─────────────────────────────────────────────

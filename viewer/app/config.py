@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     AUDIO_PTOKEN_TTL: int = 43200       # 12h
     AUDIO_TOKEN_TTL: int = 43200
     AUDIO_RESUME_GRACE: int = 3600
+    AUDIO_REQUIRE_COMPLETE: bool = True  # 생성-먼저: 합성 완료 후에만 재생 mount(라이브 스트리밍 비활성)
 
     class Config:
         env_file = ".env"

@@ -15,8 +15,10 @@ def try_acquire(lockpath):
 
 
 @contextmanager
-def gpu_lock(lockpath, timeout=1800, poll=2.0):
-    """blocking(타임아웃). converter도 같은 경로로 flock 걸어야 상호배제됨."""
+def gpu_lock(lockpath, timeout=1800, poll=2.0, on_wait=None):
+    """blocking(타임아웃). converter도 같은 경로로 flock 걸어야 상호배제됨.
+    on_wait: 획득 대기(블록) 중 매 poll 마다 호출. 대기 동안 heartbeat 를 갱신해
+    healthy-but-waiting job 이 viewer 의 reconcile_stale 로 오판되지 않게 한다(M2)."""
     os.makedirs(os.path.dirname(lockpath), exist_ok=True)
     fh = open(lockpath, "w")
     deadline = time.monotonic() + timeout
@@ -27,6 +29,11 @@ def gpu_lock(lockpath, timeout=1800, poll=2.0):
         except OSError:
             if time.monotonic() > deadline:
                 fh.close(); raise TimeoutError("GPU lock timeout")
+            if on_wait:
+                try:
+                    on_wait()           # heartbeat 갱신 실패가 락 획득을 깨면 안 됨
+                except Exception:
+                    pass
             time.sleep(poll)
     try:
         yield fh

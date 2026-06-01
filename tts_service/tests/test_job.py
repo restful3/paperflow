@@ -86,6 +86,47 @@ def test_run_job_preempts_between_chunks(monkeypatch, tmp_path):
     assert len(segs) == 1
 
 
+def test_run_job_refreshes_heartbeat_during_lock_wait(monkeypatch, tmp_path):
+    # M2: run_job must hand gpu_lock an on_wait callback that re-publishes the manifest
+    # heartbeat, so a long lock wait (converter busy) keeps a healthy job from being marked
+    # stale/failed by the viewer's reconcile_stale.
+    import contextlib, json
+    paper = tmp_path / "P"; paper.mkdir()
+    md = paper / "P_ko_audio.md"
+    md.write_text("# 제목\n\n첫 문장입니다. 둘째 문장입니다.\n", encoding="utf-8")
+    man_path = paper / "audio" / "P_ko_audio.manifest.json"
+
+    monkeypatch.setattr(job, "synth_chunk", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(job, "_chunk_ok", lambda *a, **k: True)
+
+    def fake_encode(wf, pad, out_ts, **k):
+        open(out_ts, "wb").close()
+        return 1.0
+    monkeypatch.setattr(job, "encode_segment", fake_encode)
+
+    def fake_stitch(seg_wavs, chunks, out, **k):    # avoid real ffmpeg on empty wavs
+        open(out, "wb").close()
+    monkeypatch.setattr(job, "stitch_chunks", fake_stitch)
+
+    captured = {}
+
+    @contextlib.contextmanager
+    def fake_lock(path, on_wait=None, **k):
+        captured["on_wait"] = on_wait
+        if on_wait:
+            # wipe the on-disk heartbeat, then the wait callback must rewrite it
+            m = json.load(open(man_path)); m["heartbeat"] = None
+            json.dump(m, open(man_path, "w"))
+            on_wait()
+            captured["hb_after_wait"] = json.load(open(man_path))["heartbeat"]
+        yield object()
+    monkeypatch.setattr(job, "gpu_lock", fake_lock)
+
+    job.run_job(str(paper), str(md))
+    assert callable(captured.get("on_wait"))            # run_job wired a heartbeat refresher
+    assert captured.get("hb_after_wait")                # callback actually re-published heartbeat
+
+
 def test_version_sha():
     assert job._version_sha("P_ko_audio.abc123def456") == "abc123def456"
     assert job._version_sha("P_ko_audio.abc123def456.mp3") == "abc123def456"

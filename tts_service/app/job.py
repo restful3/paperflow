@@ -84,7 +84,12 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda", is_active=None):
         seg_wavs = []          # mp3 stitch 용 (heading 포함, MVP 정합)
         cursor = 0.0
         total = len(chunks)    # heading+text 전부 세그먼트(MVP 가 heading 도 합성)
-        with gpu_lock(GPU_LOCK_PATH):                  # converter 와 상호배제
+
+        def _beat():           # M2: 락 대기 중 heartbeat 갱신 → reconcile_stale 오판 방지
+            manifest["heartbeat"] = _now_iso()
+            _publish_manifest(man_path, manifest)
+
+        with gpu_lock(GPU_LOCK_PATH, on_wait=_beat):   # converter 와 상호배제(대기 중엔 heartbeat 유지)
             for i, ch in enumerate(chunks):
                 if is_active is not None and not is_active():   # foreground 가 바뀜 → 양보(gpu_lock 해제)
                     raise Preempted(f"yielded at chunk {i}/{len(chunks)}")

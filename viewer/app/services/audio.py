@@ -2,7 +2,7 @@ import json, os, re as _re, time
 from html import escape
 from pathlib import Path
 
-from .papers import safe_paper_dir          # 기존 경로 안전 헬퍼 재사용
+from .papers import safe_paper_dir, safe_paper_dir_at_location   # 기존 경로 안전 헬퍼 재사용
 from ..config import settings
 
 
@@ -128,6 +128,59 @@ def source_id_and_sha(name):                   # 토큰 바인딩용 (sha 자리
     return src.get("path"), (_audio_version(man) or "")
 
 
+def resolve_for_audio(name, location=None):
+    """오디오 생성 대상 해석 + 검증 → (paper_dir, src_md). 불가 시 ValueError(명확한 사유).
+    제약: tts 는 outputs/ 만 받음(아카이브 불가), 합성엔 _ko_audio.md(낭독본) 선행 필요."""
+    d = safe_paper_dir_at_location(name, location) if location else safe_paper_dir(name)
+    if not d:
+        raise ValueError(f"paper not found: {name}")
+    out = settings.outputs_dir.resolve()
+    rd = d.resolve()
+    if rd != out and out not in rd.parents:
+        raise ValueError("audio generation requires the paper in outputs/ (archived papers are not supported)")
+    src = next(iter(d.glob("*_ko_audio.md")), None)
+    if not src:
+        raise ValueError("no _ko_audio.md — create the narration with the paper-audio-korean skill first")
+    return d, src
+
+
+def is_synthesis_active(name, fresh_sec=120):
+    """status='streaming' 이고 heartbeat 가 최근(fresh_sec 이내)이면 합성 진행 중 → True.
+    재생성/삭제가 실행 중 워커의 audio 디렉터리를 지워 자폭하는 것을 막는 가드용."""
+    from datetime import datetime, timezone
+    man = _manifest_dict(name)
+    if not man or man.get("status") != "streaming":
+        return False
+    hb = man.get("heartbeat")
+    try:
+        if hb:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(hb)).total_seconds()
+        else:
+            p = manifest_path(name)
+            age = max(0.0, time.time() - p.stat().st_mtime)
+    except Exception:
+        return False
+    return age < fresh_sec
+
+
+def delete_audio(name):
+    """생성된 오디오 산출물(audio/ 디렉터리 전체)과 그 논문의 듣기 진행률을 제거. idempotent."""
+    import shutil
+    d = _resolve_paper_dir(name)
+    if not d:
+        return False
+    adir = d / "audio"
+    if adir.exists():
+        shutil.rmtree(adir, ignore_errors=True)
+    pf = Path(_progress_file())                       # 듣기 진행률에서 이 논문 항목만 제거
+    data = _load(pf)
+    if name in data:
+        del data[name]
+        tmp = pf.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False)); os.replace(tmp, pf)
+    return True
+
+
 def reconcile_stale(name, threshold_sec=1800):
     """status='streaming' 인데 heartbeat 가 threshold(기본 30분) 이상 멈췄으면 'failed' 로 atomic 전이. 전이 시 True."""
     from datetime import datetime, timezone
@@ -149,8 +202,30 @@ def reconcile_stale(name, threshold_sec=1800):
     except Exception:
         age = 1e9
     if age < threshold_sec: return False
-    man["status"] = "failed"
+    # M1: 재생 가능한 prefix(HLS 세그먼트 ≥1)가 있으면 'failed' 가 아니라 'failed_partial' 로 전이한다.
+    # audio_html/프론트 audioReady 는 streaming/complete/failed_partial 만 허용하므로, 평범한 'failed'
+    # 는 이미 생성된 앞부분까지 통째로 막아버린다. 세그먼트가 있으면 playlist 를 finalize(ENDLIST)해
+    # 앞부분이 VOD 로 끊김 없이 재생되게 한다.
+    pl = hls_playlist_path(name)
+    man["status"] = "failed_partial" if (pl and _finalize_playlist_if_segments(pl)) else "failed"
     tmp = str(p) + ".tmp"; Path(tmp).write_text(json.dumps(man, ensure_ascii=False)); os.replace(tmp, p)
+    return True
+
+
+def _finalize_playlist_if_segments(pl: Path) -> bool:
+    """EVENT playlist 에 세그먼트(≥1)가 있으면 #EXT-X-ENDLIST 를 덧붙여 VOD 로 마감(idempotent)하고
+    True. 세그먼트가 없으면(재생할 게 없음) False."""
+    try:
+        text = pl.read_text()
+    except Exception:
+        return False
+    if not any(ln.startswith("seg/") for ln in text.splitlines()):
+        return False
+    if "#EXT-X-ENDLIST" not in text:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += "#EXT-X-ENDLIST\n"
+        tmp = str(pl) + ".tmp"; Path(tmp).write_text(text); os.replace(tmp, pl)
     return True
 
 
