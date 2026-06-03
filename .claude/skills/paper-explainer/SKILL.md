@@ -82,6 +82,21 @@ Papers converted from PDF via OCR or marker-pdf may contain noise:
 
 **Clean first, then rewrite.**
 
+### 3. Web Source De-cluttering (웹 출처 광고·배너·프로모 제거)
+
+When the source is a **web-scraped document** (file name starts with `web-`, or the body carries site navigation / marketing chrome), the original page often contains **non-content clutter that is NOT part of the article**. Strip these out BEFORE rewriting — they must NEVER appear in the explainer:
+
+- **광고/배너**: "Advertisement", "Sponsored", "AD", 제휴·프로모 배너, 애드센스/쿠팡류 삽입 블록
+- **구독/뉴스레터 유도**: "Subscribe", "Sign up", "뉴스레터 구독", "구독하기", 이메일 입력 폼
+- **쿠키/동의 배너**: "We use cookies", "쿠키 동의", privacy/consent 팝업 문구
+- **소셜/공유 위젯**: "Share this", "Follow us", "팔로우", 좋아요·공유 버튼, SNS 아이콘 링크
+- **사이트 네비게이션/푸터**: 상단 메뉴, 사이드바, "Home / About / Contact", 저작권 푸터, 사이트맵 링크
+- **추천/관련 콘텐츠 유도**: "Related articles", "관련 기사", "You may also like", "Read more", "더 보기", 다른 글 썸네일 목록
+- **저자 홍보 CTA**: 책 구매 링크, 강의 모집, 제품 판매 등 본문과 무관한 마케팅 문구
+- **광고성 이미지**: 본문 설명과 무관한 배너/프로모 이미지(`![](...)`)는 제거. 단, 본문을 설명하는 figure/diagram/screenshot 이미지는 Special Considerations 규칙대로 **보존**
+
+**Judgment rule (content vs. chrome)**: 저자의 실제 글(본문 텍스트, figure, 표, 코드, 인용)에 속하면 **보존**하고, *웹사이트의* 가구(선전·유도·탐색용 요소)면 **제거**한다. 이미지가 본문 설명용인지 프로모 배너인지 불확실하면, 의미 있는 캡션이 달린 콘텐츠 이미지는 남기고 장식·마케팅 배너는 버린다.
+
 ## Core Rewriting Principles — 9 Rules
 
 ### Rule 0: NO Condensation — Expand, Never Shrink (축약 절대 금지 — 확장 필수)
@@ -96,6 +111,8 @@ This skill produces a **해설판 (annotated commentary)**, NOT a summary. The o
 - Every paragraph in the original MUST have a corresponding paragraph (or more) in the output
 - Every subsection in the original MUST appear in the output — do NOT merge or skip subsections
 - "한눈에 보기", "핵심 요약", "방법 요약" style summary headings are **FORBIDDEN** as replacements for original section structure. They may only appear as **additions** alongside the full content.
+
+> **단, 광고·배너·구독유도·쿠키 동의·사이트 네비게이션 등 본문이 아닌 웹 잡동사니는 "원문"에 포함되지 않는다** (Pre-processing의 *Web Source De-cluttering* 참조). 이런 요소를 제거하는 것은 축약이 아니며, 길이 비교(1.5\~2.5x)도 **잡동사니를 제거한 본문**을 기준으로 한다. 즉 "축약 금지"는 저자의 실제 글 내용에만 적용된다.
 
 **Paragraph-level mapping rule (문단 대응 원칙):**
 ```
@@ -249,6 +266,8 @@ The output must be RICHER than the input. Never omit or summarize.
 - Any section, subsection, or paragraph from the original
 - Any formula, table, or figure reference
 - Any citation or reference
+
+> 여기서 "original"은 **저자의 실제 글 내용**을 뜻한다. 광고·배너·구독유도·쿠키 동의·소셜 위젯·사이트 네비게이션 등 웹 잡동사니는 original 이 아니므로 이 규칙의 보호 대상이 아니다 — 반드시 제거한다 (Pre-processing의 *Web Source De-cluttering* 참조).
 
 **Priority: under-writing is FAR worse than over-writing.**
 - A section that is too long can be trimmed later; a section that was summarized has lost information forever
@@ -521,6 +540,7 @@ After completing the full rewrite, verify **in this priority order**:
 - [ ] **Paragraph coverage**: Spot-check 3 random sections — does each original paragraph have a corresponding output paragraph?
 
 **Important (should pass):**
+- [ ] **No web clutter (web-sourced inputs)**: 출력에 광고·스폰서 블록("Sponsored by…", "Try X"), 구독/뉴스레터 유도("Subscribe", "Sponsor me", "구독"), 쿠키 동의, 소셜/공유 위젯, "Recent/Related articles"·태그 줄, 연도 아카이브 목록 등 **본문이 아닌 웹 잡동사니가 남아있지 않다** (Web Source De-cluttering 참조)
 - [ ] **Formula preservation**: All mathematical expressions from the original are preserved
 - [ ] **Accuracy**: No claims, data, or conclusions added that are not in the original
 - [ ] **Analogy consistency**: Same concept uses the same metaphor throughout
