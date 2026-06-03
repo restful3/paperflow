@@ -79,3 +79,46 @@ def test_save_markdown_en_does_not_target_audio(tmp_workspace):
     assert ok is False
     audio = tmp_workspace / "outputs" / "Qux" / "Qux_ko_audio.md"
     assert audio.read_text(encoding="utf-8") == "ORIGINAL AUDIO"
+
+
+# ── audio_mp3 flag: distinguishes "낭독 텍스트만" vs "재생 가능한 mp3 합성됨" ──
+# Truth source = audio/<base>_ko_audio.manifest.json with status "complete"
+# (see services/audio.py). Drives the list-view speaker emerald ring.
+
+def _add_audio_manifest(paper_dir, base, payload):
+    a = paper_dir / "audio"
+    a.mkdir(parents=True, exist_ok=True)
+    (a / f"{base}_ko_audio.manifest.json").write_text(payload, encoding="utf-8")
+
+
+def test_audio_mp3_true_when_manifest_complete(tmp_workspace):
+    d = _make_paper(tmp_workspace, "Mp3Done", {
+        "Mp3Done_ko.md": "# ko",
+        "Mp3Done_ko_audio.md": "# audio",
+    })
+    _add_audio_manifest(d, "Mp3Done",
+                        '{"status":"complete","audio":{"file":"Mp3Done_ko_audio.v1.mp3"}}')
+    info = papers.get_paper_info("Mp3Done")
+    assert info["formats"]["md_ko_audio"] is True
+    assert info["formats"]["audio_mp3"] is True
+
+
+def test_audio_mp3_false_without_manifest(tmp_workspace):
+    # 낭독 텍스트는 있으나 mp3 미합성 → 스피커는 켜지되 링은 없어야 한다.
+    _make_paper(tmp_workspace, "NoMp3", {
+        "NoMp3_ko.md": "# ko",
+        "NoMp3_ko_audio.md": "# audio",
+    })
+    info = papers.get_paper_info("NoMp3")
+    assert info["formats"]["md_ko_audio"] is True
+    assert info["formats"]["audio_mp3"] is False
+
+
+def test_audio_mp3_false_when_manifest_incomplete(tmp_workspace):
+    # status가 complete가 아니면(streaming/failed 등) 재생 불가 → False.
+    d = _make_paper(tmp_workspace, "Streaming", {
+        "Streaming_ko_audio.md": "# audio",
+    })
+    _add_audio_manifest(d, "Streaming", '{"status":"streaming","audio":{}}')
+    info = papers.get_paper_info("Streaming")
+    assert info["formats"]["audio_mp3"] is False

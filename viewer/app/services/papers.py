@@ -517,6 +517,26 @@ def _load_paper_metadata(paper_dir: Path) -> dict | None:
     return None
 
 
+def _has_playable_audio(paper_dir: Path) -> bool:
+    """True if a synthesized, playable TTS audio exists for this paper.
+
+    Truth source = the audio manifest with status "complete" (see
+    services/audio.py — same signal the player/MCP use). Cheap dir + small
+    JSON read; only called when a _ko_audio.md narration is present.
+    """
+    audio_dir = paper_dir / "audio"
+    if not audio_dir.is_dir():
+        return False
+    for mf in audio_dir.glob("*_ko_audio.manifest.json"):
+        try:
+            man = _json.loads(mf.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if man.get("status") == "complete":
+            return True
+    return False
+
+
 def _paper_info(paper_dir: Path, location: str) -> dict:
     """Build info dict for a single paper directory."""
     files: dict[str, bool] = {
@@ -526,6 +546,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         "md_ko_explained": False,
         "md_en_explained": False,
         "md_ko_audio": False,
+        "audio_mp3": False,
         "md_lint_report": False,
     }
     for f in paper_dir.iterdir():
@@ -545,6 +566,11 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
             files["md_ko"] = True
         elif f.name.endswith(".md"):
             files["md_en"] = True
+
+    # md_ko_audio = 낭독 텍스트(_ko_audio.md) 존재. audio_mp3 = 실제 합성된
+    # 재생 가능 음원 존재(audio/ manifest status="complete", services/audio.py 기준).
+    if files["md_ko_audio"]:
+        files["audio_mp3"] = _has_playable_audio(paper_dir)
 
     # Folder modification time as fallback date
     try:
