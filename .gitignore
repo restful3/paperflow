@@ -46,6 +46,17 @@ logs/
 .DS_Store
 Thumbs.db
 *.tmp
+*.bak
+*.bak_*
+*.orig
+*.rej
+
+# Local ad-hoc screenshots and scratch files
+/*.png
+/test_container_tui.txt
+# Local ad-hoc audio samples (TTS voice/clip scratch)
+/*.mp3
+/voice_samples/
 
 # Jupyter Notebook
 .ipynb_checkpoints
