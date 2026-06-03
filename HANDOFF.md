@@ -1,5 +1,5 @@
 # 세션 핸드오프 — PaperFlow 한국어 TTS (MVP 배포 + HLS Plan 1·2 구현·검증 완료)
-_최종 갱신: 2026-05-31 (HLS Plan 1·2 완료 + 액세스로그 redaction 버그픽스·워밍업 문구 개선)_
+_최종 갱신: 2026-06-01 (위 + **VoxCPM2 교체 §F + 생성-먼저·MCP 오디오/배치·Codex 3R 리뷰 §G**)_
 
 ## 🎯 목표
 `_ko_audio.md`(한국어 낭독 텍스트)를 뷰어에서 듣는 기능. **두 단계**:
@@ -60,21 +60,47 @@ _최종 갱신: 2026-05-31 (HLS Plan 1·2 완료 + 액세스로그 redaction 버
 - **반영**: `paperflow-viewer` 재빌드·재기동 완료(클린 기동, 3컨테이너 정상). 컨테이너 내 `main.py:25` `isinstance` 가드 확인.
 - **추가 픽스 — 듣기 토글 언어 게이팅 (commit `eac1c35`)**: "듣기" 토글이 `hasMdKoAudio` 만으로 떠서 **EN 보기 중에도 표시**됐음(문서 "KO 전용" 의도와 불일치). → 두 버튼(`viewer.html:345,564`) `x-show` 에 `$store.lang.ko &&` 추가 → 현재 언어에 낭독 오디오가 있을 때만 표시(오늘은 KO 오디오만 존재, EN 분기는 자연 숨김; 없는 `hasMdEnAudio` 미리 안 만듦=추측성 배제). **동반 수정**: lang `$watch` 가 EN 전환 시 audioMode 자동 해제(버튼이 lang 게이트라 안 그러면 audioMode 켜진 채 버튼 숨겨져 빠져나올 길 없음 — 내 변경이 유발한 stuck 방지). Playwright 5/5 PASS(KO 표시·EN 숨김·KO 듣기진입 audioMode=true·EN전환 자동해제·버튼숨김).
 - **추가 픽스 2건 — 속도표시 + live-edge 자동재개 (commit `ccaef64`)**: ① **속도 0.8 오표시**: 속도 드롭다운이 `x-for` 옵션이라 `x-model` 초기화 시점에 옵션이 없어 첫 항목(0.8)으로 떨어졌음(실재생은 1.0). → 정적 `<option>`(값은 `x-model.number` 매칭 위해 1.0→`"1"`)으로 교체. 검증: 1.0x 표시·`audioRate=1`·1.5x 선택 시 `playbackRate=1.5`. ② **live-edge 스톨**: 스트리밍(EVENT 플레이리스트) 재생이 합성된 마지막 세그먼트를 따라잡으면 멈추고 자동재개 안 돼 사용자가 듣기 토글로 수동 복구해야 했음(=재부착). → `@waiting`→`onAudioStall()`: 6s 디바운스 후에도 같은 currentTime·`status==='streaming'` 이면 `remountAudio()`(플레이리스트 재로드+새 토큰=토글과 동일). HLS+스트리밍 한정, 완성본 정상 EOF, remount 30s/3회 백오프로 루프방지, `@playing` 이 타이머 클리어. 검증: 핸들러 wiring + 정상재생 무영향(currentTime 전진). **실 live-edge 복구는 헤드리스 재현 곤란 → 실청취/iPhone preflight 에서 최종 확인**. (콘솔 `require is not defined` 는 CDN UMD 라이브러리發 기존 무관 에러.)
-- **TTS 엔진 교체: Chatterbox → Qwen3-TTS (commit `3076599`)**: Chatterbox 가 한국어 숫자/연도(2025년·55.34·1.1)를 오독 + 여성화자 없음 → **Qwen3-TTS-12Hz-1.7B-CustomVoice** 로 교체. 내장 한국어 여성화자 **Sohee**, **숫자 정규화 내장**(사용자 청취 확인 "숫자가 아주 깔끔해"). **수술적 교체** — `synth.py`(엔진)+`requirements.txt`(qwen-tts+torch/torchaudio 2.10.0+cu128)+`Dockerfile`(apt sox; numpy/typing_extensions 선설치 후 pysox `--no-build-isolation` 빌드)만 변경, `load_model`/`synth_chunk`/`model_revision` 시그니처·HLS 파이프라인·워치독·tts 33 테스트 그대로. `model_revision`=`모델@화자` 라 artifact_version 변경→모든 논문 차회 청취 시 Qwen 으로 재생성(구 Chatterbox 버전은 `_cleanup_old_versions` 로 grace 후 정리). 검증: 컨테이너 합성 4.0s→5.9s(RTF 0.68, VRAM 4.8GB), POST /jobs end-to-end 로 새 Qwen 버전 dir(e489f27e335f)+HLS 세그먼트 생성 확인. env `QWEN_TTS_MODEL`/`QWEN_TTS_SPEAKER` 로 모델·화자 교체 가능. **호스트 PoC venv `~/qwen-tts-poc`** 는 PoC 잔재(삭제 가능). textnorm_ko(숫자 정규화 레이어)는 Qwen 이 내장 처리하므로 **불필요해짐**.
+- **TTS 엔진 교체: Chatterbox → Qwen3-TTS (commit `3076599`)**: Chatterbox 가 한국어 숫자/연도(2025년·55.34·1.1)를 오독 + 여성화자 없음 → **Qwen3-TTS-12Hz-1.7B-CustomVoice** 로 교체. 내장 한국어 여성화자 **Sohee**, **숫자 정규화 내장**(사용자 청취 확인 "숫자가 아주 깔끔해"). **수술적 교체** — `synth.py`(엔진)+`requirements.txt`(qwen-tts+torch/torchaudio 2.10.0+cu128)+`Dockerfile`(apt sox; numpy/typing_extensions 선설치 후 pysox `--no-build-isolation` 빌드)만 변경, `load_model`/`synth_chunk`/`model_revision` 시그니처·HLS 파이프라인·워치독·tts 33 테스트 그대로. `model_revision`=`모델@화자` 라 artifact_version 변경→모든 논문 차회 청취 시 Qwen 으로 재생성(구 Chatterbox 버전은 `_cleanup_old_versions` 로 grace 후 정리). 검증: 컨테이너 합성 4.0s→5.9s(RTF 0.68, VRAM 4.8GB), POST /jobs end-to-end 로 새 Qwen 버전 dir(e489f27e335f)+HLS 세그먼트 생성 확인. env `QWEN_TTS_MODEL`/`QWEN_TTS_SPEAKER` 로 모델·화자 교체 가능. **호스트 PoC venv `~/qwen-tts-poc`** 는 삭제됨. textnorm_ko(숫자 정규화 레이어)는 Qwen 이 내장 처리하므로 **불필요해짐**.
+- **아나운서 톤 (commit `3ee67c5`)**: Sohee 기본이 감정 풍부 → `generate_custom_voice(instruct=...)` 로 중립 뉴스 아나운서 딜리버리 지시. `QWEN_TTS_INSTRUCT` env(기본=아나운서 지시), `model_revision` 에 포함→톤 변경 시 재생성. timbre 는 Sohee 유지.
+- **협조적 선점 + 모델 사전로드 (commit `270d40d`)**: GPU 1개·FIFO·선점부재로 거대 논문(980청크)이 큐를 막아 "준비중 안 끝남" → **최신 요청 논문이 foreground target**, 백그라운드 `run_job` 이 청크 사이 `is_active()` 체크해 target 바뀌면 `Preempted`(gpu_lock 해제) → 새 논문 즉시 GPU 획득. 양보된 작업은 `preempted`(재트리거 가능). 부팅 시 모델 사전로드 스레드로 첫 작업 ~80s 콜드로드 제거(= "플레이버튼 떠도 한참 후 재생" latency 큰 원인). 검증: 부팅 후 무작업 GPU 4.4GB(로드됨), A 합성 중 B 트리거→A=preempted·B=synthesizing, tts 34 테스트(선점 테스트 포함). **기존 오디오 전체 삭제됨**(사용자 요청, 8 audio dir 제거; `_ko_audio.md` 11개 보존) — 재생 시 Qwen+아나운서로 새로 생성. **남은 한계**: 980청크 같은 큰 논문은 합성이 ~실시간이라 워밍업 latency 는 본질적(선점·사전로드로 완화하나 0 아님).
 - **추가 픽스 — 잠금화면 prev/next 문장 단위 (commit `3909358`)**: iPad 제어콘솔/잠금화면의 앞·뒤 버튼이 문장이 아니라 ±초 스킵으로 동작. 원인: MediaSession 에 prev/next(문장)와 seekbackward/forward(±10s)를 둘 다 등록했는데 **iOS/iPadOS 는 seek 핸들러가 있으면 잠금화면에 ±초 스킵 버튼을 우선 노출**. → `seekbackward`/`seekforward` 를 `null` 등록(제거)해 iOS 가 ⏮/⏭(previoustrack/nexttrack=`prevSentence`/`nextSentence`) 버튼을 띄우게 함. 트레이드오프: 잠금화면 ±10초 스킵 사라짐(앱 내 ⏮/⏭·문장 탭 시크는 유지). 헤드리스로 **핸들러 등록 상태 검증 PASS**(prev/next=fn, seek=null) — **실제 잠금화면 버튼 동작은 iPad 실기기 확인 필요(preflight)**.
 - **인시던트 + 워치독 — 합성 wedge로 "준비 중" 무한 (commit `f020ece`)**: "AI Agent Frameworks" 스트리밍 job이 **첫 청크에서 wedge** — 모델/GPU가 ~3\~7 it/s(정상 ~45)로 열화돼 `synth_chunk(chunk 0)` 가 4분+ 반환 안 함. GPU는 바쁜데 세그먼트 0, heartbeat 동결(시작값), status streaming 고정(실패도 안 함) → 뷰어 "오디오 준비 중" 무한. **즉시 해소**: `docker compose restart paperflow-tts`(멈춘 generate 종료 + 모델 신규 로드). 재시작 후 1청크 합성 2.3s로 정상 회복 확인 → 코드 아닌 **런타임 열화**. **근본 갭 수정**: `job.py` `_synth_with_timeout` 워치독 스레드 추가 — `SYNTH_CHUNK_TIMEOUT`(기본 90s) 초과 시 `_synth_encode_with_retry` 가 None→`_fail_partial` 로 풀어 무한 대기 대신 앞부분 재생/실패 표면화. fail-fast(타임아웃 시 재시도 안 함)로 GPU 동시 generate 회피. **한계**: CUDA 커널 인터럽트 불가 → wedge 된 데몬 스레드는 컨테이너 재시작 전까지 GPU 점유(단 job 상태/락은 즉시 해제). tts 33 passed(워치독 회귀 테스트 포함).
+
+### F. TTS 엔진 교체: Qwen3-TTS → VoxCPM2 (commit `551b88b`, main 로컬·미push)
+- **동기**: 사용자가 VoxCPM2 한국어 숫자/연도 발음을 Qwen보다 선호. PoC 3단계 청취 검증 후 결정 — (1) 숫자 문단 단발 합성 OK, (2) voice-design 프롬프트는 **청크마다 다른 사람** 됨(일관성 실패), (3) **고정 참조 WAV 클로닝**(`prompt_wav_path`+`prompt_text`)으로 청크 간 음색 고정 확인 → 이 방식 채택.
+- **음성 라이브러리**: voice-design 으로 20대 중반 여성·중립 아나운서 톤 10종 생성 후 사용자가 선별 → **활성 4종(4 수아·6 예린·7 다은·9 채원), 기본=9 채원**. voice-design 은 비결정적이라 **생성된 WAV 가 그 목소리의 유일 원본** → `tts_service/voices/<key>.wav` + `voices.json`(전사) 번들, 이미지에 COPY. (8·10 비활성 보관: `~/voxcpm-poc/voices/`. 1·2·3·5 는 사용자 요청 삭제됨=복구불가.)
+- **수술 범위**(Qwen 교체와 동일): `synth.py`(엔진+음성해석+`model_revision`) + `requirements.txt`(voxcpm + **torch 2.5.1+cu121**, qwen-tts/2.10+cu128 대체) + `Dockerfile`(pysox/sox 제거, voices COPY) + `docker-compose.yml`(`VOXCPM_VOICE=09_chaewon`, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`). `synth_chunk`/`model_revision` 시그니처·HLS·gpulock·선점 그대로. `model_revision`=`openbmb/VoxCPM2@<voice>` → **음성 바꾸면 artifact_version 달라져 오디오 자동 재생성**(Codex Finding 2 캐시키 메커니즘).
+- **스모크 중 발견·수정한 실버그 (TDD)**: **모델 이중로드 OOM** — 부팅 프리로드 스레드가 VoxCPM2 로드(~80s, torch.compile 워밍업) 중 `_MODEL=None` 인 사이 job 워커가 **두 번째 인스턴스 동시 로드** → 12GB 카드에 모델 2개 → OOM/실패. `load_model` 에 **double-checked 락**(`_MODEL_LOCK`) 추가 → 동시 호출이 단일 인스턴스 공유. 회귀 테스트 `test_load_model_loads_once_under_concurrency`(동시 5호출→1회 로드) RED→GREEN.
+- **테스트**: `tts_service/tests/test_synth_voice.py` 6종 신규(음성 해석·env override·model_revision·동시 로드). **tts 43 passed**.
+- **스모크 PASS**(실 파이프라인): "The next evolution of the Agents SDK"(282청크) POST /jobs → expandable_segments + 단일 인스턴스로 **OOM 없이 synthesizing 진행**, 9번 채원 목소리 세그먼트 생성. 첫 6청크 청취 샘플 `pipeline_voice9_sample.mp3`(repo root, git 미추적).
+- **VoxCPM2 운영 메모(중요)**: 12GB RTX 3060 에서 **모델 상주 ~5.5\~7GB + 합성 피크 ~8GB**(Qwen 4.8GB 보다 큼). 단일 인스턴스+expandable_segments 로 안정. **RTF ~1.3(실시간보다 느림)** — Qwen 0.68 보다 느려 워밍업/live-edge 지연은 본질적(완전 제거 불가). 모델 가중치는 `model_cache` 볼륨에 사전시드(`./model_cache/huggingface/hub/models--openbmb--VoxCPM2`, 컨테이너 재다운로드 없음). Apache-2.0(라이선스 깔끔).
+- **PoC 환경(휘발성·정리 후보)**: 호스트 venv `~/voxcpm-poc`(torch 2.5.1+cu121 + voxcpm + 음성 원본 6종 + PoC 스크립트). 호스트 `~/.cache/huggingface` VoxCPM2 4.7GB(model_cache 에 사본 있음→삭제가능). 샘플 mp3들(`voice_samples/`, `pipeline_voice9_sample.mp3`, `voxcpm2_*.mp3`). **`~/voxcpm-poc/voices/` 의 비활성 8·10 + 활성 원본은 voice-design 비결정성 때문에 유일본 — 삭제 주의.**
+- **뷰어 무변경**: HLS 스트리밍이 엔진-불가지(viewer 는 m3u8/세그먼트만 재생) → 뷰어 재빌드 불필요. 기존 논문은 재생 시 VoxCPM2/채원으로 자동 재생성.
+- **음성 추가/교체 방법**: voice-design 으로 새 WAV 생성(`~/voxcpm-poc/` 참고) → `tts_service/voices/` 에 wav + `voices.json` 엔트리 추가 → 이미지 재빌드. 기본 음성 변경은 compose `VOXCPM_VOICE` 또는 `.env`.
+
+### G. 생성-먼저 정책 + MCP 오디오/배치 도구 (commit `c547f04`, main 로컬·미push)
+- **동기**: 사용자가 라이브 스트리밍을 실제로 써보니 ① 재생 멈춤 ② 따라가기(하이라이트)가 음성보다 먼저 멈춤. 원인 측정 결과 **VoxCPM2 RTF≈1.3(실시간보다 느림, RTX 3060)** — timesteps 를 10→4 로 낮춰도 1.36→1.26밖에 안 떨어짐(병목=AR 토큰생성, diffusion 아님) → **라이브 스트리밍은 이 HW에서 불가**. 사용자가 "둘 다(속도+생성먼저)" 택했으나 속도는 막다른 길로 판명 → **생성-먼저(VOD) 단일 정책**.
+- **인시던트(재생 중 자폭)**: 멈췄을 때 사용자가 "재생성"을 눌러 `DELETE /audio` 가 합성 중 디렉터리를 통째로 지움 → 워커가 `.w000017.wav` 쓰다 죽음. → **삭제 가드** 도입.
+- **생성-먼저 구현(viewer.html 무변경 원칙 최대 유지)**: `api.py` stream-url 이 `AUDIO_REQUIRE_COMPLETE`(config 기본 True)면 status 가 complete/failed_partial 아니면 **425** → 프론트가 기존 "준비 중 N/총" 표시·재시도 → 완료 시 mount(끊김 없는 VOD·따라가기 정합). 프론트는 `audioStreamingPlayback: true→false` 한 줄(라이브 머신러리는 opt-in 으로 잔존). delete 가드: `audio.py is_synthesis_active`(status=streaming + heartbeat<120s) → `DELETE /audio` 409.
+- **MCP 6도구**(`mcp_router.py`): `generate_audio`·`get_audio_status`·`get_audio_result`·`delete_audio(confirm)`·`generate_audio_batch`·`get_audio_batch_status`. 논문참조=`paper`(name)+`location`. `audio.py resolve_for_audio`(outputs 전용·`_ko_audio.md` 필요, 아니면 ValueError) + `_tts_json`(httpx 에러를 agent용 ValueError 로 정규화). **배치=기존 sweep 재사용**: tts `POST /sweep`(on-demand)·`GET /sweep`(상태) 신규.
+- **배치 동시성 모델(Codex 3R로 다듬음)**: `run_sweep` 가 `_worker` 의미(progress_cb·terminal state·선점)를 `process_one` 으로 재사용 + idle-gate(`should_start`) + 실패후보 skip. 배치는 `_current_target`(foreground 전용) 안 건드리고 **`_foreground_epoch` 스냅샷**으로 선점 판단(foreground /jobs 오면 epoch↑ → 배치 양보). **`_SWEEP_RUN_LOCK`** single-flight(daemon↔on-demand 상호배제). **`_try_claim_batch`** atomic claim(`_lock` 안 활성 job 재확인+epoch+등록 → should_start↔snapshot TOCTOU 차단, 활성이면 "skipped").
+- **Codex 리뷰 3라운드(peer-council, paperflow 세션, 캡쳐 `/tmp/codex_response_2026060*.txt`)**: R1 BLOCKING(run_sweep `_jobs` 영구 segmenting)+HIGH(idle/선점 우회, MCP httpx 에러) → R2 HIGH(배치가 _current_target 역선점 race, daemon↔on-demand 미배제, `_jobs` lock없는 순회) → R3 HIGH(claim TOCTOU). **R3까지 전부 TDD 수정**. R3의 마지막 claim atomicity 는 코드 수정·테스트 통과했으나 **max 3R 캡 도달로 Codex 4차 재리뷰는 안 받음**(Codex 가 "이 race만 막으면 BLOCKING/HIGH 없음"이라 한 지점).
+- **테스트**: tts 52 passed(sweep·동시성 신규), viewer 200 passed. 라이브 스모크 OK(6도구·아카이브 거부·confirm 가드·에러 정규화·배치 sweep).
+- **남은 한계/결정(Codex non-blocking 동의)**: ① **아카이브 논문 오디오 불가**(tts outputs 전용, `safe_paper_dir` 가 archives 반환 시 거부) ② 삭제 가드 좁은 race(job accepted~manifest publish 전, defer) ③ `failed_partial` stream-url 허용(의도적 부분재생) ④ `_SWEEP_RUN_LOCK` 점유 중 `/sweep` 은 `started:true` 후 즉시 종료(메시지 약간 부정확).
+- **커밋 범위 주의**: c547f04 는 같은 파일 얽힘 때문에 §G(생성먼저·MCP) + 세션 시작 시점의 미커밋 M1(failed_partial)·M2(lock 대기 heartbeat)·delete_audio 안정화를 **한 커밋에 묶음**. viewer.html 307줄 diff 대부분은 기존 스트리밍 작업(내 변경은 flag 1줄).
 
 ## ✅ 남은 것 (BLOCKING — 자동화 불가, 수동)
 - **실기기 iPhone Safari preflight**(스펙 §12.3): signed token 으로 m3u8/segment 쿠키없이 통과 · 첫 audible(1\~3 세그) · 잠금화면/백그라운드/네트워크전환 지속재생 · 완료 VOD seek · MediaSession/AirPods. 통과 시 HLS 기능 GA.
 
 ## 🔄 진행 중
-- 없음. 활성 합성 job 없음(tts 재시작으로 스모크 job 종료됨).
-- **스모크 잔여 v2 오디오**(outputs/): "The next evolution of the Agents SDK"·"Anthropic launches enterprise…" = **complete**(정상 산출물). "7 Agentic AI Trends…"·"The 2026 MCP Roadmap" = **stale streaming**(재시작으로 중단됨, heartbeat 만료 → 다음 접근 시 `reconcile_stale`이 failed 로 전이, 또는 듣기 재생성으로 완료). 정리 불필요 — 정상 동작.
+- **활성 Qwen 합성 3건(streaming, 선점 테스트·논문열기 잔여)**: "Anthropic launches…"(21/223), "Building effective agents"(88/406), "Multi-Agent…"(4/980). 선점 구조라 마지막 요청 1개만 실제 진행, 나머지는 양보(preempted)되거나 대기. **정리 불필요** — 재생 시 foreground 우선 처리됨. 클리어해도 tts 가 계속 처리(핸들만 잃음).
+- **아나운서 톤 사용자 청취 확인 미완**: 톤 instruct 적용·배포됐으나 사용자가 최종 "괜찮다" 확인 전. 별로면 `QWEN_TTS_INSTRUCT` 조정(env 또는 synth.py).
 
 ## ⏭️ 다음 단계
-1. **실기기 iPhone Safari preflight**(위 "남은 것", 스펙 §12.3) — 유일한 BLOCKING. 통과 시 HLS GA.
-   - 백엔드·프론트 모두 구현·Codex리뷰·Playwright(네이티브 경로) 검증 완료. 남은 건 실제 iPhone 동작뿐.
-2. (선택) v1.1: artifact_version generation counter(same-source 재시도 오버랩), sweep 완전 preemption.
+1. **아나운서 톤 청취 확인** — 뷰어에서 논문 재생해 중립 아나운서 톤 적절한지 판단. 조정 필요 시 `QWEN_TTS_INSTRUCT` 수정 → tts 재빌드(COPY app, 빠름).
+2. **미push 커밋 2건 push** — `3ee67c5`(아나운서)·`270d40d`(선점) (원하면).
+3. **실기기 iPhone Safari preflight**(스펙 §12.3) — HLS 의 유일 BLOCKING. 통과 시 GA. (Qwen 전환 무관하게 여전히 필요.)
+4. (선택) v1.1: 선점 ping-pong 방지(빠른 논문 전환 시), generation counter.
 
 ## 🧠 대화에만 있던 핵심 컨텍스트
 - **왜 HLS인가**: 단일 `<audio>` mp3는 "재생 중 파일 append" 불가(고정 Content-Length), iPhone Safari는 오디오 MSE 사실상 미지원 → HLS(Apple 네이티브 progressive)가 무빙 윈도우의 정답. 사용자가 "무빙 스티치" 아이디어를 냈고 그게 HLS로 귀결됨.
@@ -91,13 +117,17 @@ _최종 갱신: 2026-05-31 (HLS Plan 1·2 완료 + 액세스로그 redaction 버
   - **Playwright(실 브라우저)**: `/tmp/pwverify`(python playwright, 재부팅 시 소실). 스크립트는 **`/tmp` 밖**에 두거나 맨 위에서 `sys.path=[p for p in sys.path if p not in ('','/tmp')]` — `/tmp`에 누군가의 `inspect.py`가 있어 stdlib `inspect`를 가려 import 깨짐(measurement/playwright에서 실제 발생). 로그인은 page.evaluate fetch('/api/login')로 쿠키 주입. 이 Chromium은 `canPlayType('application/vnd.apple.mpegurl')`=truthy라 **네이티브 HLS 경로**(=iOS 경로)를 탐.
   - bash 출력에 가끔 **토렌트(FC2-PPV) 텍스트가 섞임**(다른 백그라운드 작업의 stdout 오염) — 무시. grep -v로 필터.
 - **합성 시간 주의**: 한 논문(200\~280문장) 전체 합성 ~20\~30분. 스모크는 완주 대신 streaming 초반(첫 세그먼트~수 개)만 검증하면 충분.
+- **TTS 엔진 = Qwen3-TTS (이번 세션 교체)**: `tts_service` 컨테이너 안에서 실행(host venv 아님 — `~/qwen-tts-poc` 삭제됨). 모델 가중치는 `model_cache` 볼륨(`/root/.cache`)에 캐시. RTF ~0.68, VRAM ~4.8GB. 화자 Sohee(한국어 여성)+아나운서 instruct. **숫자/연도 내장 정규화**(Chatterbox 의 오독 문제 해결). Qwen Flash 는 voice clone 미지원이나 CustomVoice 의 preset 화자+instruct 로 충분.
+- **한글 폴더명 NFC/NFD 함정**: outputs 의 한글 폴더/파일명은 디스크에 **NFD(자모 분해)** 로 저장됨. tts `/jobs` 에 경로를 보낼 때 NFC 문자열을 하드코딩하면 **404(파일 못 찾음)**. → `glob.glob` 로 실제 경로를 얻거나 `unicodedata.normalize('NFC', p)` 로 매칭. (이번 세션 트리거 시 실제 발생.)
+- **선점/사전로드 (이번 세션)**: 최신 요청 논문이 foreground, 백그라운드는 `Preempted` 로 양보(gpu_lock 해제). 모델은 부팅 시 사전로드(첫 작업 콜드로드 제거). 큰 논문(980청크)의 ~실시간 합성 워밍업 지연은 본질적 한계(완전 제거 불가).
+- **기존 오디오 전체 삭제됨**(사용자 요청): 모든 `outputs/*/audio` 제거, `_ko_audio.md` 11개 보존. 재생 시 Qwen+아나운서로 새로 생성.
 
 ## ⚠️ 클리어 전 주의
-- **이번 세션 HLS 산출물은 전부 main 에 로컬 커밋됨**(Plan1+2 + Codex 픽스 + 후속 버그픽스 §E + TTS 엔진 Qwen 교체, 마지막 `3076599`). **push 안 함**(요청 없었음) — 원하면 사용자가 push.
+- **이번 세션 HLS 산출물은 전부 main 에 로컬 커밋됨**(Plan1+2 + Codex 픽스 + 후속 버그픽스 §E + Qwen 교체·아나운서톤·선점, 마지막 `270d40d`). **`f5752e4` 까지 origin/main 에 push 됨**; 이후 `3ee67c5`·`270d40d` 는 로컬(미push).
 - **커밋 안 된 변경 = 전부 세션 무관(건드리지 말 것)**: `.gitignore`(M), PNG 16개 삭제(D), `test_container_tui.txt`(D), `_tail30s_sample.mp3`(??), `docs/superpowers/plans/2026-05-26-*-plan.md`(??) — **세션 시작 시점부터 있던 기존 워킹트리 상태.**
   - 단, **이 핸드오프 갱신으로 `HANDOFF.md`가 다시 M 상태**가 됨(상태 파일, 커밋은 사용자 결정 — `git add HANDOFF.md && git commit` 으로 별도 커밋 가능).
-- **백그라운드**: 활성 bash 셸 없음(측정·스모크·폴링 전부 종료). docker **3컨테이너 실행 중**(converter/tts/viewer, 정상). `peer-council-codex.service` 상시(클리어 후 유지). 활성 GPU 합성 job 없음.
-- **임시(휘발성, 재부팅 시 소실)**: `/tmp/cbx-venv`(Chatterbox 합성 venv, pytest/pip 없음), `/tmp/pwverify`(playwright venv). 모델 가중치는 `~/.cache/huggingface`·`./model_cache`(영구).
+- **백그라운드**: 활성 bash 셸 없음(전부 foreground 종료). docker **3컨테이너 실행 중**(converter/tts/viewer, 정상). **tts 가 Qwen 합성 진행 중**(streaming 3건, GPU ~72%) — 클리어해도 계속 처리되나 핸들 잃음. `peer-council-codex.service` 상시(클리어 후 유지).
+- **임시(휘발성, 재부팅 시 소실)**: `/tmp/pwverify`(playwright venv). `~/qwen-tts-poc` 는 삭제됨. Qwen 모델 가중치는 `./model_cache`(영구, 컨테이너 `/root/.cache`).
 - **미완료 todo**: 없음(이번 세션 task 전부 completed).
 
 ## 📂 관련 파일
