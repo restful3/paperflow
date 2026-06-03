@@ -560,16 +560,7 @@
         Easy
       </button>
 
-      <!-- Audio (listen) toggle — KO-only -->
-      <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
-              @click="toggleAudio()"
-              class="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-full border transition"
-              :class="audioMode
-                  ? ($store.darkMode.on ? 'bg-sky-900 text-sky-300 border-sky-700' : 'bg-sky-100 text-sky-700 border-sky-300')
-                  : ($store.darkMode.on ? 'text-gray-100 border-gray-400 hover:border-gray-200' : 'text-gray-700 border-gray-400 hover:border-gray-600')"
-              :title="audioMode ? '원본 보기' : '듣기판으로 전환 (TTS 최적화)'">
-        듣기
-      </button>
+      <!-- Audio (listen) toggle moved into the ⋯ More actions menu below -->
 
       <span class="shrink-0 text-[11px]"
             :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
@@ -638,45 +629,93 @@
       <!-- Separator -->
       <div class="h-6 w-px shrink-0" :class="$store.darkMode.on ? 'bg-gray-600' : 'bg-gray-200'"></div>
 
-      <!-- Actions -->
-      <template x-if="location === 'outputs'">
-        <button @click="doAction('archive')"
-                class="p-1.5 rounded-lg transition shrink-0"
-                :class="$store.darkMode.on ? 'text-gray-400 hover:text-emerald-400 hover:bg-gray-700' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'"
-                title="Archive">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      <!-- More actions menu (⋯): Audio / Archive / Download / Delete -->
+      <div class="relative shrink-0" x-data="{ moreMenuOpen: false }">
+        <button @click="moreMenuOpen = !moreMenuOpen"
+                class="p-1.5 rounded-lg transition"
+                :class="moreMenuOpen
+                  ? ($store.darkMode.on ? 'text-gray-200 bg-gray-700' : 'text-gray-700 bg-gray-100')
+                  : ($store.darkMode.on ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100')"
+                title="More actions">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/>
           </svg>
         </button>
-      </template>
-      <template x-if="location === 'archives'">
-        <button @click="doAction('restore')"
-                class="p-1.5 rounded-lg transition shrink-0"
-                :class="$store.darkMode.on ? 'text-gray-400 hover:text-indigo-400 hover:bg-gray-700' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'"
-                title="Restore">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-          </svg>
-        </button>
-      </template>
-      <button @click="doAction('delete')"
-              class="p-1.5 rounded-lg transition shrink-0"
-              :class="$store.darkMode.on ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'"
-              title="Delete">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-        </svg>
-      </button>
 
-      <!-- Download (dynamic: PDF / MD / Easy) -->
-      <a :href="downloadUrl" :download="downloadFilename"
-         class="p-1.5 rounded-lg transition shrink-0"
-         :class="$store.darkMode.on ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'"
-         :title="'Download ' + downloadLabel">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-      </a>
+        <div x-show="moreMenuOpen" @click.outside="moreMenuOpen = false"
+             x-transition:enter="transition ease-out duration-150"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-100"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="absolute right-0 mt-2 w-44 py-1 rounded-lg shadow-lg border z-50 origin-top-right"
+             :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
+             style="display: none;">
+
+          <!-- Audio (listen) toggle — KO-only, only when an audio version exists -->
+          <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
+                  @click="toggleAudio(); moreMenuOpen = false"
+                  class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
+                  :class="audioMode
+                    ? ($store.darkMode.on ? 'text-sky-300 bg-sky-900/40 hover:bg-sky-900/60' : 'text-sky-700 bg-sky-50 hover:bg-sky-100')
+                    : ($store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')"
+                  :title="audioMode ? '원본 보기' : '듣기판으로 전환 (TTS 최적화)'">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6 9l6-3v12l-6-3H4a1 1 0 01-1-1v-2a1 1 0 011-1h2z"/>
+            </svg>
+            <span x-text="audioMode ? '원본 보기' : '듣기'">듣기</span>
+          </button>
+
+          <!-- Archive (if in outputs) -->
+          <template x-if="location === 'outputs'">
+            <button @click="doAction('archive'); moreMenuOpen = false"
+                    class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
+                    :class="$store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'">
+              <svg class="w-4 h-4 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Archive</span>
+            </button>
+          </template>
+
+          <!-- Restore (if in archives) -->
+          <template x-if="location === 'archives'">
+            <button @click="doAction('restore'); moreMenuOpen = false"
+                    class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
+                    :class="$store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'">
+              <svg class="w-4 h-4 shrink-0 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+              </svg>
+              <span>Restore</span>
+            </button>
+          </template>
+
+          <!-- Download (dynamic: PDF / MD / Easy) -->
+          <a :href="downloadUrl" :download="downloadFilename"
+             @click="moreMenuOpen = false"
+             class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
+             :class="$store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'">
+            <svg class="w-4 h-4 shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span x-text="downloadLabel">Download</span>
+          </a>
+
+          <!-- separator before destructive action -->
+          <div class="my-1 h-px" :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'"></div>
+
+          <!-- Delete -->
+          <button @click="doAction('delete'); moreMenuOpen = false"
+                  class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
+                  :class="$store.darkMode.on ? 'text-red-400 hover:bg-gray-700' : 'text-red-600 hover:bg-red-50'">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -763,16 +802,10 @@
           <button @click="deleteAudio()" class="px-2 py-1 rounded hover:bg-red-500/20 text-sm" title="오디오 삭제(재생성 필요)">🗑</button>
         </div>
 
-        <!-- Live TTS generate prompt (audio mode, not yet generated) -->
-        <div x-show="audioMode && !audioReady"
+        <!-- Live TTS progress bar — 수동 '오디오 생성' 버튼 제거(오디오는 배치 생성). 생성 진행 중일 때만 표시. -->
+        <div x-show="audioMode && !audioReady && audioGenerating"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-sky-50 text-gray-800 border-b border-sky-200'">
-          <template x-if="!audioGenerating">
-            <button @click="generateAudio()"
-                    class="px-3 py-1.5 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition"
-                    x-text="audioManifest ? '🔄 다시 생성' : '🎧 오디오 생성'"
-                    :title="audioManifest ? '기존(부분/실패) 오디오를 지우고 새로 생성' : '오디오 생성'"></button>
-          </template>
           <template x-if="audioGenerating">
             <span class="flex items-center gap-2">
               <svg class="animate-spin h-4 w-4 text-sky-600" viewBox="0 0 24 24" fill="none">
@@ -786,6 +819,7 @@
 
         <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
              :class="$store.darkMode.on && 'dark'"
+             :lang="activeMdLang"
              x-html="activeMdContent"
              @touchstart="handleMarkdownTouchStart($event)"
              @touchmove="handleTouchMove($event)"
@@ -854,6 +888,7 @@
         <div class="hidden md:flex flex-col lg:flex-row w-full h-full">
           <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 w-full lg:w-1/2 h-1/2 lg:h-full overflow-y-auto min-h-0"
                :class="[$store.darkMode.on && 'dark', $store.darkMode.on ? 'border-b lg:border-b-0 lg:border-r border-gray-700' : 'border-b lg:border-b-0 lg:border-r border-gray-300']"
+               :lang="activeMdLang"
                x-html="splitMdContent"></div>
 
           <!-- iPad/touch devices: avoid inline iframe scroll lock -->
@@ -1347,6 +1382,23 @@ function viewerApp() {
         return this.hasMdKo ? this.mdKoContent : this.mdEnContent;
       } else {
         return this.hasMdEn ? this.mdEnContent : this.mdKoContent;
+      }
+    },
+
+    // Language actually rendered in the content container — mirrors activeMdContent's
+    // branch-for-branch. Bound via :lang so Safari Reader / "페이지 읽어주기"(Listen to Page),
+    // which detect language from the extracted article element (not just <html lang>),
+    // pick Korean for KO/듣기 docs even when the title is English-heavy.
+    get activeMdLang() {
+      if (this.audioMode && this.mdKoAudioContent) return 'ko';
+      if (this.explainedMode) {
+        if (this.$store.lang.ko && this.mdKoExplainedContent) return 'ko';
+        if (!this.$store.lang.ko && this.mdEnExplainedContent) return 'en';
+      }
+      if (this.$store.lang.ko) {
+        return this.hasMdKo ? 'ko' : 'en';
+      } else {
+        return this.hasMdEn ? 'en' : 'ko';
       }
     },
 
