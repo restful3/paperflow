@@ -89,6 +89,25 @@
       window.dispatchEvent(new CustomEvent('show-toast', { detail: { message, type, duration } }));
     }
 
+    function systemStat() {
+      return {
+        show: false,
+        s: { cpu_percent: 0, ram_percent: 0, ram_used_gb: 0, ram_total_gb: 0, gpu: null },
+        init() {
+          if (location.pathname === '/login') return;   // 로그인 전엔 폴링 안 함(401 루프 방지)
+          this.show = true;
+          this.tick();
+          setInterval(() => this.tick(), 4000);
+        },
+        async tick() {
+          try {
+            const r = await apiFetch('/api/system');
+            if (r && r.ok) this.s = await r.json();
+          } catch (e) { /* silent */ }
+        },
+      };
+    }
+
     async function apiFetch(url, options = {}) {
       const resp = await fetch(url, {
         credentials: 'same-origin',

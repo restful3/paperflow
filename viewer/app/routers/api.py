@@ -598,6 +598,29 @@ async def stats(_user: str = Depends(get_current_user_api)):
     return paper_svc.get_stats()
 
 
+@router.get("/system")
+async def system_stats(_user: str = Depends(get_current_user_api)):
+    """앱 전역 리소스 상태. CPU/RAM 은 viewer(psutil), GPU/VRAM 은 TTS /system 프록시.
+    TTS 에 /system 이 아직 없으면 gpu=null (TTS 재빌드 후 자동 채워짐 — viewer 변경 불필요)."""
+    import psutil
+    vm = psutil.virtual_memory()
+    out = {
+        "cpu_percent": round(psutil.cpu_percent(interval=None), 1),
+        "ram_used_gb": round(vm.used / 1e9, 1),
+        "ram_total_gb": round(vm.total / 1e9, 1),
+        "ram_percent": vm.percent,
+        "gpu": None,
+    }
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.get(f"{settings.TTS_SERVICE_URL}/system", timeout=3)
+        if r.is_success:
+            out["gpu"] = r.json()
+    except Exception:
+        pass
+    return out
+
+
 @router.get("/logs/latest")
 async def latest_log(_user: str = Depends(get_current_user_api)):
     log = paper_svc.get_latest_log()
@@ -658,6 +681,79 @@ async def audio_status(name: str, _user: str = Depends(get_current_user_api)):
     async with httpx.AsyncClient() as c:
         r = await c.get(f"{settings.TTS_SERVICE_URL}/jobs", params={"paper_dir": str(d)}, timeout=10)
     return r.json()
+
+
+# ── 관리형 오디오 큐 (TTS /queue 프록시) ───────────────────────────────────────
+# 전역 라우트(/papers 프리픽스 없음) → greedy {name:path} 섀도잉 무관.
+@router.post("/audio/queue")
+async def audio_queue_add(payload: dict, _user: str = Depends(get_current_user_api)):
+    name = (payload or {}).get("name")
+    if not name:
+        raise HTTPException(400, "name required")
+    d = audio_svc._resolve_paper_dir(name)
+    if not d:
+        raise HTTPException(404, "paper not found")
+    src = next(iter(d.glob("*_ko_audio.md")), None)
+    if not src:
+        raise HTTPException(404, "no _ko_audio.md")
+    async with httpx.AsyncClient() as c:
+        r = await c.post(f"{settings.TTS_SERVICE_URL}/queue",
+                         json={"paper_dir": str(d), "src_md": str(src)}, timeout=30)
+    return r.json()
+
+
+@router.delete("/audio/queue/{name:path}")
+async def audio_queue_remove(name: str, _user: str = Depends(get_current_user_api)):
+    d = audio_svc._resolve_paper_dir(name)
+    if not d:
+        raise HTTPException(404, "paper not found")
+    async with httpx.AsyncClient() as c:
+        r = await c.request("DELETE", f"{settings.TTS_SERVICE_URL}/queue",
+                            params={"paper_dir": str(d)}, timeout=10)
+    if r.status_code == 409:
+        raise HTTPException(409, "not pending (processing or absent)")
+    return r.json()
+
+
+@router.get("/audio/queue")
+async def audio_queue_status(_user: str = Depends(get_current_user_api)):
+    async with httpx.AsyncClient() as c:
+        r = await c.get(f"{settings.TTS_SERVICE_URL}/queue", timeout=10)
+    snap = r.json()
+    for it in snap.get("items", []):                      # paper_dir → 표시용 name(폴더명)
+        it["name"] = os.path.basename(it.get("paper_dir", ""))
+    return snap
+
+
+@router.get("/audio/candidates")
+async def audio_candidates(_user: str = Depends(get_current_user_api)):
+    """낭독본(_ko_audio.md)은 있으나 합성 mp3가 없는 outputs 논문 목록.
+    list_papers 와 동일한 메타 shape → 프론트가 기존 목록 렌더/정렬을 재사용."""
+    papers = paper_svc.list_papers("unread")
+    return [p for p in papers
+            if (p.get("formats") or {}).get("md_ko_audio")
+            and not (p.get("formats") or {}).get("audio_mp3")]
+
+
+@router.post("/audio/queue/batch")
+async def audio_queue_batch(payload: dict, _user: str = Depends(get_current_user_api)):
+    """선택한 논문들을 일괄 큐 투입. {names:[...]} → 각자 paper_dir/src_md 해석 후 TTS /queue."""
+    names = (payload or {}).get("names") or []
+    added, skipped, errors = 0, 0, []
+    async with httpx.AsyncClient() as c:
+        for name in names:
+            d = audio_svc._resolve_paper_dir(name)
+            src = next(iter(d.glob("*_ko_audio.md")), None) if d else None
+            if not d or not src:
+                errors.append(name)
+                continue
+            r = await c.post(f"{settings.TTS_SERVICE_URL}/queue",
+                             json={"paper_dir": str(d), "src_md": str(src)}, timeout=30)
+            if r.is_success and r.json().get("queued"):
+                added += 1
+            else:
+                skipped += 1                              # 이미 큐/완료 등
+    return {"added": added, "skipped": skipped, "errors": errors}
 
 
 @router.get("/papers/{name:path}/audio/manifest")

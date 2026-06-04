@@ -2,7 +2,9 @@ import os, threading
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.job import run_job, GPU_LOCK_PATH, Preempted
-from app.sweep import sweep_loop, run_sweep, should_run, _IDLE_STAGES
+from app.sweep import sweep_loop, run_sweep, should_run, _IDLE_STAGES, _sha256_file
+from app.queue import AudioQueue
+from app.manifest import is_fresh_for_hls
 
 app = FastAPI()
 _jobs = {}          # paper_dir -> {"stage","done","total","error"}
@@ -88,6 +90,23 @@ def health():
     return {"ok": True}
 
 
+@app.get("/system")
+def system():
+    """GPU util(%) + VRAM used/total(GB). viewer /api/system 이 프록시해 상단바 칩에 표시.
+    nvidia-smi 부재/오류 시 null (viewer 가 gpu=null 로 graceful 처리)."""
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+             "--format=csv,noheader,nounits"], timeout=5).decode().strip().splitlines()[0]
+        util, used_mib, total_mib = [p.strip() for p in out.split(",")]
+        return {"util": int(float(util)),
+                "vram_used_gb": round(int(float(used_mib)) / 1024, 1),
+                "vram_total_gb": round(int(float(total_mib)) / 1024, 1)}
+    except Exception as e:
+        return {"util": None, "vram_used_gb": None, "vram_total_gb": None, "error": str(e)}
+
+
 _OUTPUTS_ROOT = os.environ.get("PF_OUTPUTS_ROOT", "/data/outputs")
 
 
@@ -145,6 +164,74 @@ def start_sweep(max_papers: int = 100):
 def sweep_status():
     with _sweep_ctl_lock:
         return dict(_sweep_state)
+
+
+# ── 관리형 오디오 큐 (등록 큐 UX 미러) ─────────────────────────────────────────
+def _audio_fresh(paper_dir, src_md):
+    """재시작 복구용: 이 논문에 이미 fresh HLS 오디오가 있으면 True (find_candidate 와 동일 산식)."""
+    base = os.path.basename(src_md)[: -len("_ko_audio.md")]
+    man_path = os.path.join(paper_dir, f"{base}_ko_audio.manifest.json")
+    if not os.path.exists(man_path) or not os.path.exists(src_md):
+        return False
+    try:
+        m = json.load(open(man_path, encoding="utf-8"))
+        return is_fresh_for_hls(m, _sha256_file(src_md))
+    except Exception:
+        return False
+
+
+_AUDIO_QUEUE_PATH = os.path.join(_OUTPUTS_ROOT, ".audio_queue.json")
+audio_queue = AudioQueue(
+    path=_AUDIO_QUEUE_PATH,
+    process_one=_process_candidate,
+    should_start=lambda: should_run(_jobs_snapshot(), GPU_LOCK_PATH),
+    is_fresh=_audio_fresh,
+)
+
+
+def _queue_progress(items):
+    """processing 항목에 현재 _jobs 진행률(done/total)을 덧붙인다(큐 탭 진행바용)."""
+    jobs = _jobs_snapshot()
+    for it in items:
+        j = jobs.get(it["paper_dir"])
+        it["done"] = j.get("done", 0) if j else 0
+        it["total"] = j.get("total", 0) if j else 0
+    return items
+
+
+@app.post("/queue")
+def queue_add(req: JobReq):
+    if not (_under_root(req.paper_dir) and _under_root(req.src_md)):
+        raise HTTPException(400, "path outside outputs root")
+    if not os.path.exists(req.src_md):
+        raise HTTPException(404, "src_md not found")
+    queued = audio_queue.enqueue(req.paper_dir, req.src_md)
+    return {"queued": queued}
+
+
+@app.delete("/queue")
+def queue_remove(paper_dir: str):
+    if not audio_queue.remove(paper_dir):
+        raise HTTPException(409, "not pending (processing or absent)")
+    return {"removed": True}
+
+
+@app.get("/queue")
+def queue_status():
+    snap = audio_queue.snapshot()
+    snap["items"] = _queue_progress(snap["items"])
+    return snap
+
+
+@app.post("/queue/enqueue-missing")
+def queue_enqueue_missing(max: int = 100):
+    added = audio_queue.enqueue_missing(_OUTPUTS_ROOT, max_n=max)
+    return {"added": added}
+
+
+@app.on_event("startup")
+def _start_queue_worker():
+    threading.Thread(target=audio_queue.run_worker, daemon=True).start()
 
 
 # ── 유휴 사전생성 sweep (기본 OFF) ─────────────────────────────────────────────

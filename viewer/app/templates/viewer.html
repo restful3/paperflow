@@ -577,6 +577,18 @@
             :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
             x-text="`원본 ${originalProgress}% · Easy ${easyProgress}%`"></span>
 
+      <!-- System resource chip (inline; wide screens only to avoid crowding the reading bar) -->
+      <div x-data="systemStat()" x-init="init()" x-show="show" x-cloak
+           class="hidden xl:flex items-center gap-1.5 text-[11px] font-medium shrink-0 px-2 py-0.5 rounded-full border select-none"
+           :class="$store.darkMode.on ? 'text-gray-400 border-gray-600' : 'text-gray-500 border-gray-300'"
+           :title="'CPU ' + s.cpu_percent + '% · RAM ' + s.ram_used_gb + '/' + s.ram_total_gb + 'GB' + (s.gpu ? ' · GPU ' + s.gpu.util + '% · VRAM ' + s.gpu.vram_used_gb + '/' + s.gpu.vram_total_gb + 'GB' : ' · GPU 정보 없음')">
+        <span><span class="opacity-60">CPU</span> <span x-text="s.cpu_percent + '%'"></span></span>
+        <span class="opacity-30">·</span>
+        <span><span class="opacity-60">RAM</span> <span x-text="s.ram_percent + '%'"></span></span>
+        <template x-if="s.gpu"><span class="flex items-center gap-1.5"><span class="opacity-30">·</span><span><span class="opacity-60">GPU</span> <span x-text="s.gpu.util + '%'"></span></span></span></template>
+        <template x-if="!s.gpu"><span class="flex items-center gap-1.5"><span class="opacity-30">·</span><span class="opacity-50">GPU —</span></span></template>
+      </div>
+
       <!-- Dark mode toggle -->
       <button @click="$store.darkMode.toggle()"
               class="p-1.5 rounded-lg transition shrink-0"
@@ -811,9 +823,21 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
               </svg>
-              <span x-text="'오디오 준비 중 — 준비되면 ▶ 눌러 재생 (' + audioJobStage + (audioJobTotal ? ' ' + audioJobDone + '/' + audioJobTotal : '') + ')'"></span>
+              <span x-text="'오디오 생성 중 — 완료되면 자동으로 ▶ 플레이어가 뜹니다 (' + audioJobStage + (audioJobTotal ? ' ' + audioJobDone + '/' + audioJobTotal : '') + ')'"></span>
             </span>
           </template>
+        </div>
+
+        <!-- 미생성 안내 + 큐 생성 버튼 — 듣기 모드지만 합성 mp3가 아직 없을 때. 듣기≠합성: 텍스트는 아이폰 내장 TTS로 읽고, 합성 mp3는 명시적으로 큐에 추가. -->
+        <div x-show="audioMode && !audioReady && !audioGenerating"
+             class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm flex-wrap"
+             :class="$store.darkMode.on ? 'bg-gray-800 text-gray-200' : 'bg-sky-50 text-gray-700 border-b border-sky-200'">
+          <span class="opacity-80">합성 오디오 없음 — 아래 낭독 텍스트를 아이폰 내장 TTS로 들으세요.</span>
+          <button @click="generateAudio()"
+                  class="ml-auto px-2.5 py-1 rounded font-medium transition flex items-center gap-1"
+                  :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/40 hover:bg-sky-900/60' : 'text-sky-700 bg-sky-100 hover:bg-sky-200'">
+            🎧 오디오 생성 (큐에 추가)
+          </button>
         </div>
 
         <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
@@ -1326,6 +1350,7 @@ function viewerApp() {
     _streamPollTimer: null,     // pollStreamingManifest 단일 타이머(다중 루프 방지)
     _jobPolling: false,         // pollAudioJob 중복 시작 방지
     _jobPollTimer: null,        // pollAudioJob 예약 타이머(detach 시 취소)
+    _genPollTimer: null,        // pollAudioGen(큐 인지 생성 폴러) 타이머(detach 시 취소)
     _mp3ErrN: 0, _mp3ErrAt: 0,  // mp3 로드 에러 백오프(누락 파일 무한 재로드 방지)
     audioFragStart: {},         // HLS 세그먼트 idx → 실제 미디어 시작초(frag.start). 하이라이트/seek를
                                 // 매니페스트 clock(wav+pad, AAC 와 drift) 대신 실제 재생 타임라인에 정렬.
@@ -2126,14 +2151,44 @@ function viewerApp() {
       }
     },
     async generateAudio() {
-      if (this.audioManifest) {              // 잔여(부분/실패) 산출물 정리 후 새로 생성("다시 생성")
-        await apiFetch('/api/papers/' + name + '/audio', { method: 'DELETE' });
-        this.audioManifest = null;
-      }
-      this.audioGenerating = true; this.audioJobStage = 'segmenting';
+      // 듣기≠합성: 듣기 토글은 합성을 안 한다. 합성은 여기서 명시적으로 '관리형 큐'에 추가한다.
+      // (foreground 즉시합성/라이브 스트리밍 제거 — 큐가 단일 GPU로 순차 처리, 완료되면 mp3 재생)
+      const resp = await apiFetch('/api/audio/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!resp || !resp.ok) { showToast('큐 추가 실패', 'error'); return; }
+      const d = await resp.json();
+      showToast(d.queued ? '오디오 생성 큐에 추가됨 — 완료되면 ▶ 플레이어가 준비됩니다' : '이미 큐에 있습니다');
+      this.audioGenerating = true; this.audioJobStage = '대기 중';
       this.audioJobDone = 0; this.audioJobTotal = 0;
-      await apiFetch('/api/papers/' + name + '/audio/jobs', { method: 'POST' });
-      this.pollAudioJob();
+      this.pollAudioGen();
+    },
+    async pollAudioGen() {
+      // 큐 인지 폴러: 완성되면 재생 mount, 아니면 큐 상태(대기/생성 중)를 반영. detach 시 취소.
+      if (this._genPollTimer) { clearTimeout(this._genPollTimer); this._genPollTimer = null; }
+      if (!this.audioMode || !this.audioGenerating) return;
+      try {
+        const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
+        if (r && r.ok) {
+          const m = await r.json();
+          if (m.status === 'complete') { this.audioGenerating = false; await this.loadAudio(); return; }
+          if (m.status === 'failed' || m.status === 'failed_partial') {
+            this.audioGenerating = false; showToast('오디오 생성 실패 — 다시 시도하세요', 'error'); return;
+          }
+        }
+        const qs = await apiFetch('/api/audio/queue');           // 큐에서 내 항목 상태/진행률
+        if (qs && qs.ok) {
+          const q = await qs.json();
+          const me = (q.items || []).find(it => it.name === name);
+          if (me) {
+            this.audioJobStage = me.status === 'processing' ? '생성 중' : '대기 중';
+            this.audioJobDone = me.done || 0; this.audioJobTotal = me.total || 0;
+          }
+        }
+      } catch (e) { /* 네트워크 오류 → 재시도 */ }
+      this._genPollTimer = setTimeout(() => this.pollAudioGen(), 2500);
     },
     async deleteAudio() {
       if (!confirm('생성된 오디오를 삭제할까요? 다시 들으려면 재생성해야 합니다.')) return;
@@ -2189,6 +2244,7 @@ function viewerApp() {
     detachAudio() {                           // 듣기 off / 재생가능→생성중 전환 시 깨끗이 분리
       this.stopStreamPoll();
       if (this._jobPollTimer) { clearTimeout(this._jobPollTimer); this._jobPollTimer = null; }
+      if (this._genPollTimer) { clearTimeout(this._genPollTimer); this._genPollTimer = null; }
       this._jobPolling = false;
       this.clearStallTimer();
       if (this.audioHls) { try { this.audioHls.destroy(); } catch (e) {} this.audioHls = null; }

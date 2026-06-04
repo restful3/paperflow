@@ -90,6 +90,16 @@
           </div>
         </div>
         <div class="flex items-center space-x-3">
+          <!-- System resource chip (inline in nav — no overlap) -->
+          <div x-data="systemStat()" x-init="init()" x-show="show" x-cloak
+               class="hidden lg:flex items-center gap-1.5 text-[11px] font-medium text-white/75 px-2 py-1 rounded-full bg-white/10 border border-white/15 select-none"
+               :title="'CPU ' + s.cpu_percent + '% · RAM ' + s.ram_used_gb + '/' + s.ram_total_gb + 'GB' + (s.gpu ? ' · GPU ' + s.gpu.util + '% · VRAM ' + s.gpu.vram_used_gb + '/' + s.gpu.vram_total_gb + 'GB' : ' · GPU 정보 없음')">
+            <span><span class="opacity-60">CPU</span> <span x-text="s.cpu_percent + '%'"></span></span>
+            <span class="opacity-30">·</span>
+            <span><span class="opacity-60">RAM</span> <span x-text="s.ram_percent + '%'"></span></span>
+            <template x-if="s.gpu"><span class="flex items-center gap-1.5"><span class="opacity-30">·</span><span><span class="opacity-60">GPU</span> <span x-text="s.gpu.util + '%'"></span></span><span class="opacity-30">·</span><span><span class="opacity-60">VRAM</span> <span x-text="s.gpu.vram_used_gb + '/' + s.gpu.vram_total_gb + 'G'"></span></span></span></template>
+            <template x-if="!s.gpu"><span class="flex items-center gap-1.5"><span class="opacity-30">·</span><span class="opacity-50">GPU —</span></span></template>
+          </div>
           <span class="text-white/80 text-sm hidden sm:inline" x-text="'Hello, {{ username }}'"></span>
           <!-- Language toggle (EN/KO) -->
           <button @click="$store.lang.toggle()"
@@ -236,9 +246,24 @@
                   x-text="queueCount + activeUploads"></span>
             <span x-show="isProcessing" class="ml-1 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block"></span>
           </button>
+          <!-- Audio Queue tab -->
+          <button @click="switchTab('audio')" role="tab" :aria-selected="tab === 'audio'"
+                  class="flex-1 sm:flex-none px-4 py-2.5 sm:px-5 sm:py-2 text-sm sm:text-xs rounded-t-lg border border-b-0 -mb-px ml-0.5 transition-colors"
+                  :class="tab === 'audio'
+                    ? ($store.darkMode.on ? 'bg-gray-800 border-gray-600 text-sky-400 font-semibold z-10' : 'bg-white border-gray-200 text-sky-700 font-semibold z-10')
+                    : ($store.darkMode.on ? 'bg-transparent border-transparent text-gray-500 hover:text-gray-300' : 'bg-transparent border-transparent text-gray-500 hover:text-gray-700')">
+            🎧 오디오 큐
+            <span x-show="audioQueuePending > 0" x-cloak
+                  class="ml-1.5 text-xs sm:text-[10px] rounded-full px-2 sm:px-1.5 py-0.5 font-medium"
+                  :class="audioQueueActive
+                    ? ($store.darkMode.on ? 'bg-sky-900/50 text-sky-300' : 'bg-sky-100 text-sky-600')
+                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
+                  x-text="audioQueuePending"></span>
+            <span x-show="audioQueueActive" class="ml-1 w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse inline-block"></span>
+          </button>
         </div>
         <!-- Sort/View controls (hidden on Upload tab) -->
-        <div x-show="tab !== 'upload'" class="hidden sm:flex items-center gap-3 mb-2">
+        <div x-show="tab !== 'upload' && tab !== 'audio'" class="hidden sm:flex items-center gap-3 mb-2">
           <!-- Sort controls -->
           <div class="flex items-center space-x-1">
             <select x-model="sortBy"
@@ -307,7 +332,7 @@
       </div>
     </div>
     <!-- Mobile sort/view controls (below tabs, hidden on Upload) -->
-    <div x-show="tab !== 'upload'" class="flex sm:hidden items-center justify-between gap-3 px-4 py-2 border-l border-r transition-colors"
+    <div x-show="tab !== 'upload' && tab !== 'audio'" class="flex sm:hidden items-center justify-between gap-3 px-4 py-2 border-l border-r transition-colors"
          :class="$store.darkMode.on ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'">
       <div class="flex items-center space-x-1">
         <select x-model="sortBy"
@@ -375,7 +400,7 @@
       <div class="p-4 sm:p-5">
 
     <!-- Papers content (Unread / Archived tabs) -->
-    <div x-show="tab !== 'upload'">
+    <div x-show="tab !== 'upload' && tab !== 'audio'">
 
     <!-- Loading -->
     <div x-show="loading" class="flex justify-center py-12">
@@ -538,6 +563,19 @@
                 </svg>
               </button>
               <!-- Enrich button removed by request -->
+              <!-- Audio generate (add to queue) -->
+              <button @click.prevent="enqueueAudio(paper)" :disabled="!paper.formats.md_ko_audio"
+                      class="p-3 sm:p-1.5 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      :class="paper.formats.md_ko_audio
+                        ? (paper.formats.audio_mp3
+                            ? ($store.darkMode.on ? 'text-emerald-400 hover:bg-gray-700' : 'text-emerald-600 hover:bg-emerald-50')
+                            : ($store.darkMode.on ? 'text-gray-500 hover:text-sky-400 hover:bg-gray-700' : 'text-gray-400 hover:text-sky-600 hover:bg-sky-50'))
+                        : ($store.darkMode.on ? 'text-gray-600' : 'text-gray-300')"
+                      :title="paper.formats.md_ko_audio ? (paper.formats.audio_mp3 ? 'MP3 있음 — 다시 생성(큐 추가)' : '오디오 생성 (큐에 추가)') : '낭독본 없음 — 먼저 낭독판 생성 필요'">
+                <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"/>
+                </svg>
+              </button>
               <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
                       class="p-3 sm:p-1.5 rounded-lg transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400 hover:bg-gray-700' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'"
@@ -757,6 +795,19 @@
                 </svg>
               </button>
               <!-- Enrich button removed by request -->
+              <!-- Audio generate (add to queue) -->
+              <button @click.prevent="enqueueAudio(paper)" :disabled="!paper.formats.md_ko_audio"
+                      class="hidden sm:inline-flex p-2.5 sm:p-1 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      :class="paper.formats.md_ko_audio
+                        ? (paper.formats.audio_mp3
+                            ? ($store.darkMode.on ? 'text-emerald-400' : 'text-emerald-600')
+                            : ($store.darkMode.on ? 'text-gray-500 hover:text-sky-400' : 'text-gray-400 hover:text-sky-600'))
+                        : ($store.darkMode.on ? 'text-gray-600' : 'text-gray-300')"
+                      :title="paper.formats.md_ko_audio ? (paper.formats.audio_mp3 ? 'MP3 있음 — 다시 생성(큐 추가)' : '오디오 생성 (큐에 추가)') : '낭독본 없음 — 먼저 낭독판 생성 필요'">
+                <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"/>
+                </svg>
+              </button>
               <button x-show="tab === 'unread'" @click.prevent="confirmAction('archive', paper)"
                       class="hidden sm:inline-flex p-2.5 sm:p-1 rounded transition"
                       :class="$store.darkMode.on ? 'text-gray-500 hover:text-emerald-400' : 'text-gray-400 hover:text-emerald-600'"
@@ -1055,10 +1106,203 @@
 
     </div><!-- /Upload tab content -->
 
+    <!-- ══ Audio Queue tab content ══ -->
+    <div x-show="tab === 'audio'" x-cloak class="space-y-5">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 class="text-sm font-semibold" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'">🎧 오디오 생성 큐</h3>
+          <p class="text-xs mt-0.5" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">
+            낭독본(_ko_audio.md)을 MP3로 합성하는 대기열. 단일 GPU라 순차 처리됩니다.</p>
+        </div>
+        <button @click="openCandidates()"
+                class="px-3 py-2 rounded-lg text-xs font-medium transition border shrink-0"
+                :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/30 hover:bg-sky-900/50 border-sky-800' : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200'">
+          오디오 없는 논문 선택…
+        </button>
+      </div>
+
+      <!-- Processing (current) -->
+      <div x-show="audioProcessing.length > 0" class="space-y-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">생성 중</h4>
+        <template x-for="it in audioProcessing" :key="it.paper_dir">
+          <div class="rounded-lg border px-3 py-2.5 transition-colors"
+               :class="$store.darkMode.on ? 'border-sky-800 bg-sky-900/10' : 'border-sky-200 bg-sky-50'">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-sm font-medium truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'" x-text="it.name"></span>
+              <span class="text-xs shrink-0 ml-2 flex items-center gap-1.5" :class="$store.darkMode.on ? 'text-sky-400' : 'text-sky-600'">
+                <span x-text="audioStageLabel(it.stage)"></span>
+                <span x-show="it.total > 0" x-text="it.done + '/' + it.total + ' (' + Math.round(it.done / it.total * 100) + '%)'"></span>
+              </span>
+            </div>
+            <div class="w-full rounded-full h-2 overflow-hidden" :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
+              <div class="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-500"
+                   :style="'width: ' + (it.total > 0 ? Math.round(it.done / it.total * 100) : 0) + '%'"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Pending -->
+      <div x-show="audioPending.length > 0" class="space-y-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">대기</h4>
+        <template x-for="(it, i) in audioPending" :key="it.paper_dir">
+          <div class="rounded-lg border px-3 py-2 flex items-center justify-between transition-colors"
+               :class="$store.darkMode.on ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'">
+            <span class="text-sm truncate" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'">
+              <span class="text-xs mr-1.5" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="'#' + (i + 1)"></span>
+              <span x-text="it.name"></span>
+            </span>
+            <button @click="removeAudioQueue(it.name)" class="p-1 rounded transition shrink-0 ml-2"
+                    :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'"
+                    title="큐에서 제거">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Failed -->
+      <div x-show="audioFailed.length > 0" class="space-y-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-red-500">실패</h4>
+        <template x-for="it in audioFailed" :key="it.paper_dir">
+          <div class="rounded-lg border px-3 py-2 flex items-center justify-between transition-colors"
+               :class="$store.darkMode.on ? 'border-red-900/50 bg-red-900/10' : 'border-red-200 bg-red-50'">
+            <span class="text-sm truncate" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'" x-text="it.name"></span>
+            <button @click="retryAudioQueue(it)" class="px-2 py-1 rounded text-[11px] font-medium transition shrink-0 ml-2"
+                    :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/30 hover:bg-sky-900/50 border border-sky-800' : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200'"
+                    title="재시도">재시도</button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Done -->
+      <div x-show="audioDone.length > 0" class="space-y-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">완료</h4>
+        <template x-for="it in audioDone" :key="it.paper_dir">
+          <div class="rounded-lg border px-3 py-2 flex items-center gap-2 transition-colors"
+               :class="$store.darkMode.on ? 'border-gray-700 bg-gray-800/40' : 'border-gray-200 bg-white'">
+            <svg class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span class="text-sm truncate" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'" x-text="it.name"></span>
+          </div>
+        </template>
+      </div>
+
+      <!-- Activity log (client-side timeline) -->
+      <div class="border-t pt-3 transition-colors" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+        <button @click="audioLogOpen = !audioLogOpen"
+                class="flex items-center space-x-2 text-xs transition mb-2"
+                :class="$store.darkMode.on ? 'text-gray-400 hover:text-sky-400' : 'text-gray-500 hover:text-sky-600'">
+          <svg class="w-3.5 h-3.5 transition-transform" :class="audioLogOpen && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+          <span>활동 로그</span>
+          <span x-show="audioLog.length" class="opacity-60" x-text="'(' + audioLog.length + ')'"></span>
+          <span x-show="audioQueueActive" class="ml-1 w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+        </button>
+        <div x-show="audioLogOpen" x-collapse x-cloak>
+          <div class="bg-gray-900 rounded-lg p-3 max-h-60 overflow-y-auto text-[11px] leading-relaxed font-mono text-gray-300 whitespace-pre-wrap">
+            <template x-if="audioLog.length === 0"><span class="text-gray-500">아직 활동이 없습니다.</span></template>
+            <template x-for="(e, i) in audioLog" :key="i">
+              <div><span class="text-gray-500" x-text="e.t"></span> <span x-text="e.msg"></span></div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div x-show="audioQueue.length === 0" class="text-center py-8">
+        <div class="text-4xl mb-3 opacity-40">🎧</div>
+        <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">큐가 비어 있습니다. 카드/뷰어의 🎧 버튼으로 개별 논문을 생성하세요.</p>
+      </div>
+
+    </div><!-- /Audio Queue tab content -->
+
       </div><!-- /p-4 sm:p-5 -->
     </div><!-- /Content panel -->
 
   </main>
+
+  <!-- Audio candidate selection modal (오디오 없는 논문 선택) -->
+  <div x-cloak x-show="candModal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50" @click="candModal.show = false"></div>
+    <div class="relative rounded-2xl shadow-xl w-full max-w-2xl flex flex-col transition-colors"
+         style="max-height: 85vh"
+         :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-white'"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+        <h3 class="text-base font-semibold" :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'">
+          🎧 오디오 없는 논문 선택
+          <span class="text-xs font-normal ml-1" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+                x-text="'(' + candFiltered.length + '편)'"></span>
+        </h3>
+        <button @click="candModal.show = false" class="p-1 rounded transition" :class="$store.darkMode.on ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-400 hover:bg-gray-100'">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <!-- Toolbar -->
+      <div class="flex items-center gap-2 flex-wrap px-5 py-2.5 text-xs border-b" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+        <label class="flex items-center gap-1.5 cursor-pointer font-medium" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'">
+          <input type="checkbox" :checked="candAllVisibleSelected" @change="toggleSelectAllVisible()">
+          전체 선택
+        </label>
+        <span class="text-gray-400">·</span>
+        <select x-model="candDocType" class="rounded px-1.5 py-1 bg-transparent border" :class="$store.darkMode.on ? 'border-gray-600 text-gray-200' : 'border-gray-300 text-gray-700'">
+          <option value="">모든 종류</option>
+          <template x-for="t in candDocTypes" :key="t"><option :value="t" x-text="t"></option></template>
+        </select>
+        <select x-model="candSort" class="rounded px-1.5 py-1 bg-transparent border" :class="$store.darkMode.on ? 'border-gray-600 text-gray-200' : 'border-gray-300 text-gray-700'">
+          <option value="date">추가일</option>
+          <option value="last_read">최근 읽음</option>
+          <option value="title">제목</option>
+        </select>
+        <button @click="candOrder = (candOrder === 'desc' ? 'asc' : 'desc')" class="px-1.5 py-1 rounded border" :class="$store.darkMode.on ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-600'"
+                x-text="candOrder === 'desc' ? '↓' : '↑'"></button>
+      </div>
+      <!-- List -->
+      <div class="flex-1 overflow-y-auto px-2 py-2">
+        <template x-if="candModal.loading">
+          <p class="text-center text-sm py-10" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">불러오는 중…</p>
+        </template>
+        <template x-if="!candModal.loading && candFiltered.length === 0">
+          <p class="text-center text-sm py-10" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">오디오 없는 논문이 없습니다. 🎉</p>
+        </template>
+        <template x-for="p in candFiltered" :key="p.name">
+          <label class="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition"
+                 :class="candSelected[p.name] ? ($store.darkMode.on ? 'bg-sky-900/20' : 'bg-sky-50') : ($store.darkMode.on ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')">
+            <input type="checkbox" :checked="!!candSelected[p.name]" @change="toggleCand(p.name)" class="shrink-0">
+            <span class="flex-1 min-w-0">
+              <span class="block text-sm truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-700'"
+                    x-text="($store.lang.ko && p.title_ko) ? p.title_ko : (p.title || p.name)"></span>
+              <span class="flex items-center gap-2 mt-0.5 text-[11px]" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">
+                <span x-show="p.doc_type && p.doc_type !== 'other'" x-text="p.doc_type"
+                      class="px-1.5 rounded" :class="$store.darkMode.on ? 'bg-violet-900/30 text-violet-300' : 'bg-violet-50 text-violet-600'"></span>
+                <span x-text="'추가 ' + (formatDate(p.extracted_at || p.added_at) || '-')"></span>
+                <span x-show="p.last_read_at" x-text="'· 읽음 ' + formatDate(p.last_read_at)"></span>
+              </span>
+            </span>
+          </label>
+        </template>
+      </div>
+      <!-- Footer -->
+      <div class="flex items-center justify-between px-5 py-3 border-t" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+        <span class="text-sm font-medium" :class="$store.darkMode.on ? 'text-sky-300' : 'text-sky-600'" x-text="'선택 ' + candSelectedCount + '편'"></span>
+        <div class="flex gap-2">
+          <button @click="candModal.show = false" class="px-4 py-2 rounded-lg text-sm font-medium transition" :class="$store.darkMode.on ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'">취소</button>
+          <button @click="submitCandidates()" :disabled="candSelectedCount === 0 || candSubmitting"
+                  class="px-4 py-2 rounded-lg text-sm font-medium text-white transition bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  x-text="candSubmitting ? '추가 중…' : '큐에 추가'"></button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Confirmation modal -->
   <div x-cloak x-show="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1172,6 +1416,51 @@ function papersApp() {
     statusInterval: null,
     logInterval: null,
     _lastProcessingStage: null,
+
+    // Audio generation queue state
+    audioQueue: [],
+    audioQueueCurrent: null,
+    audioLog: [],
+    audioLogOpen: false,
+    _audioPrev: {},
+
+    // Audio candidate selection modal
+    candModal: { show: false, loading: false },
+    candidates: [],
+    candSelected: {},
+    candSort: 'date',
+    candOrder: 'desc',
+    candDocType: '',
+    candSubmitting: false,
+
+    get candDocTypes() {
+      return [...new Set(this.candidates.map(p => p.doc_type).filter(t => t && t !== 'other'))].sort();
+    },
+    get candFiltered() {
+      let list = this.candidates.slice();
+      if (this.candDocType) list = list.filter(p => p.doc_type === this.candDocType);
+      const dir = this.candOrder === 'desc' ? -1 : 1;
+      list.sort((a, b) => {
+        let va, vb;
+        if (this.candSort === 'title') { va = (a.title_ko || a.title || a.name).toLowerCase(); vb = (b.title_ko || b.title || b.name).toLowerCase(); }
+        else if (this.candSort === 'last_read') { va = a.last_read_at || ''; vb = b.last_read_at || ''; }
+        else { va = a.extracted_at || a.added_at || ''; vb = b.extracted_at || b.added_at || ''; }
+        return va < vb ? -dir : va > vb ? dir : 0;
+      });
+      return list;
+    },
+    get candSelectedCount() { return Object.values(this.candSelected).filter(Boolean).length; },
+    get candAllVisibleSelected() {
+      const vis = this.candFiltered;
+      return vis.length > 0 && vis.every(p => this.candSelected[p.name]);
+    },
+
+    get audioProcessing() { return this.audioQueue.filter(it => it.status === 'processing'); },
+    get audioPending() { return this.audioQueue.filter(it => it.status === 'pending'); },
+    get audioDone() { return this.audioQueue.filter(it => it.status === 'done'); },
+    get audioFailed() { return this.audioQueue.filter(it => it.status === 'failed'); },
+    get audioQueuePending() { return this.audioProcessing.length + this.audioPending.length; },
+    get audioQueueActive() { return this.audioProcessing.length > 0; },
 
     get queueCount() { return this.processingFiles.length; },
     get isProcessing() {
@@ -1348,9 +1637,9 @@ function papersApp() {
     },
 
     async init() {
-      await Promise.all([this.fetchPapers(), this.fetchStats(), this.refreshStatus(), this.fetchProgress(), this.fetchRatings()]);
-      // Background polling for processing status (badge updates across all tabs)
-      this.statusInterval = setInterval(() => this.refreshStatus(), 5000);
+      await Promise.all([this.fetchPapers(), this.fetchStats(), this.refreshStatus(), this.fetchProgress(), this.fetchRatings(), this.refreshAudioQueue()]);
+      // Background polling for processing + audio queue status (badge updates across all tabs)
+      this.statusInterval = setInterval(() => { this.refreshStatus(); this.refreshAudioQueue(); }, 5000);
       // Track column count for responsive card layout
       window.addEventListener('resize', () => {
         this.colCount = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1;
@@ -1435,6 +1724,8 @@ function papersApp() {
       this.tab = t;
       if (t === 'upload') {
         this.refreshStatus();
+      } else if (t === 'audio') {
+        this.refreshAudioQueue();
       } else {
         await this.fetchPapers();
       }
@@ -1745,6 +2036,136 @@ function papersApp() {
           this._lastProcessingStage = currentStage;
         }
       } catch (e) { /* silent */ }
+    },
+
+    audioStageLabel(stage) {
+      return ({ segmenting: '분할 중', synthesizing: '합성 중', stitching: '병합 중',
+                validating: '검증 중', ready: '완료', none: '대기' })[stage] || '생성 중';
+    },
+    _pushAudioLog(msg) {
+      const d = new Date();
+      const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+      this.audioLog.unshift({ t, msg });
+      if (this.audioLog.length > 80) this.audioLog.length = 80;
+    },
+    _audioLogDiff(items) {
+      const prev = this._audioPrev, cur = {};
+      for (const it of items) {
+        cur[it.name] = it.status;
+        if (prev[it.name] !== it.status) {
+          if (it.status === 'processing') this._pushAudioLog('▶ 시작: ' + it.name);
+          else if (it.status === 'done') this._pushAudioLog('✓ 완료: ' + it.name);
+          else if (it.status === 'failed') this._pushAudioLog('✗ 실패: ' + it.name);
+          else if (it.status === 'pending' && prev[it.name] === undefined) this._pushAudioLog('＋ 추가: ' + it.name);
+        }
+      }
+      this._audioPrev = cur;
+    },
+    async refreshAudioQueue() {
+      try {
+        const resp = await apiFetch('/api/audio/queue');
+        if (!resp || !resp.ok) return;
+        const data = await resp.json();
+        const items = data.items || [];
+        // 진행 중 항목의 단계(stage) 라벨 취득 — 보통 1개(단일 GPU 순차)
+        for (const it of items) {
+          if (it.status === 'processing') {
+            try {
+              const sr = await apiFetch('/api/papers/' + encodeURIComponent(it.name) + '/audio/status');
+              if (sr && sr.ok) {
+                const st = await sr.json();
+                it.stage = st.stage;
+                if (st.total) { it.done = st.done; it.total = st.total; }
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
+        this._audioLogDiff(items);
+        this.audioQueue = items;
+        this.audioQueueCurrent = data.current || null;
+      } catch (e) { /* silent */ }
+    },
+
+    async openCandidates() {
+      this.candModal.show = true; this.candModal.loading = true;
+      this.candidates = []; this.candSelected = {};
+      try {
+        const resp = await apiFetch('/api/audio/candidates');
+        if (resp && resp.ok) this.candidates = await resp.json();
+      } catch (e) { showToast('후보 목록 로드 실패', 'error'); }
+      finally { this.candModal.loading = false; }
+    },
+    toggleCand(name) {
+      this.candSelected = { ...this.candSelected, [name]: !this.candSelected[name] };
+    },
+    toggleSelectAllVisible() {
+      const vis = this.candFiltered;
+      const allSel = vis.length > 0 && vis.every(p => this.candSelected[p.name]);
+      const next = { ...this.candSelected };
+      vis.forEach(p => { next[p.name] = !allSel; });
+      this.candSelected = next;
+    },
+    async submitCandidates() {
+      const names = Object.keys(this.candSelected).filter(n => this.candSelected[n]);
+      if (!names.length) return;
+      this.candSubmitting = true;
+      try {
+        const resp = await apiFetch('/api/audio/queue/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ names }),
+        });
+        if (resp && resp.ok) {
+          const d = await resp.json();
+          showToast((d.added || 0) + '편 큐에 추가됨' + (d.skipped ? ' (' + d.skipped + '편 중복/완료 제외)' : ''));
+          this.candModal.show = false;
+          this.refreshAudioQueue();
+        } else { showToast('큐 추가 실패', 'error'); }
+      } catch (e) { showToast('큐 추가 실패', 'error'); }
+      finally { this.candSubmitting = false; }
+    },
+
+    async enqueueAudio(paper) {
+      if (!paper.formats || !paper.formats.md_ko_audio) {
+        showToast('낭독본(_ko_audio.md)이 먼저 필요합니다', 'error');
+        return;
+      }
+      try {
+        const resp = await apiFetch('/api/audio/queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: paper.name }),
+        });
+        if (resp && resp.ok) {
+          const data = await resp.json();
+          showToast(data.queued ? '오디오 큐에 추가됨' : '이미 큐에 있습니다');
+          this.refreshAudioQueue();
+        } else if (resp) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || '큐 추가 실패', 'error');
+        }
+      } catch (e) {
+        showToast('큐 추가 실패', 'error');
+      }
+    },
+
+    async removeAudioQueue(name) {
+      try {
+        const resp = await apiFetch('/api/audio/queue/' + encodeURIComponent(name), { method: 'DELETE' });
+        if (resp && resp.ok) {
+          this.refreshAudioQueue();
+        } else if (resp) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || '제거 실패 (생성 중일 수 있음)', 'error');
+        }
+      } catch (e) {
+        showToast('제거 실패', 'error');
+      }
+    },
+
+    async retryAudioQueue(it) {
+      // 실패 항목 재시도 = 같은 논문을 다시 enqueue (서버가 중복 무시/재투입 처리)
+      await this.enqueueAudio({ name: it.name, formats: { md_ko_audio: true } });
     },
 
     toggleLog() {
