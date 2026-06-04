@@ -21,6 +21,11 @@ from app.sweep import find_candidate
 _PENDING, _PROCESSING, _DONE, _FAILED = "pending", "processing", "done", "failed"
 _ACTIVE = (_PENDING, _PROCESSING)   # 중복 enqueue / enqueue-missing skip 판정 대상
 
+# processing 으로 죽은 채 발견된 항목을 몇 번까지 자동 재큐할지. 도달하면 failed.
+# 일시적 재시작(컨테이너 재빌드 등) 1회는 흡수하되, 반복 크래시(예: 특정 청크
+# CUDA assert)는 무한 재시도 대신 failed 로 표면화한다.
+MAX_RECOVER_ATTEMPTS = 2
+
 
 class AudioQueue:
     def __init__(self, path, process_one, should_start, is_fresh=None):
@@ -56,13 +61,27 @@ class AudioQueue:
         os.replace(tmp, self.path)
 
     def _recover(self):
-        """부팅 시 중단된 processing 항목을 pending 으로(이미 fresh 면 done) 되돌린다."""
+        """부팅 시 중단된 processing 항목을 정리한다.
+
+        - 이미 fresh 오디오가 있으면 done.
+        - 아니면 중단(크래시/재시작) 1회로 보고 interrupts 를 올린 뒤, 예산 미만이면
+          pending 재큐, 예산 도달이면 failed(무한 재시도 차단 + 실패 표면화).
+        """
         changed = False
         with self._lock:
             for it in self._items:
-                if it.get("status") == _PROCESSING:
-                    it["status"] = _DONE if self.is_fresh(it["paper_dir"], it["src_md"]) else _PENDING
-                    changed = True
+                if it.get("status") != _PROCESSING:
+                    continue
+                if self.is_fresh(it["paper_dir"], it["src_md"]):
+                    it["status"] = _DONE
+                else:
+                    it["interrupts"] = it.get("interrupts", 0) + 1
+                    if it["interrupts"] >= MAX_RECOVER_ATTEMPTS:
+                        it["status"] = _FAILED
+                        it["error"] = "이전 실행이 반복 중단됨(크래시/재시작 추정). 재시도하세요."
+                    else:
+                        it["status"] = _PENDING
+                changed = True
             if changed:
                 self._save()
 
@@ -130,7 +149,16 @@ class AudioQueue:
             item["error"] = None
             self._save()
             paper_dir, src_md = item["paper_dir"], item["src_md"]
-        stage = self.process_one(paper_dir, src_md)
+        # process_one 이 예외(예: CUDA assert RuntimeError)를 던지면 워커가 죽고
+        # 항목이 processing 에 박히는 대신, 해당 항목만 failed 로 마킹하고 계속 진행.
+        try:
+            stage = self.process_one(paper_dir, src_md)
+        except Exception as e:
+            with self._lock:
+                item["status"] = _FAILED
+                item["error"] = f"처리 중 예외: {type(e).__name__}: {str(e)[:200]}"
+                self._save()
+            return True
         with self._lock:
             if stage == "ready":
                 item["status"] = _DONE

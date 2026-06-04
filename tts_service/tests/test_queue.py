@@ -141,3 +141,63 @@ def test_snapshot_reports_current_processing(tmp_path):
     q.enqueue("/out/A", "/out/A/A_ko_audio.md")
     q._items[0]["status"] = "processing"
     assert q.snapshot()["current"] == "/out/A"
+
+
+# ── 하드닝: 크래시/예외 시 failed 마킹 ────────────────────────────────────────
+
+
+def test_drain_marks_failed_and_records_error_on_exception(tmp_path):
+    """process_one 이 예외를 던지면(예: CUDA assert RuntimeError) 항목을 failed 로
+    마킹하고 error 를 기록한다. drain_once 는 예외를 전파하지 않는다(True 반환)."""
+    def boom(pd, sm):
+        raise RuntimeError("CUDA error: device-side assert triggered")
+    q = _q(tmp_path, process_one=boom)
+    q.enqueue("/out/A", "/out/A/A_ko_audio.md")
+    assert q.drain_once() is True                 # 예외 전파 안 함
+    it = q.snapshot()["items"][0]
+    assert it["status"] == "failed"
+    assert it["error"] and "RuntimeError" in it["error"]
+
+
+def test_drain_continues_to_next_item_after_exception(tmp_path):
+    """한 항목이 예외로 죽어도 워커는 살아남아 다음 pending 을 계속 처리한다."""
+    def po(pd, sm):
+        if pd == "/out/A":
+            raise RuntimeError("boom")
+        return "ready"
+    q = _q(tmp_path, process_one=po)
+    q.enqueue("/out/A", "/out/A/A_ko_audio.md")
+    q.enqueue("/out/B", "/out/B/B_ko_audio.md")
+    assert q.drain_once() is True                 # A 예외 → failed
+    assert q.drain_once() is True                 # B 정상 처리
+    by = {it["paper_dir"]: it["status"] for it in q.snapshot()["items"]}
+    assert by == {"/out/A": "failed", "/out/B": "done"}
+
+
+def test_recover_requeues_first_interruption_with_counter(tmp_path):
+    """중단된 processing 항목의 첫 복구는 pending 재큐 + interrupts=1
+    (일시적 재시작 1회 흡수)."""
+    path = str(tmp_path / ".audio_queue.json")
+    json.dump([{"paper_dir": "/out/A", "src_md": "/out/A/A_ko_audio.md",
+                "status": "processing", "enqueued_at": "t", "error": None}],
+              open(path, "w"))
+    q = AudioQueue(path=path, process_one=lambda pd, sm: "ready",
+                   should_start=lambda: True, is_fresh=lambda pd, sm: False)
+    it = q.snapshot()["items"][0]
+    assert it["status"] == "pending"
+    assert it["interrupts"] == 1
+
+
+def test_recover_marks_failed_after_repeated_interruption(tmp_path):
+    """이미 한 번 중단(interrupts=1)된 항목이 또 processing 으로 죽어 있으면
+    재큐 대신 failed 로 마킹(무한 재시도 차단) + error 기록."""
+    path = str(tmp_path / ".audio_queue.json")
+    json.dump([{"paper_dir": "/out/A", "src_md": "/out/A/A_ko_audio.md",
+                "status": "processing", "enqueued_at": "t", "error": None,
+                "interrupts": 1}],
+              open(path, "w"))
+    q = AudioQueue(path=path, process_one=lambda pd, sm: "ready",
+                   should_start=lambda: True, is_fresh=lambda pd, sm: False)
+    it = q.snapshot()["items"][0]
+    assert it["status"] == "failed"
+    assert it["error"] and ("중단" in it["error"] or "재시도" in it["error"])
