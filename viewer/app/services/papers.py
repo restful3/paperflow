@@ -13,6 +13,14 @@ from urllib.request import Request, urlopen
 
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
+# Real-browser User-Agent for direct fetch/download. Many publishers and CDNs
+# serve bot challenges (or 403) to non-browser UAs; the headless path already
+# uses this string, so the direct-download path uses the same one for parity.
+_BROWSER_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
 
 def _slugify_name(text: str, max_len: int = 80) -> str:
     s = (text or "untitled").strip().lower()
@@ -23,7 +31,7 @@ def _slugify_name(text: str, max_len: int = 80) -> str:
 
 
 def _fetch_url_html(url: str, timeout: int = 20) -> tuple[str, str]:
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
+    req = Request(url, headers={"User-Agent": _BROWSER_UA})
     with urlopen(req, timeout=timeout) as resp:
         final_url = resp.geturl()
         data = resp.read()
@@ -58,8 +66,54 @@ def _looks_like_pdf_bytes(data: bytes) -> bool:
     return bool(data and data[:5] == b"%PDF-")
 
 
+def _capture_rejection_reason(pdf_text: str) -> str | None:
+    """Classify a headless print-to-pdf capture's first-page text.
+
+    Returns a Korean rejection message when the capture is a bot/auth page,
+    an error page, or footer/banner-only; returns None when it looks like a
+    real article body.
+
+    Footer keywords (terms/copyright/privacy) only trigger rejection on SHORT
+    captures — a full-length article that merely contains those words in its
+    footer must pass.
+    """
+    norm = re.sub(r"\s+", " ", (pdf_text or "")).strip().lower()
+    norm_nospace = norm.replace(" ", "")
+
+    def _hit(keywords: list[str]) -> int:
+        return sum(1 for k in keywords if k in norm or k.replace(" ", "") in norm_nospace)
+
+    bot_keywords = [
+        "verifying the device", "verifying your browser", "verify you are human",
+        "checking your browser", "device verification",
+        "captcha", "are you a robot", "access denied",
+        "just a moment", "ddos protection", "cloudflare",
+        "attention required", "unusual traffic",
+    ]
+    if _hit(bot_keywords) >= 1 and len(norm) < 600:
+        return "사이트 봇 감지/인증 페이지가 캡처되었습니다. 이 사이트는 자동 가져오기를 지원하지 않습니다."
+
+    error_keywords = [
+        "page not found", "404 not found", "403 forbidden",
+        "no longer exists", "has been moved", "page you requested",
+        "this page isn't available", "page doesn't exist",
+        "requested url was not found", "server error", "500 internal",
+    ]
+    if _hit(error_keywords) >= 1 and len(norm) < 600:
+        return "에러 페이지(404/403 등)가 캡처되었습니다. URL이 유효한지 확인해 주세요."
+
+    weak_keywords = ["privacy policy", "notify me", "owner login", "terms", "copyright", "built for agents"]
+    weak_hit = sum(1 for k in weak_keywords if k in norm)
+    # Reject only truly-empty captures, or footer-heavy captures that are ALSO
+    # short — never a long real article that happens to mention footer words.
+    if len(norm) < 220 or (weak_hit >= 3 and len(norm) < 600):
+        return "원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요."
+
+    return None
+
+
 def _download_pdf(url: str, timeout: int = 30) -> bytes:
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
+    req = Request(url, headers={"User-Agent": _BROWSER_UA})
     with urlopen(req, timeout=timeout) as resp:
         content_type = (resp.headers.get("Content-Type") or "").lower()
         data = resp.read()
@@ -130,6 +184,10 @@ _SITE_PDF_TRANSFORMERS: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"arxiv\.org/abs/(\d{4}\.\d{4,5})(v\d+)?"), _arxiv_transform),
     # arXiv old-style: arxiv.org/abs/hep-ph/0512345
     (re.compile(r"arxiv\.org/abs/([-a-z]+/\d{7})(v\d+)?"), _arxiv_old_transform),
+    # arXiv "Download PDF" link (no extension): arxiv.org/pdf/2301.12345 or .../2301.12345v2
+    (re.compile(r"arxiv\.org/pdf/(\d{4}\.\d{4,5})(v\d+)?(?:\.pdf)?"), _arxiv_transform),
+    # arXiv old-style PDF link: arxiv.org/pdf/hep-ph/0512345
+    (re.compile(r"arxiv\.org/pdf/([-a-z]+/\d{7})(v\d+)?(?:\.pdf)?"), _arxiv_old_transform),
     # ar5iv (HTML rendering of arXiv papers)
     (re.compile(r"ar5iv\.labs\.arxiv\.org/html/(\d{4}\.\d{4,5})"), _ar5iv_transform),
     # OpenReview: openreview.net/forum?id=xxx
@@ -161,7 +219,7 @@ def _resolve_doi_redirect(url: str, timeout: int = 15) -> str | None:
     if "doi.org/" not in url:
         return None
     try:
-        req = Request(url, headers={"User-Agent": "Mozilla/5.0 (PaperFlow URL Import)"})
+        req = Request(url, headers={"User-Agent": _BROWSER_UA})
         with urlopen(req, timeout=timeout) as resp:
             final = resp.geturl()
         if final and final != url:
@@ -354,8 +412,12 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
     # G. strict_pdf_required check (based on effective_url, not original doi.org)
     effective_host = (urlparse(effective_url).netloc or "").lower()
     if any(d in effective_host for d in _STRICT_PDF_DOMAINS):
-        detail = f" direct-download failed ({'; '.join(download_errors[:2])})" if download_errors else ""
-        raise ValueError("해당 논문 링크는 원문 PDF 직접 다운로드가 필요하지만 실패했습니다." + detail)
+        detail = f" (direct-download failed: {'; '.join(download_errors[:2])})" if download_errors else ""
+        raise ValueError(
+            "원문 PDF를 가져오지 못했습니다. 유료(페이월) 논문이거나 사이트가 자동 접근을 "
+            "차단했을 수 있습니다. 페이지에서 PDF 직접 링크(arXiv는 /pdf/ 링크)를 복사해 "
+            "다시 시도해 주세요." + detail
+        )
 
     # H. Headless browser print-to-pdf fallback (non-academic/general pages)
     browser_bin = (
@@ -382,8 +444,9 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
             "--disable-dev-shm-usage",
             "--disable-blink-features=AutomationControlled",
             "--virtual-time-budget=30000",
-            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "--no-pdf-header-footer",
+            "--hide-scrollbars",
+            f"--user-agent={_BROWSER_UA}",
             f"--print-to-pdf={tmp_path}",
             url,
         ]
@@ -402,33 +465,9 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
             raise ValueError("PDF 생성 결과가 비정상입니다.")
 
         pdf_text = _extract_pdf_text_simple(tmp_path, max_pages=2)
-        norm = re.sub(r"\s+", " ", (pdf_text or "")).strip().lower()
-        bot_keywords = [
-            "verifying the device", "verifying your browser", "verify you are human",
-            "checking your browser", "device verification",
-            "captcha", "are you a robot", "access denied",
-            "just a moment", "ddos protection", "cloudflare",
-            "attention required", "unusual traffic",
-        ]
-        norm_nospace = norm.replace(" ", "")
-        bot_hit = sum(1 for k in bot_keywords if k in norm or k.replace(" ", "") in norm_nospace)
-        if bot_hit >= 1 and len(norm) < 600:
-            raise ValueError("사이트 봇 감지/인증 페이지가 캡처되었습니다. 이 사이트는 자동 가져오기를 지원하지 않습니다.")
-
-        error_keywords = [
-            "page not found", "404 not found", "403 forbidden",
-            "no longer exists", "has been moved", "page you requested",
-            "this page isn't available", "page doesn't exist",
-            "requested url was not found", "server error", "500 internal",
-        ]
-        error_hit = sum(1 for k in error_keywords if k in norm or k.replace(" ", "") in norm_nospace)
-        if error_hit >= 1 and len(norm) < 600:
-            raise ValueError("에러 페이지(404/403 등)가 캡처되었습니다. URL이 유효한지 확인해 주세요.")
-
-        weak_keywords = ["privacy policy", "notify me", "owner login", "terms", "copyright", "built for agents"]
-        weak_hit = sum(1 for k in weak_keywords if k in norm)
-        if len(norm) < 220 or weak_hit >= 3:
-            raise ValueError("원문 본문이 아닌 푸터/배너만 인쇄되어 가져오기에 실패했습니다. 원문 페이지를 직접 열어 본문이 보이는 링크인지 확인해 주세요.")
+        reason = _capture_rejection_reason(pdf_text)
+        if reason:
+            raise ValueError(reason)
 
         return tmp_path.read_bytes(), effective_url, "html_fallback"
     finally:
