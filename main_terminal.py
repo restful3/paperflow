@@ -213,6 +213,38 @@ class _SimpleHTMLTextExtractor(HTMLParser):
         return txt.strip()
 
 
+# arXiv(및 유사 학술 사이트) 초록 랜딩페이지 스크랩에만 등장하는 보일러플레이트 표식.
+# URL-first HTML 추출이 /abs/ 같은 랜딩페이지를 긁어 본문 대신 채워 넣는 것을 감지한다.
+_LANDING_PAGE_MARKERS = (
+    "View a PDF of the paper",
+    "Submission history",
+    "arXivLabs",
+    "Connected Papers",
+    "Bibliographic Explorer",
+    "Which authors of this paper are endorsers",
+    "export BibTeX citation",
+)
+
+
+def _looks_like_paper_landing_page(text: str) -> bool:
+    """True iff the markdown looks like a scraped arXiv(-style) abstract landing
+    page rather than the paper body. URL-first HTML 추출 결과가 이에 해당하면
+    거부하고 실제 PDF 변환으로 폴백시킨다(2개 이상 표식일 때만 판정 → 우연한
+    단일 언급 오탐 방지)."""
+    if not text:
+        return False
+    return sum(1 for m in _LANDING_PAGE_MARKERS if m in text) >= 2
+
+
+def _md_is_landing_page(md_path: str) -> bool:
+    """md_path 파일을 읽어 랜딩페이지 스크랩인지 판정(읽기 실패 시 False)."""
+    try:
+        with open(md_path, encoding="utf-8", errors="ignore") as f:
+            return _looks_like_paper_landing_page(f.read())
+    except OSError:
+        return False
+
+
 def _url_to_markdown_html_first(source_url, output_dir, base_name, timeout=20):
     """Try URL-first extraction and write markdown.
 
@@ -3125,6 +3157,13 @@ def process_single_pdf(pdf_path, config, prompt):
                 if pipeline.get("url_html_first", False) and source_url:
                     print_info(f"URL-first enabled, trying HTML extraction: {source_url}")
                     md_path, html_info = _url_to_markdown_html_first(source_url, output_dir, base_name)
+                    if md_path and _md_is_landing_page(md_path):
+                        print_warning("URL-first result looks like an arXiv abstract landing-page scrape — discarding to convert the real PDF instead")
+                        try:
+                            os.remove(md_path)
+                        except OSError:
+                            pass
+                        md_path = None
                     if md_path:
                         used_url_first = True
                         print_success(f"URL-first extraction complete ({html_info.get('chars', 0)} chars): {md_path}")
@@ -3135,6 +3174,13 @@ def process_single_pdf(pdf_path, config, prompt):
                         if pipeline.get("browser_fallback", True):
                             print_info("Trying browser fallback extraction...")
                             md_path, binfo = _url_to_markdown_browser_fallback(source_url, output_dir, base_name)
+                            if md_path and _md_is_landing_page(md_path):
+                                print_warning("Browser fallback result looks like an arXiv abstract landing-page scrape — discarding to convert the real PDF instead")
+                                try:
+                                    os.remove(md_path)
+                                except OSError:
+                                    pass
+                                md_path = None
                             if md_path:
                                 used_url_first = True
                                 print_success(f"Browser fallback extraction complete ({binfo.get('chars', 0)} chars): {md_path}")
