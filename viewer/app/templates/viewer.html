@@ -560,7 +560,18 @@
         Easy
       </button>
 
-      <!-- Audio (listen) toggle moved into the ⋯ More actions menu below -->
+      <!-- Audio (listen) toggle — KO-only, only when an audio version exists -->
+      <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
+              @click="toggleAudio()"
+              class="p-1.5 rounded-lg transition shrink-0"
+              :class="audioMode
+                ? ($store.darkMode.on ? 'text-sky-300 bg-sky-900/40' : 'text-sky-700 bg-sky-50')
+                : ($store.darkMode.on ? 'text-gray-400 hover:text-sky-300 hover:bg-gray-700' : 'text-gray-400 hover:text-sky-600 hover:bg-sky-50')"
+              :title="audioMode ? '원본 보기' : '듣기판으로 전환 (TTS 최적화)'">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6 9l6-3v12l-6-3H4a1 1 0 01-1-1v-2a1 1 0 011-1h2z"/>
+        </svg>
+      </button>
 
       <span class="shrink-0 text-[11px]"
             :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
@@ -653,19 +664,7 @@
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
              style="display: none;">
 
-          <!-- Audio (listen) toggle — KO-only, only when an audio version exists -->
-          <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
-                  @click="toggleAudio(); moreMenuOpen = false"
-                  class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
-                  :class="audioMode
-                    ? ($store.darkMode.on ? 'text-sky-300 bg-sky-900/40 hover:bg-sky-900/60' : 'text-sky-700 bg-sky-50 hover:bg-sky-100')
-                    : ($store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')"
-                  :title="audioMode ? '원본 보기' : '듣기판으로 전환 (TTS 최적화)'">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6 9l6-3v12l-6-3H4a1 1 0 01-1-1v-2a1 1 0 011-1h2z"/>
-            </svg>
-            <span x-text="audioMode ? '원본 보기' : '듣기'">듣기</span>
-          </button>
+          <!-- Audio (listen) toggle moved to the desktop top bar (speaker icon) -->
 
           <!-- Archive (if in outputs) -->
           <template x-if="location === 'outputs'">
@@ -1605,8 +1604,9 @@ function viewerApp() {
       if ((this.hasMdKoExplained || this.hasMdEnExplained) && localStorage.getItem('pf-explained') === 'true') {
         this.explainedMode = true;
       }
-      // Restore audio (listen) mode preference (KO-only; mutually exclusive with Easy)
-      if (this.hasMdKoAudio && localStorage.getItem('pf-audio') === 'true') {
+      // 듣기(audio) 모드는 논문별(per-paper)로만 기억한다 — 다른 논문으로 전이되지 않음.
+      // 마지막으로 그 논문에서 듣기를 켰으면 다시 열 때 복원(KO 전용, Easy 와 상호배타).
+      if (this.hasMdKoAudio && localStorage.getItem('pf-audio-' + name) === 'true') {
         this.audioMode = true;
         this.explainedMode = false;
         if (this.$store?.lang) this.$store.lang.ko = true;
@@ -1628,8 +1628,8 @@ function viewerApp() {
       this.$watch('$store.lang.ko', async (isKo) => {
         // 듣기(audioMode)는 KO 전용 — EN 으로 전환하면 자동 해제(원본 보기로). 버튼이 lang.ko 게이트라 stuck 방지.
         if (!isKo && this.audioMode) {
+          // EN 은 잠깐 보는 것뿐 — per-paper 듣기 의도는 지우지 않는다(reopen 시 복원 유지).
           this.audioMode = false;
-          localStorage.setItem('pf-audio', 'false');
           this.detachAudio();              // 보조 종료 경로도 깨끗이 분리(stale player 방지)
           this.refreshProgressStats();
         }
@@ -1965,7 +1965,7 @@ function viewerApp() {
       this.explainedMode = newMode;
       if (newMode && this.audioMode) { this.audioMode = false; this.detachAudio(); }  // Easy/듣기 상호배타 + 분리
       localStorage.setItem('pf-explained', newMode ? 'true' : 'false');
-      if (newMode) localStorage.setItem('pf-audio', 'false');
+      if (newMode) localStorage.setItem('pf-audio-' + name, 'false');  // Easy 선택 → 이 논문 듣기 off 기록
       this.refreshProgressStats();
       await this.loadMdForCurrentLang();
       if (this.view === 'split') {
@@ -1990,7 +1990,7 @@ function viewerApp() {
         if (this.$store?.lang) this.$store.lang.ko = true;  // audio is KO-only
         this.audioStarted = false; this.audioBuffering = false;  // 재진입 시 준비됨 ▶ 다시 강조
       }
-      localStorage.setItem('pf-audio', newMode ? 'true' : 'false');
+      localStorage.setItem('pf-audio-' + name, newMode ? 'true' : 'false');  // per-paper 기억
       this.refreshProgressStats();
       await this.loadMdForCurrentLang();   // 정적 텍스트 baseline(읽기용)
       if (newMode) {
