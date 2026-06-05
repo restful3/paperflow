@@ -297,6 +297,27 @@
             Split
           </button>
         </template>
+
+        <!-- Easy (explained) toggle — moved out of hamburger to sit beside MD/PDF -->
+        <button x-show="!editMode"
+                @click="toggleExplained()"
+                :disabled="!hasMdKoExplained && !hasMdEnExplained"
+                class="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
+                :class="!(hasMdKoExplained || hasMdEnExplained)
+                  ? ($store.darkMode.on ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-300 cursor-not-allowed')
+                  : explainedMode
+                    ? ($store.darkMode.on ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-700')
+                    : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')"
+                x-text="explainedMode ? 'Original' : 'Easy'">Easy</button>
+
+        <!-- Audio (listen) toggle — moved out of hamburger, KO-only when audio exists -->
+        <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
+                @click="toggleAudio()"
+                class="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
+                :class="audioMode
+                  ? ($store.darkMode.on ? 'bg-sky-900 text-sky-300' : 'bg-sky-100 text-sky-700')
+                  : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')"
+                x-text="audioMode ? '원본' : '듣기'">듣기</button>
       </div>
 
       <!-- Collapsible action menu -->
@@ -324,34 +345,20 @@
         </button>
 
         <!-- Language toggle moved to top row for one-tap mobile access -->
+        <!-- Easy / 듣기 toggles moved out to the view-tab row (beside MD/PDF) -->
 
-        <!-- Easy (explained) Toggle -->
-        <button x-show="!editMode"
-                @click="toggleExplained(); mobileMenuOpen = false"
-                :disabled="!hasMdKoExplained && !hasMdEnExplained"
+        <!-- Audio action (KO narration) — same slot, switches by MP3 presence:
+             no MP3 → queue synthesis; MP3 exists → enter listen mode. -->
+        <button x-show="!editMode && hasMdKoAudio"
+                @click="((hasAudioMp3 || audioReady) ? (!audioMode && toggleAudio()) : generateAudio()); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
-                :class="!(hasMdKoExplained || hasMdEnExplained)
-                  ? ($store.darkMode.on ? 'bg-gray-700 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-300 cursor-not-allowed')
-                  : explainedMode
-                    ? ($store.darkMode.on ? 'bg-amber-900 text-amber-300 hover:bg-amber-800' : 'bg-amber-100 text-amber-700 hover:bg-amber-200')
-                    : ($store.darkMode.on ? 'bg-gray-600 text-gray-100 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50')">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-          </svg>
-          <span x-text="explainedMode ? 'Original' : 'Easy'">Easy</span>
-        </button>
-
-        <!-- Audio (listen) Toggle — KO-only listen-optimized narration -->
-        <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
-                @click="toggleAudio(); mobileMenuOpen = false"
-                class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
-                :class="audioMode
-                    ? ($store.darkMode.on ? 'bg-sky-900 text-sky-300 hover:bg-sky-800' : 'bg-sky-100 text-sky-700 hover:bg-sky-200')
-                    : ($store.darkMode.on ? 'bg-gray-600 text-gray-100 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50')">
+                :class="(hasAudioMp3 || audioReady)
+                  ? ($store.darkMode.on ? 'bg-sky-900 text-sky-300 hover:bg-sky-800' : 'bg-sky-100 text-sky-700 hover:bg-sky-200')
+                  : ($store.darkMode.on ? 'bg-gray-600 text-gray-100 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-50')">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6 9l6-3v12l-6-3H4a1 1 0 01-1-1v-2a1 1 0 011-1h2z"/>
           </svg>
-          <span x-text="audioMode ? '원본' : '듣기'">듣기</span>
+          <span x-text="(hasAudioMp3 || audioReady) ? '오디오 듣기' : '오디오 생성 (큐에 추가)'">오디오 생성 (큐에 추가)</span>
         </button>
 
         <!-- Dark Mode Toggle -->
@@ -826,6 +833,12 @@
               <span x-text="'오디오 생성 중 — 완료되면 자동으로 ▶ 플레이어가 뜹니다 (' + audioJobStage + (audioJobTotal ? ' ' + audioJobDone + '/' + audioJobTotal : '') + ')'"></span>
             </span>
           </template>
+          <!-- 강제 종료: 진행 중(또는 대기) 합성을 중단하고 부분 파일 삭제 -->
+          <button @click="cancelAudio()"
+                  class="ml-auto px-2.5 py-1 rounded font-medium transition flex items-center gap-1 shrink-0"
+                  :class="$store.darkMode.on ? 'text-red-300 bg-red-900/40 hover:bg-red-900/60' : 'text-red-700 bg-red-100 hover:bg-red-200'">
+            ✕ 생성 종료
+          </button>
         </div>
 
         <!-- 미생성 안내 + 큐 생성 버튼 — 듣기 모드지만 합성 mp3가 아직 없을 때. 듣기≠합성: 텍스트는 아이폰 내장 TTS로 읽고, 합성 mp3는 명시적으로 큐에 추가. -->
@@ -833,8 +846,9 @@
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm flex-wrap"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-200' : 'bg-sky-50 text-gray-700 border-b border-sky-200'">
           <span class="opacity-80">합성 오디오 없음 — 아래 낭독 텍스트를 아이폰 내장 TTS로 들으세요.</span>
+          <!-- 모바일에선 햄버거(☰) 메뉴의 '오디오 생성'으로 대체 → 본문 버튼은 데스크톱(md+)에서만 노출 -->
           <button @click="generateAudio()"
-                  class="ml-auto px-2.5 py-1 rounded font-medium transition flex items-center gap-1"
+                  class="ml-auto hidden md:flex px-2.5 py-1 rounded font-medium transition items-center gap-1"
                   :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/40 hover:bg-sky-900/60' : 'text-sky-700 bg-sky-100 hover:bg-sky-200'">
             🎧 오디오 생성 (큐에 추가)
           </button>
@@ -1317,6 +1331,7 @@
 <script>
 function viewerApp() {
   const name = '{{ paper_name_encoded }}';
+  const paperNameRaw = decodeURIComponent(name);   // URL-decoded 폴더명: JSON 바디/이름 비교용(safe_paper_dir 는 정확매칭이라 raw 필요)
 
   return {
     view: '{{ default_view }}',
@@ -1327,6 +1342,7 @@ function viewerApp() {
     hasMdEnExplained: {{ 'true' if has_md_en_explained else 'false' }},
     explainedMode: false,
     hasMdKoAudio: {{ 'true' if has_md_ko_audio else 'false' }},
+    hasAudioMp3: {{ 'true' if has_audio_mp3 else 'false' }},   // 서버 렌더 시점의 합성 mp3 존재 여부(페이지 로드용)
     audioMode: false,
     // ── Live TTS audio player state (Plan 2) ──
     audioManifest: null,        // {chunks:[{id,dom_id,start_sec,end_sec,...}], audio:{duration_sec,file}}
@@ -2156,7 +2172,7 @@ function viewerApp() {
       const resp = await apiFetch('/api/audio/queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name: paperNameRaw }),
       });
       if (!resp || !resp.ok) { showToast('큐 추가 실패', 'error'); return; }
       const d = await resp.json();
@@ -2164,6 +2180,16 @@ function viewerApp() {
       this.audioGenerating = true; this.audioJobStage = '대기 중';
       this.audioJobDone = 0; this.audioJobTotal = 0;
       this.pollAudioGen();
+    },
+    async cancelAudio() {
+      // 진행 중/대기 중 합성 강제 종료 + 부분 파일 삭제. name 은 URL-encoded → path 파라미터로 OK.
+      if (!confirm('진행 중인 오디오 생성을 강제 종료할까요? (생성 중이던 부분 파일은 삭제됩니다)')) return;
+      const resp = await apiFetch('/api/audio/queue/' + name, { method: 'DELETE' });
+      if (!resp || !resp.ok) { showToast('종료 실패', 'error'); return; }
+      this.audioGenerating = false;
+      if (this._genPollTimer) { clearTimeout(this._genPollTimer); this._genPollTimer = null; }
+      const d = await resp.json().catch(() => ({}));
+      showToast(d.cancelling ? '강제 종료 요청됨 — 잠시 후 중단·부분 파일 삭제' : '오디오 생성 취소됨');
     },
     async pollAudioGen() {
       // 큐 인지 폴러: 완성되면 재생 mount, 아니면 큐 상태(대기/생성 중)를 반영. detach 시 취소.
@@ -2181,7 +2207,7 @@ function viewerApp() {
         const qs = await apiFetch('/api/audio/queue');           // 큐에서 내 항목 상태/진행률
         if (qs && qs.ok) {
           const q = await qs.json();
-          const me = (q.items || []).find(it => it.name === name);
+          const me = (q.items || []).find(it => it.name === paperNameRaw);
           if (me) {
             this.audioJobStage = me.status === 'processing' ? '생성 중' : '대기 중';
             this.audioJobDone = me.done || 0; this.audioJobTotal = me.total || 0;

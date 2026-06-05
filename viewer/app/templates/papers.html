@@ -1134,6 +1134,13 @@
               <span class="text-xs shrink-0 ml-2 flex items-center gap-1.5" :class="$store.darkMode.on ? 'text-sky-400' : 'text-sky-600'">
                 <span x-text="audioStageLabel(it.stage)"></span>
                 <span x-show="it.total > 0" x-text="it.done + '/' + it.total + ' (' + Math.round(it.done / it.total * 100) + '%)'"></span>
+                <button @click="cancelAudioQueue(it.name)" class="p-1 rounded transition"
+                        :class="$store.darkMode.on ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'"
+                        title="강제 종료(부분 파일 삭제)">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
               </span>
             </div>
             <div class="w-full rounded-full h-2 overflow-hidden" :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
@@ -1172,9 +1179,18 @@
           <div class="rounded-lg border px-3 py-2 flex items-center justify-between transition-colors"
                :class="$store.darkMode.on ? 'border-red-900/50 bg-red-900/10' : 'border-red-200 bg-red-50'">
             <span class="text-sm truncate" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'" x-text="it.name"></span>
-            <button @click="retryAudioQueue(it)" class="px-2 py-1 rounded text-[11px] font-medium transition shrink-0 ml-2"
-                    :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/30 hover:bg-sky-900/50 border border-sky-800' : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200'"
-                    title="재시도">재시도</button>
+            <div class="flex items-center gap-1 shrink-0 ml-2">
+              <button @click="retryAudioQueue(it)" class="px-2 py-1 rounded text-[11px] font-medium transition"
+                      :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/30 hover:bg-sky-900/50 border border-sky-800' : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200'"
+                      title="재시도">재시도</button>
+              <button @click="removeAudioQueue(it.name)" class="p-1 rounded transition"
+                      :class="$store.darkMode.on ? 'text-gray-500 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'"
+                      title="목록에서 삭제">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </template>
       </div>
@@ -2153,14 +2169,22 @@ function papersApp() {
       try {
         const resp = await apiFetch('/api/audio/queue/' + encodeURIComponent(name), { method: 'DELETE' });
         if (resp && resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          if (data.cancelling) showToast('강제 종료 중 — 곧 목록에서 사라집니다');
           this.refreshAudioQueue();
         } else if (resp) {
           const data = await resp.json().catch(() => ({}));
-          showToast(data.detail || '제거 실패 (생성 중일 수 있음)', 'error');
+          showToast(data.detail || '제거 실패', 'error');
         }
       } catch (e) {
         showToast('제거 실패', 'error');
       }
+    },
+
+    async cancelAudioQueue(name) {
+      // 생성 중 항목 강제 종료 = DELETE(백엔드가 processing 이면 취소 + 부분 파일 삭제 후 큐에서 제거).
+      if (!confirm('생성 중인 오디오를 강제 종료할까요? (생성되던 부분 파일도 삭제됩니다)')) return;
+      await this.removeAudioQueue(name);
     },
 
     async retryAudioQueue(it) {
