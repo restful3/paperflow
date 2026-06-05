@@ -5,7 +5,7 @@ import threading
 
 from app.gpulock import try_acquire
 
-_IDLE_STAGES = ("ready", "failed", "failed_partial", "none")
+_IDLE_STAGES = ("ready", "failed", "failed_partial", "none", "cancelled")
 # daemon sweep 과 on-demand run_sweep 의 후보 처리를 단일화(둘이 동시에 같은/다른 후보를 밀어넣지 않게).
 _SWEEP_RUN_LOCK = threading.Lock()
 

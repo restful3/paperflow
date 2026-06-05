@@ -14,6 +14,10 @@ class Preempted(Exception):
     """foreground 가 다른 논문으로 바뀌어 이 백그라운드 합성이 협조적으로 양보됨."""
 
 
+class Cancelled(Exception):
+    """사용자가 진행 중 합성을 강제 종료 → 부분 산출물 삭제 후 중단(선점과 달리 재큐 안 함)."""
+
+
 def _sha256(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -38,9 +42,10 @@ def _paper_lock(adir, sha12):
     return fh
 
 
-def run_job(paper_dir, src_md, progress_cb=None, device="cuda", is_active=None):
+def run_job(paper_dir, src_md, progress_cb=None, device="cuda", is_active=None, should_cancel=None):
     """src_md = 절대경로 <base>_ko_audio.md. HLS 증분 publish + 완료 mp3. 반환: manifest dict.
-    is_active: 호출 시 False 면 foreground 가 다른 논문으로 바뀐 것 → 청크 사이에서 Preempted 로 양보."""
+    is_active: 호출 시 False 면 foreground 가 다른 논문으로 바뀐 것 → 청크 사이에서 Preempted 로 양보.
+    should_cancel: 호출 시 True 면 사용자가 강제 종료 요청 → 청크 사이에서 Cancelled(부분 산출물 삭제 후 중단)."""
     base = _base(src_md)
     adir = _audio_dir(paper_dir)
     os.makedirs(adir, exist_ok=True)
@@ -91,6 +96,8 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda", is_active=None):
 
         with gpu_lock(GPU_LOCK_PATH, on_wait=_beat):   # converter 와 상호배제(대기 중엔 heartbeat 유지)
             for i, ch in enumerate(chunks):
+                if should_cancel is not None and should_cancel():   # 사용자 강제 종료 → 부분 산출물 삭제 후 중단
+                    raise Cancelled(f"cancelled at chunk {i}/{len(chunks)}")
                 if is_active is not None and not is_active():   # foreground 가 바뀜 → 양보(gpu_lock 해제)
                     raise Preempted(f"yielded at chunk {i}/{len(chunks)}")
                 wf = os.path.join(seg_dir, f".w{i:06d}.wav")
@@ -129,9 +136,30 @@ def run_job(paper_dir, src_md, progress_cb=None, device="cuda", is_active=None):
         if progress_cb:
             progress_cb(stage="ready", done=total, total=total)
         return manifest
+    except Cancelled:
+        _cleanup_partial(adir, base, version, man_path)   # 강제 종료 → 부분 산출물 삭제
+        raise
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
         lock.close()
+
+
+def _cleanup_partial(adir, base, version, man_path):
+    """진행 중 강제 종료 시 부분 산출물 제거: 해당 버전 HLS 디렉터리(.w*.wav/seg_*.ts/stream.m3u8 포함)
+    + 미완료 mp3 + (complete 아닌) manifest. 완료된 다른 버전이 있으면 건드리지 않는다."""
+    hls_dir = os.path.join(adir, f"{base}_ko_audio.{version}")
+    shutil.rmtree(hls_dir, ignore_errors=True)
+    try:
+        os.remove(os.path.join(adir, f"{base}_ko_audio.{version}.mp3"))
+    except OSError:
+        pass
+    try:
+        if os.path.exists(man_path):
+            m = json.load(open(man_path))
+            if m.get("status") != "complete":
+                os.remove(man_path)
+    except Exception:
+        pass
 
 
 def _synth_encode_with_retry(ch, wf, pad, out_ts, device):

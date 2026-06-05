@@ -8,6 +8,8 @@ def test_should_run_gated_by_active_job(tmp_path):
     assert should_run({}, lp) is True
     assert should_run({"/p": {"stage": "synthesizing"}}, lp) is False
     assert should_run({"/p": {"stage": "ready"}}, lp) is True
+    # 강제 종료(cancelled)는 종결 상태 → idle 로 취급(다음 작업이 막히지 않게)
+    assert should_run({"/p": {"stage": "cancelled"}}, lp) is True
 
 
 def test_find_candidate_needs_audio_md_without_fresh_hls(tmp_path):

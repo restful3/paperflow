@@ -1,7 +1,7 @@
 import os, threading
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from app.job import run_job, GPU_LOCK_PATH, Preempted
+from app.job import run_job, GPU_LOCK_PATH, Preempted, Cancelled
 from app.sweep import sweep_loop, run_sweep, should_run, _IDLE_STAGES, _sha256_file
 from app.queue import AudioQueue
 from app.manifest import is_fresh_for_hls
@@ -17,6 +17,26 @@ _foreground_epoch = 0    # foreground /jobs 가 올 때마다 +1. 배치 작업�
 def _is_active(paper_dir):
     with _lock:
         return _current_target == paper_dir
+
+
+# ── 진행 중 강제 종료(cancel) 레지스트리 ──────────────────────────────────────
+_cancel_lock = threading.Lock()
+_cancel_requested = set()       # paper_dir 들 — 합성 루프가 청크 경계에서 확인 → Cancelled
+
+
+def _request_cancel(paper_dir):
+    with _cancel_lock:
+        _cancel_requested.add(paper_dir)
+
+
+def _is_cancel_requested(paper_dir):
+    with _cancel_lock:
+        return paper_dir in _cancel_requested
+
+
+def _clear_cancel(paper_dir):
+    with _cancel_lock:
+        _cancel_requested.discard(paper_dir)
 
 
 def _jobs_snapshot():
@@ -39,13 +59,18 @@ def _worker(paper_dir, src_md, is_active=None):
             _jobs[paper_dir] = {"stage": stage, "done": done, "total": total, "error": None}
     try:
         cb("segmenting", 0, 0)
-        run_job(paper_dir, src_md, progress_cb=cb, is_active=is_active)
+        run_job(paper_dir, src_md, progress_cb=cb, is_active=is_active,
+                should_cancel=lambda: _is_cancel_requested(paper_dir))
         # freshness-skip 경로는 progress_cb("ready")를 부르지 않으므로 완료를 보장한다.
         with _lock:
             st = _jobs.get(paper_dir, {})
             if st.get("stage") not in ("ready", "failed_partial"):
                 _jobs[paper_dir] = {"stage": "ready", "done": st.get("done", 0),
                                     "total": st.get("total", 0), "error": None}
+    except Cancelled:
+        # 사용자 강제 종료 → 부분 산출물은 run_job 이 이미 삭제. 종결 stage=cancelled.
+        with _lock:
+            _jobs[paper_dir] = {"stage": "cancelled", "done": 0, "total": 0, "error": None}
     except Preempted:
         # foreground 가 다른 논문으로 바뀜 → 양보. 비종결 상태(preempted)로 두어 재방문 시 재트리거 가능.
         with _lock:
@@ -57,6 +82,8 @@ def _worker(paper_dir, src_md, is_active=None):
     except Exception as e:
         with _lock:
             _jobs[paper_dir] = {"stage": "failed", "done": 0, "total": 0, "error": str(e)}
+    finally:
+        _clear_cancel(paper_dir)   # 취소 플래그 정리(완료/실패/취소 무관 — 다음 작업에 누수 방지)
     with _lock:
         return _jobs.get(paper_dir, {}).get("stage")   # 종결 stage(배치 run_sweep 가 사용)
 
@@ -126,7 +153,7 @@ def create(req: JobReq):
         _current_target = req.paper_dir              # 최신 요청 = foreground → 다른 논문 작업은 양보
         _foreground_epoch += 1                       # 진행 중 배치가 epoch 변화로 양보하게
         st = _jobs.get(req.paper_dir)
-        if st and st["stage"] not in ("ready", "failed", "failed_partial", "preempted"):
+        if st and st["stage"] not in ("ready", "failed", "failed_partial", "preempted", "cancelled"):
             return {"accepted": False, "status": st}     # 이미 진행 중
         _jobs[req.paper_dir] = {"stage": "segmenting", "done": 0, "total": 0, "error": None}
     threading.Thread(target=_worker, args=(req.paper_dir, req.src_md), daemon=True).start()
@@ -211,8 +238,15 @@ def queue_add(req: JobReq):
 
 @app.delete("/queue")
 def queue_remove(paper_dir: str):
+    # processing(진행 중)이면 강제 종료 요청 → 합성 루프가 청크 경계에서 Cancelled,
+    #   run_job 이 부분 산출물 삭제 후 큐에서 제거된다(즉시 반환, 실제 중단은 다음 청크 경계).
+    # pending 이면 즉시 큐에서 제거. 둘 다 아니면(부재) 409.
+    snap = audio_queue.snapshot()
+    if any(it["paper_dir"] == paper_dir and it["status"] == "processing" for it in snap["items"]):
+        _request_cancel(paper_dir)
+        return {"cancelling": True}
     if not audio_queue.remove(paper_dir):
-        raise HTTPException(409, "not pending (processing or absent)")
+        raise HTTPException(409, "not pending (absent)")
     return {"removed": True}
 
 

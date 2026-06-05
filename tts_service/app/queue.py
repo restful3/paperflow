@@ -6,8 +6,8 @@
 드레인한다는 점만 다르다.
 
 stage→status 매핑(process_one 반환):
-  ready                  → done
-  failed / failed_partial→ failed
+  ready                  → 큐에서 제거(완료 항목은 큐에 남기지 않음)
+  failed / failed_partial→ failed (재시도 가시성 위해 유지)
   preempted              → pending (foreground 선점, 재방문)
   skipped                → pending (claim 실패, 다음 idle 때 재시도)
 """
@@ -61,19 +61,24 @@ class AudioQueue:
         os.replace(tmp, self.path)
 
     def _recover(self):
-        """부팅 시 중단된 processing 항목을 정리한다.
+        """부팅 시 완료/중단 항목을 정리한다.
 
-        - 이미 fresh 오디오가 있으면 done.
+        - 과거 버전이 남긴 done 잔류 항목 + fresh 복구 항목은 큐에서 제거(완료 항목 잔류 방지).
+        - 중단된 processing 항목 중 이미 fresh 오디오가 있으면 제거.
         - 아니면 중단(크래시/재시작) 1회로 보고 interrupts 를 올린 뒤, 예산 미만이면
           pending 재큐, 예산 도달이면 failed(무한 재시도 차단 + 실패 표면화).
         """
         changed = False
         with self._lock:
-            for it in self._items:
+            # 완료(done) 항목은 큐에 남기지 않는다(과거 버전 잔류분 정리).
+            n0 = len(self._items)
+            self._items = [it for it in self._items if it.get("status") != _DONE]
+            changed = len(self._items) != n0
+            for it in list(self._items):
                 if it.get("status") != _PROCESSING:
                     continue
                 if self.is_fresh(it["paper_dir"], it["src_md"]):
-                    it["status"] = _DONE
+                    self._items.remove(it)   # 이미 완료(fresh) → 큐에서 제거
                 else:
                     it["interrupts"] = it.get("interrupts", 0) + 1
                     if it["interrupts"] >= MAX_RECOVER_ATTEMPTS:
@@ -99,14 +104,15 @@ class AudioQueue:
         return True
 
     def remove(self, paper_dir):
-        """pending 항목 제거. processing(진행 중)이면 거부(Phase 1: 완료까지 대기)."""
+        """비-processing 항목(pending/failed) 제거 — 사용자가 대기·실패 항목을 정리.
+        processing(진행 중)이면 거부(강제 종료는 cancel 경로). 제거 건이 있으면 True."""
         with self._lock:
             for it in self._items:
                 if it["paper_dir"] == paper_dir and it["status"] == _PROCESSING:
                     return False
             before = len(self._items)
             self._items = [it for it in self._items
-                           if not (it["paper_dir"] == paper_dir and it["status"] == _PENDING)]
+                           if not (it["paper_dir"] == paper_dir and it["status"] != _PROCESSING)]
             if len(self._items) != before:
                 self._save()
                 return True
@@ -160,8 +166,9 @@ class AudioQueue:
                 self._save()
             return True
         with self._lock:
-            if stage == "ready":
-                item["status"] = _DONE
+            if stage in ("ready", "cancelled"):
+                # 완료/강제종료 항목은 큐에서 제거(재큐·failed 로 남기지 않음).
+                self._items = [it for it in self._items if it is not item]
             elif stage in ("preempted", "skipped"):
                 item["status"] = _PENDING        # 선점/claim실패 → 재방문
             else:                                 # failed / failed_partial / 기타

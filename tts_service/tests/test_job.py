@@ -86,6 +86,34 @@ def test_run_job_preempts_between_chunks(monkeypatch, tmp_path):
     assert len(segs) == 1
 
 
+def test_run_job_cancel_deletes_partials(monkeypatch, tmp_path):
+    # 강제 종료: should_cancel 이 True 가 되면 청크 사이에서 Cancelled 로 중단하고
+    # 부분 산출물(버전 HLS 디렉터리 + 세그먼트 + 미완료 manifest)을 모두 삭제한다.
+    import pytest
+    paper = tmp_path / "P"; paper.mkdir()
+    md = paper / "P_ko_audio.md"
+    md.write_text("# 제목\n\n첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다.\n", encoding="utf-8")
+    monkeypatch.setattr(job, "GPU_LOCK_PATH", str(tmp_path / ".gpu.lock"))
+    monkeypatch.setattr(job, "synth_chunk", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(job, "_chunk_ok", lambda *a, **k: True)
+
+    def fake_encode(wf, pad, out_ts, **k):
+        open(out_ts, "wb").close()
+        return 1.0
+    monkeypatch.setattr(job, "encode_segment", fake_encode)
+
+    calls = {"n": 0}
+    def should_cancel():
+        calls["n"] += 1
+        return calls["n"] > 1           # 첫 청크 합성 후 취소 요청
+
+    with pytest.raises(job.Cancelled):
+        job.run_job(str(paper), str(md), should_cancel=should_cancel)
+    # 부분 산출물 전부 삭제: 세그먼트 없음 + manifest 없음
+    assert [p for p in tmp_path.rglob("seg_*.ts")] == []
+    assert not (paper / "audio" / "P_ko_audio.manifest.json").exists()
+
+
 def test_run_job_refreshes_heartbeat_during_lock_wait(monkeypatch, tmp_path):
     # M2: run_job must hand gpu_lock an on_wait callback that re-publishes the manifest
     # heartbeat, so a long lock wait (converter busy) keeps a healthy job from being marked

@@ -31,11 +31,20 @@ def test_remove_pending_ok_processing_refused(tmp_path):
     q.enqueue("/out/A", "/out/A/A_ko_audio.md")
     assert q.remove("/out/A") is True
     assert q.snapshot()["items"] == []
-    # processing 상태는 제거 거부(Phase 1: 완료까지 대기)
+    # processing 상태는 제거 거부(취소는 별도 경로)
     q.enqueue("/out/B", "/out/B/B_ko_audio.md")
     q._items[0]["status"] = "processing"
     assert q.remove("/out/B") is False
     assert len(q.snapshot()["items"]) == 1
+
+
+def test_remove_failed_item(tmp_path):
+    # 실패(failed) 항목도 목록에서 삭제할 수 있어야 한다(사용자가 정리 가능).
+    q = _q(tmp_path)
+    q.enqueue("/out/A", "/out/A/A_ko_audio.md")
+    q._items[0]["status"] = "failed"
+    assert q.remove("/out/A") is True
+    assert q.snapshot()["items"] == []
 
 
 def test_drain_processes_pending_sequentially(tmp_path):
@@ -47,8 +56,8 @@ def test_drain_processes_pending_sequentially(tmp_path):
     assert q.drain_once() is True
     assert q.drain_once() is False        # 더 처리할 pending 없음
     assert order == ["/out/A", "/out/B"]
-    statuses = [it["status"] for it in q.snapshot()["items"]]
-    assert statuses == ["done", "done"]
+    # 완료(ready) 항목은 큐에서 자동 제거 → 큐가 비어야 함
+    assert q.snapshot()["items"] == []
 
 
 def test_drain_idle_gated(tmp_path):
@@ -96,7 +105,7 @@ def test_persistence_reload(tmp_path):
 
 
 def test_restart_recovery_processing_to_pending(tmp_path):
-    # 중단된 processing 항목은 재부팅 시 pending 으로 되돌린다(이미 fresh 면 done).
+    # 중단된 processing 항목은 재부팅 시 pending 으로 되돌린다(이미 fresh 면 큐에서 제거).
     path = str(tmp_path / ".audio_queue.json")
     json.dump([
         {"paper_dir": "/out/A", "src_md": "/out/A/A_ko_audio.md",
@@ -104,12 +113,45 @@ def test_restart_recovery_processing_to_pending(tmp_path):
         {"paper_dir": "/out/B", "src_md": "/out/B/B_ko_audio.md",
          "status": "processing", "enqueued_at": "t", "error": None},
     ], open(path, "w"))
-    # A 는 이미 fresh 오디오 있음 → done, B 는 없음 → pending
+    # A 는 이미 fresh 오디오 있음 → 완료로 보고 큐에서 제거, B 는 없음 → pending
     q = AudioQueue(path=path, process_one=lambda pd, sm: "ready",
                    should_start=lambda: True,
                    is_fresh=lambda pd, sm: pd == "/out/A")
     by_dir = {it["paper_dir"]: it["status"] for it in q.snapshot()["items"]}
-    assert by_dir == {"/out/A": "done", "/out/B": "pending"}
+    assert by_dir == {"/out/B": "pending"}
+
+
+def test_drain_done_is_removed_from_queue(tmp_path):
+    # 완료(ready) 항목은 done 상태로 남지 않고 큐에서 즉시 제거된다.
+    q = _q(tmp_path)
+    q.enqueue("/out/A", "/out/A/A_ko_audio.md")
+    assert q.drain_once() is True
+    assert q.snapshot()["items"] == []        # 완료 후 큐에서 사라짐
+
+
+def test_drain_cancelled_is_removed_from_queue(tmp_path):
+    # 진행 중 강제 종료(process_one 이 'cancelled' 반환) → 재큐/실패 아니라 큐에서 제거.
+    q = _q(tmp_path, process_one=lambda pd, sm: "cancelled")
+    q.enqueue("/out/A", "/out/A/A_ko_audio.md")
+    assert q.drain_once() is True
+    assert q.snapshot()["items"] == []
+
+
+def test_recover_prunes_legacy_done_items(tmp_path):
+    # 과거 버전이 남긴 done 잔류 항목은 로드/복구 시 정리된다(failed/pending 은 유지).
+    path = str(tmp_path / ".audio_queue.json")
+    json.dump([
+        {"paper_dir": "/out/A", "src_md": "/out/A/A_ko_audio.md",
+         "status": "done", "enqueued_at": "t", "error": None},
+        {"paper_dir": "/out/B", "src_md": "/out/B/B_ko_audio.md",
+         "status": "pending", "enqueued_at": "t", "error": None},
+        {"paper_dir": "/out/C", "src_md": "/out/C/C_ko_audio.md",
+         "status": "failed", "enqueued_at": "t", "error": "x"},
+    ], open(path, "w"))
+    q = AudioQueue(path=path, process_one=lambda pd, sm: "ready",
+                   should_start=lambda: False, is_fresh=lambda pd, sm: False)
+    by_dir = {it["paper_dir"]: it["status"] for it in q.snapshot()["items"]}
+    assert by_dir == {"/out/B": "pending", "/out/C": "failed"}   # done(A) 제거됨
 
 
 def test_enqueue_missing_selects_only_audio_md_without_fresh(tmp_path):
@@ -169,9 +211,9 @@ def test_drain_continues_to_next_item_after_exception(tmp_path):
     q.enqueue("/out/A", "/out/A/A_ko_audio.md")
     q.enqueue("/out/B", "/out/B/B_ko_audio.md")
     assert q.drain_once() is True                 # A 예외 → failed
-    assert q.drain_once() is True                 # B 정상 처리
+    assert q.drain_once() is True                 # B 정상 처리 → 큐에서 제거
     by = {it["paper_dir"]: it["status"] for it in q.snapshot()["items"]}
-    assert by == {"/out/A": "failed", "/out/B": "done"}
+    assert by == {"/out/A": "failed"}             # 완료된 B 는 사라지고 failed 만 남음
 
 
 def test_recover_requeues_first_interruption_with_counter(tmp_path):
