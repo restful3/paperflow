@@ -1210,7 +1210,7 @@ Rules:
 - For categories, infer 2-5 relevant academic categories (e.g., "Machine Learning", "Natural Language Processing", "Computer Vision", "Reinforcement Learning", "Robotics", "Data Mining", "Software Engineering", "Optimization", "Deep Learning").
 - For source_language, detect the PRIMARY language of the paper body. Use ISO 639-1 codes: "en" (English), "ko" (Korean), "zh" (Chinese), "ja" (Japanese), "de" (German), "fr" (French), etc. If the paper has mixed languages (e.g., English body with Korean abstract), use the main body language.
 - Extract the publication year as an integer (e.g., 2025). Look for it in the header, footnotes, copyright notice, or submission date. If not found, use null.
-- For doc_type, classify the document into exactly one of: "paper" (academic/research paper, preprint), "report" (technical report, survey, index report), "blog" (blog post, tutorial, product announcement), "news" (news article, interview), "essay" (opinion piece, editorial, commentary), "other" (anything else). Infer from the writing style, structure, and source.
+- For doc_type, classify the document into exactly one of: "paper" (academic/research paper, preprint), "report" (technical report, survey, index report), "blog" (personal or company blog post, tutorial, product announcement), "news" (breaking/timely news report, interview), "essay" (opinion piece, editorial, commentary), "article" (a feature/informational article professionally published by a magazine, media outlet, or industry/trade publication — e.g., a business magazine feature or long-form explainer — that is NOT an academic paper, a personal blog post, breaking news, or an opinion essay), "other" (anything else). Infer from the writing style, structure, and source.
 - IMPORTANT: All fields above are REQUIRED. You must include every key in your JSON response, especially "doc_type" and "publication_year". Never omit any field.
 - Return ONLY the JSON object. No markdown formatting, no code blocks, no explanation.
 - If you cannot determine a field, use null for strings or [] for arrays. For doc_type, always choose the closest match — never omit it."""
@@ -1309,7 +1309,7 @@ def extract_paper_metadata(md_path, output_dir, config):
                 metadata["abstract_ko"] = None
 
             # Validate doc_type — if missing, ask AI with a lightweight follow-up call
-            valid_doc_types = {"paper", "report", "blog", "news", "essay", "other"}
+            valid_doc_types = {"paper", "report", "blog", "news", "essay", "article", "other"}
             doc_type = metadata.get("doc_type")
             if not isinstance(doc_type, str) or doc_type.lower().strip() not in valid_doc_types:
                 print_warning("doc_type missing from AI response, requesting classification...")
@@ -1319,7 +1319,7 @@ def extract_paper_metadata(md_path, output_dir, config):
                         messages=[
                             {"role": "system", "content": (
                                 'Classify this document into exactly one of: '
-                                '"paper", "report", "blog", "news", "essay", "other". '
+                                '"paper", "report", "blog", "news", "essay", "article", "other". '
                                 'Reply with ONLY the single word.'
                             )},
                             {"role": "user", "content": md_content[:3000]}
