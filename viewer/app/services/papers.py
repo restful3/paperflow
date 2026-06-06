@@ -619,6 +619,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         "md_ko_explained": False,
         "md_en_explained": False,
         "md_ko_audio": False,
+        "md_ko_audio_brief": False,
         "audio_mp3": False,
         "md_lint_report": False,
     }
@@ -633,6 +634,8 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
             files["md_en_explained"] = True
         elif f.name.endswith("_mdlint_report.json"):
             files["md_lint_report"] = True
+        elif f.name.endswith("_ko_audio_brief.md"):
+            files["md_ko_audio_brief"] = True
         elif f.name.endswith("_ko_audio.md"):
             files["md_ko_audio"] = True
         elif f.name.endswith("_ko.md"):
@@ -871,6 +874,8 @@ def _resolve_result(paper_dir: Path, location: str) -> dict:
             formats["md_ko_explained"] = True
         elif f.name.endswith("_explained.md"):
             formats["md_en_explained"] = True
+        elif f.name.endswith("_ko_audio_brief.md"):
+            formats["md_ko_audio_brief"] = True
         elif f.name.endswith("_ko_audio.md"):
             formats["md_ko_audio"] = True
         elif f.name.endswith("_ko.md"):
@@ -1012,6 +1017,10 @@ def get_md_ko_path(name: str) -> Path | None:
             continue
         if fn.endswith("_ko_explained.md"):
             continue
+        if fn.endswith("_ko_audio.md"):
+            continue
+        if fn.endswith("_ko_audio_brief.md"):
+            continue
         if ".bak" in fn or "_backup_" in fn:
             continue
         cands.append(f)
@@ -1034,6 +1043,7 @@ def get_md_en_path(name: str) -> Path | None:
             and not f.name.endswith("_ko.md")
             and not f.name.endswith("_explained.md")
             and not f.name.endswith("_ko_audio.md")
+            and not f.name.endswith("_ko_audio_brief.md")
         ):
             return f
     return None
@@ -1046,6 +1056,17 @@ def get_md_ko_audio_path(name: str) -> Path | None:
         return None
     for f in paper_dir.iterdir():
         if f.name.endswith("_ko_audio.md"):
+            return f
+    return None
+
+
+def get_md_ko_audio_brief_path(name: str) -> Path | None:
+    """Get Korean abridged audio (brief listen) markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    for f in paper_dir.iterdir():
+        if f.name.endswith("_ko_audio_brief.md"):
             return f
     return None
 
@@ -1102,6 +1123,7 @@ def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
                 and not f.name.endswith("_ko.md")
                 and not f.name.endswith("_explained.md")
                 and not f.name.endswith("_ko_audio.md")
+                and not f.name.endswith("_ko_audio_brief.md")
             ):
                 target = f
                 break

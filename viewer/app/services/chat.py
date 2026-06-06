@@ -156,6 +156,9 @@ def get_or_create_chunks(paper_name: str) -> List[ChatChunk]:
 
     for f in paper_dir.iterdir():
         if f.suffix == ".md":
+            if f.name.endswith("_ko_audio_brief.md"):
+                # Abridged listen edition is not a RAG source; skip.
+                continue
             if f.name.endswith("_ko_audio.md"):
                 # Listen-optimized narration is not a RAG source (formulas/tables
                 # are paraphrased away); skip so it isn't mistaken for English.

@@ -47,6 +47,8 @@ def build_zip_stream(
                     continue
                 if lower.endswith("_ko_audio.md") and not include_translation:
                     continue
+                if lower.endswith("_ko_audio_brief.md") and not include_translation:
+                    continue
                 zf.write(entry, arcname=name)
             elif entry.is_dir() and entry.name in ("images",):
                 for img in sorted(entry.iterdir()):
