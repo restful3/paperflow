@@ -1653,6 +1653,35 @@ function viewerApp() {
         if (this.$store?.lang) this.$store.lang.ko = true;
       }
 
+      // 초기 기본 표시: 공들인 산출물을 먼저 보여준다 — 낭독판 > 해설판 > 원문(한글 번역 우선).
+      // 단, 사용자가 직접 만진 선택(이 논문 듣기 on/off, 전역 Easy on/off, 전역 언어)은 존중해 건너뛴다.
+      //  - audioPref/explainedPref: 'true'|'false'|null  (null = 한 번도 안 만짐)
+      //  - allowKo: 영어를 명시적으로 고른 사용자(pf-lang='en')에겐 한국어 전용 산출물(낭독/한글해설)을 자동 적용하지 않음
+      // 자동 적용은 메모리상 모드만 켜고 localStorage 에는 쓰지 않는다 → 사용자가 직접 토글해야만 기억된다.
+      if (!this.audioMode && !this.explainedMode) {
+        const audioPref = localStorage.getItem('pf-audio-' + name);
+        const explainedPref = localStorage.getItem('pf-explained');
+        const langPref = localStorage.getItem('pf-lang');
+        const allowKo = langPref !== 'en';
+        if (this.hasMdKoAudio && audioPref === null && allowKo) {
+          // 1순위 낭독판 (KO 전용)
+          this.audioMode = true;
+          if (this.$store?.lang) this.$store.lang.ko = true;
+        } else if (audioPref === null && explainedPref === null &&
+                   ((allowKo && this.hasMdKoExplained) || (langPref !== 'ko' && this.hasMdEnExplained))) {
+          // 2순위 해설판 — 언어 선택과 맞는 해설이 있을 때(KO 우선). audioPref==='false'면 승격하지 않고 원문으로.
+          this.explainedMode = true;
+          if (allowKo && this.hasMdKoExplained) {
+            if (this.$store?.lang) this.$store.lang.ko = true;
+          } else if (this.$store?.lang) {
+            this.$store.lang.ko = false;   // EN 해설판만 있을 때
+          }
+        } else if (langPref === null && this.hasMdKo && this.$store?.lang) {
+          // 3순위 원문 — 언어 미지정이면 한글 번역(_ko.md) 우선
+          this.$store.lang.ko = true;
+        }
+      }
+
       // Load star rating
       this.loadRating();
 
