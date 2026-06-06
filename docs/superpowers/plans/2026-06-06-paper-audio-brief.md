@@ -169,12 +169,12 @@ def test_mcp_zip_excludes_brief_when_translation_off(tmp_workspace):
         "Zz.md": "# en",
         "Zz_ko_audio_brief.md": "# brief",
     })
-    chunks = b"".join(mcp_zip.build_paper_zip(d, "Zz", include_pdf=False, include_translation=False))
+    chunks = b"".join(mcp_zip.build_zip_stream(
+        d, include_pdf=False, include_translation=False, job_meta={"job_id": "t"}))
     names = zipfile.ZipFile(io.BytesIO(chunks)).namelist()
     assert "Zz_ko_audio_brief.md" not in names
     assert "Zz.md" in names
 ```
-(Adjust `mcp_zip.build_paper_zip(...)` to the module's actual generator signature — grep `def ` in `viewer/app/services/mcp_zip.py`; it returns a chunk iterator.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -312,11 +312,11 @@ def test_api_serves_brief(tmp_workspace):
     _make_paper(tmp_workspace, "Foo", {"Foo_ko_audio_brief.md": "# brief body"})
     client = TestClient(create_app())
     token = auth.create_token("u")
-    r = client.get("/api/papers/Foo/md-ko-audio-brief", cookies={"access_token": token})
+    r = client.get("/api/papers/Foo/md-ko-audio-brief", cookies={"paperflow_token": token})
     assert r.status_code == 200
     assert "brief body" in r.text
 ```
-(If the existing audio tests use a different auth/client helper, mirror that helper instead — check `test_audio_api.py`.)
+(Auth cookie name is `paperflow_token` — `auth.COOKIE` in `viewer/app/auth.py`. If `create_token` has a different arity, mirror `test_audio_api.py`'s client/login helper.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -373,11 +373,13 @@ function decide(p) {
   if (hasMdKoAudio && audioPref === 'true') { audioMode = true; explainedMode = false; langKo = true; }
   if (!audioMode && !explainedMode) {
     const allowKo = langPref !== 'en';
-    if (hasMdKoAudio && audioPref === null && allowKo) { audioMode = true; langKo = true; }
+    const hasAudioText = hasMdKoAudio || hasMdKoAudioBrief;
+    if (hasAudioText && audioPref === null && allowKo) { audioMode = true; langKo = true; }
     else if (audioPref === null && explainedPref === null && allowKo && hasMdKoExplained) { explainedMode = true; langKo = true; }
     else if (langPref === null && hasMdKo) { langKo = true; }
   }
-  const audioUsesBrief = audioMode && hasMdKoAudioBrief && !audioFull;
+  // brief when brief exists AND (not switched to 전체 OR no full audio to switch to)
+  const audioUsesBrief = audioMode && hasMdKoAudioBrief && (!audioFull || !hasMdKoAudio);
   if (audioMode) return audioUsesBrief ? 'AUDIO_BRIEF' : 'AUDIO_FULL';
   if (explainedMode) return 'EXPLAINED';
   return langKo ? (hasMdKo ? 'ORIG(ko)' : 'ORIG(en)') : (hasMdEn ? 'ORIG(en)' : 'ORIG(ko)');
@@ -391,6 +393,8 @@ T('audioFull switch -> full', decide({...FULL, audioFull:true}), 'AUDIO_FULL');
 T('no audio at all -> explained', decide({hasMdKoExplained:true, hasMdKo:true}), 'EXPLAINED');
 T('lang=en + brief -> orig en (no force ko)', decide({...FULL, langPref:'en'}), 'ORIG(en)');
 T('explicit audio on -> brief (default sub-mode)', decide({...FULL, audioPref:'true'}), 'AUDIO_BRIEF');
+T('brief-only fresh -> brief', decide({hasMdKoAudioBrief:true, hasMdKo:true}), 'AUDIO_BRIEF');
+T('brief-only + audioFull -> still brief (no full to switch)', decide({hasMdKoAudioBrief:true, hasMdKo:true, audioFull:true}), 'AUDIO_BRIEF');
 console.log(process.exitCode ? 'FAIL' : 'ALL PASS');
 ```
 
@@ -426,10 +430,12 @@ don't silently fall through when `hasMdKoAudio` is false (Codex review):
       return this.hasMdKoAudio || this.hasMdKoAudioBrief;
     },
     get audioUsesBrief() {
-      return this.audioMode && this.hasMdKoAudioBrief && !this.audioFull;
+      // brief when: brief exists AND (not switched to 전체 OR no full audio exists)
+      return this.audioMode && this.hasMdKoAudioBrief && (!this.audioFull || !this.hasMdKoAudio);
     },
     get activeAudioApiType() {
-      return this.audioUsesBrief ? 'md-ko-audio-brief' : 'md-ko-audio';
+      // fall back to brief whenever full audio is absent (brief-only papers)
+      return (this.audioUsesBrief || !this.hasMdKoAudio) ? 'md-ko-audio-brief' : 'md-ko-audio';
     },
 ```
 `activeMdContent` (~1416) audio branch:
@@ -451,10 +457,11 @@ Also widen the 듣기 button gate and `toggleAudio()` guard from `hasMdKoAudio` 
 
 - [ ] **Step 5: Load brief content + gate the mp3 player to full-only**
 
-`loadMdForCurrentLang()` audio branch (~1984):
+`loadMdForCurrentLang()` audio branch (~1984) — gate on `hasAudioText` (not
+`hasMdKoAudio`) and load whichever the resolver picks, so brief-only papers load:
 ```javascript
-      if (this.audioMode && this.hasMdKoAudio) {
-        if (this.audioUsesBrief) {
+      if (this.audioMode && this.hasAudioText) {
+        if (this.activeAudioApiType === 'md-ko-audio-brief') {
           if (!this.mdKoAudioBriefContent) await this.loadMarkdown('md-ko-audio-brief');
         } else {
           if (!this.mdKoAudioContent) await this.loadMarkdown('md-ko-audio');
@@ -495,16 +502,27 @@ Restore `audioFull` per-paper in the restore block (~1650, beside the pf-audio r
 ```javascript
       this.audioFull = (localStorage.getItem('pf-audiofull-' + name) === 'true');
 ```
+And in the first-view auto-default block (~1666), widen the audio trigger from
+`hasMdKoAudio` to `hasAudioText` so a brief-only paper still auto-defaults to 듣기:
+```javascript
+        if (this.hasAudioText && audioPref === null && allowKo) {
+          this.audioMode = true;
+          if (this.$store?.lang) this.$store.lang.ko = true;
+        } else if (...) {   // explained / original branches unchanged
+```
+Also widen the per-paper audio *restore* line (~1650) the same way:
+`if (this.hasAudioText && localStorage.getItem('pf-audio-' + name) === 'true') { ... }`.
 Add the toggle button beside the 듣기 button (both rows ~314 and ~571). Example for ~314:
 ```html
-        <button x-show="!editMode && audioMode && hasMdKoAudioBrief"
+        <button x-show="!editMode && audioMode && hasMdKoAudioBrief && hasMdKoAudio"
                 @click="toggleAudioFull()"
                 class="ml-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors"
                 :class="$store.darkMode.on ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-600'"
                 x-text="audioFull ? '요약' : '전체'"
                 :title="audioFull ? '축약본으로' : '전체 낭독판으로'"></button>
 ```
-(Mirror the same button at the second 듣기 location ~571.)
+(The `&& hasMdKoAudio` guard hides the switch on brief-only papers — there's no full
+narration to switch to. Mirror the same button at the second 듣기 location ~571.)
 
 - [ ] **Step 6b: Template-presence regression test (ties the truth-table to viewer.html)**
 
@@ -519,17 +537,25 @@ TPL = Path(__file__).resolve().parents[1] / "app" / "templates" / "viewer.html"
 def test_brief_wiring_present_in_template():
     html = TPL.read_text(encoding="utf-8")
     for token in [
-        "hasMdKoAudioBrief",
-        "mdKoAudioBriefContent",
-        "audioUsesBrief",
-        "activeAudioApiType",
-        "toggleAudioFull",
-        "/md-ko-audio-brief",
-        "'md-ko-audio-brief'",
-        "!audioUsesBrief",   # mp3 player gated to full-only
-        "pf-audiofull-",
+        "hasMdKoAudioBrief", "mdKoAudioBriefContent", "audioUsesBrief",
+        "activeAudioApiType", "toggleAudioFull", "/md-ko-audio-brief",
+        "'md-ko-audio-brief'", "!audioUsesBrief", "pf-audiofull-", "hasAudioText",
     ]:
         assert token in html, f"missing brief wiring token: {token}"
+
+def test_brief_wiring_is_actually_connected():
+    """Token presence isn't enough — assert the load/guard/gating is wired so a
+    stale `hasMdKoAudio`-only branch can't pass silently (Codex review)."""
+    html = TPL.read_text(encoding="utf-8")
+    # load branch gates on hasAudioText (not bare hasMdKoAudio)
+    assert "this.audioMode && this.hasAudioText" in html
+    # mp3 player + generate regions gated to full-only (player, generating, 미생성, mobile btn)
+    assert html.count("!audioUsesBrief") >= 3
+    # 전체 switch shown only when BOTH brief and full exist
+    assert "hasMdKoAudioBrief && hasMdKoAudio" in html
+    # first-view auto-default + per-paper restore widened to hasAudioText
+    assert "this.hasAudioText && audioPref" in html
+    assert "this.hasAudioText && localStorage.getItem('pf-audio-'" in html
 ```
 
 Run: `cd viewer && python3 -m pytest tests/test_viewer_audio_brief_template.py -v`
@@ -693,6 +719,17 @@ def test_brief_without_sidecar_is_relisted(tmp_path):
     items = _run(tmp_path)
     assert any(i["folder"].endswith("NoMeta") for i in items)
 
+def test_non_complete_sidecar_is_relisted(tmp_path):
+    import hashlib, json
+    d = _paper(tmp_path, "Failed", audio_chars=12000, brief=True)
+    exp = d / "Failed_ko_explained.md"
+    sha = hashlib.sha256(exp.read_bytes()).hexdigest()
+    # sha matches, but status != complete -> must still regenerate
+    (d / "Failed_ko_audio_brief.meta.json").write_text(
+        json.dumps({"status": "failed", "source_sha256": sha}), encoding="utf-8")
+    items = _run(tmp_path)
+    assert any(i["folder"].endswith("Failed") for i in items)
+
 def test_missing_explainer_is_skipped(tmp_path):
     _paper(tmp_path, "NoExp", audio_chars=12000, explained=False)
     assert _run(tmp_path) == []
@@ -752,6 +789,8 @@ def is_brief_stale(brief: Path, explained: Path) -> bool:
         meta = json.loads(sidecar.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return True
+    if meta.get('status') != 'complete':
+        return True  # failed/incomplete/running -> regenerate
     recorded = meta.get('source_sha256')
     if not recorded:
         return True
@@ -939,3 +978,12 @@ Invoke `/paper-audio-brief-korean` on a paper that has `_ko_explained.md` and a 
 - **[rec] truth-table ↔ template coupling** → Task 3 Step 6b `test_viewer_audio_brief_template.py`.
 - **[rec] list-view intent** → File Structure: explicit no-new-icon phase-1 decision.
 - **[noted, accepted] full-audio freshness** not gated (source is the explainer; brief regenerates from current explainer) — acceptable per spec.
+
+## Round 2 peer review (Codex) — incorporated
+
+- **[defect] brief-only still loaded via `hasMdKoAudio`** → `loadMdForCurrentLang` branch + toggle + auto-default now gate on `hasAudioText`; `activeAudioApiType` falls back to brief when full absent; truth-table adds 2 brief-only cases.
+- **[defect] `is_brief_stale` ignored sidecar status** → now `status != "complete"` ⇒ stale; `test_non_complete_sidecar_is_relisted`.
+- **[defect] template test too weak** → added `test_brief_wiring_is_actually_connected` asserting the real load/guard/x-show wiring (not just token presence).
+- **[fix] mcp_zip test** used non-existent `build_paper_zip` → corrected to `build_zip_stream(paper_dir, *, include_pdf, include_translation, job_meta)`.
+- **[fix] API test cookie** `access_token` → `paperflow_token` (= `auth.COOKIE`).
+- **[ui] 전체 switch** hidden on brief-only papers (`hasMdKoAudioBrief && hasMdKoAudio`).
