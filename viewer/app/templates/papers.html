@@ -1406,6 +1406,7 @@ function papersApp() {
     viewMode: localStorage.getItem('pf-view') || 'card',
     sortBy: localStorage.getItem('pf-sort') || 'last_read',
     sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
+    shuffleKeys: {},   // {name: number} stable random keys for sortBy==='random'; not persisted
     filterDocType: localStorage.getItem('pf-filter-doctype') || '',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
     dupModal: { show: false, filename: '', size_mb: '', papers: [], resolve: null },
@@ -1733,11 +1734,20 @@ function papersApp() {
         results = [...results].sort((a, b) => dir * (this.getProgress(a.name) - this.getProgress(b.name)));
       } else if (this.sortBy === 'rating') {
         results = [...results].sort((a, b) => dir * (this.getRating(a.name) - this.getRating(b.name)));
+      } else if (this.sortBy === 'random') {
+        // sortOrder ignored — random has no direction. Stable keys from this.shuffleKeys.
+        results = [...results].sort((a, b) => (this.shuffleKeys[a.name] ?? 0) - (this.shuffleKeys[b.name] ?? 0));
       } else {
         results = [...results].sort((a, b) => dir * a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       }
 
       return results;
+    },
+
+    reshuffle() {
+      const keys = {};
+      for (const p of this.papers) keys[p.name] = Math.random();
+      this.shuffleKeys = keys;
     },
 
     async switchTab(t) {
@@ -1760,6 +1770,8 @@ function papersApp() {
           const expandedSet = new Set(this.papers.filter(p => p._expanded).map(p => p.name));
           papers.forEach(p => { p._expanded = expandedSet.has(p.name); });
           this.papers = papers;
+          // If random sort is active but no keys yet (e.g. restored from localStorage on reload), seed them once.
+          if (this.sortBy === 'random' && Object.keys(this.shuffleKeys).length === 0) this.reshuffle();
         }
       } catch (e) {
         showToast('Failed to load papers', 'error');
