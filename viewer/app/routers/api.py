@@ -511,6 +511,15 @@ async def serve_md_ko_audio(name: str, _user: str = Depends(get_current_user_api
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
+@router.get("/papers/{name:path}/md-ko-audio-brief")
+async def serve_md_ko_audio_brief(name: str, _user: str = Depends(get_current_user_api)):
+    name = unquote(name)
+    path = paper_svc.get_md_ko_audio_brief_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Korean brief audio markdown not found")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
 class MarkdownUpdateRequest(BaseModel):
     content: str
 

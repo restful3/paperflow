@@ -121,3 +121,18 @@ def test_mcp_zip_excludes_brief_when_translation_off(tmp_workspace):
     names = zipfile.ZipFile(io.BytesIO(chunks)).namelist()
     assert "Zz_ko_audio_brief.md" not in names
     assert "Zz.md" in names
+
+
+def test_api_serves_brief(tmp_workspace):
+    import importlib
+    from fastapi.testclient import TestClient
+    from app import main as _main
+    from app.dependencies import get_current_user_api
+    _make_paper(tmp_workspace, "Foo", {"Foo_ko_audio_brief.md": "# brief body"})
+    importlib.reload(_main)
+    app = _main.create_app()
+    app.dependency_overrides[get_current_user_api] = lambda: "tester"
+    client = TestClient(app)
+    r = client.get("/api/papers/Foo/md-ko-audio-brief")
+    assert r.status_code == 200
+    assert "brief body" in r.text
