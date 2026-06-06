@@ -70,6 +70,7 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     has_md_ko_explained = info["formats"].get("md_ko_explained", False) if info else False
     has_md_en_explained = info["formats"].get("md_en_explained", False) if info else False
     has_md_ko_audio = info["formats"].get("md_ko_audio", False) if info else False
+    has_md_ko_audio_brief = info["formats"].get("md_ko_audio_brief", False) if info else False
     has_audio_mp3 = info["formats"].get("audio_mp3", False) if info else False
     location = info["location"] if info else "outputs"
 
@@ -113,6 +114,7 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "has_md_ko_explained": has_md_ko_explained,
         "has_md_en_explained": has_md_en_explained,
         "has_md_ko_audio": has_md_ko_audio,
+        "has_md_ko_audio_brief": has_md_ko_audio_brief,
         "has_audio_mp3": has_audio_mp3,
         "location": location,
         "default_view": default_view,
