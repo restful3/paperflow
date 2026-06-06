@@ -267,7 +267,7 @@
           <!-- Sort controls -->
           <div class="flex items-center space-x-1">
             <select x-model="sortBy"
-                    @change="localStorage.setItem('pf-sort', sortBy)"
+                    @change="localStorage.setItem('pf-sort', sortBy); if (sortBy === 'random') reshuffle()"
                     class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                     :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
               <option value="last_read">Last Read</option>
@@ -278,15 +278,17 @@
               <option value="size">Size</option>
               <option value="progress">Progress</option>
               <option value="rating">Rating</option>
+              <option value="random">랜덤</option>
             </select>
-            <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+            <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
                     class="p-1.5 rounded-md transition"
                     :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                    :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
-              <svg class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+                    :title="sortBy === 'random' ? '다시 섞기' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
+              <svg x-show="sortBy !== 'random'" class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
                    fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
               </svg>
+              <span x-show="sortBy === 'random'" class="block w-4 h-4 text-sm leading-4 text-center">🎲</span>
             </button>
           </div>
           <!-- Doc type filter -->
@@ -334,7 +336,7 @@
          :class="$store.darkMode.on ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'">
       <div class="flex items-center space-x-1">
         <select x-model="sortBy"
-                @change="localStorage.setItem('pf-sort', sortBy)"
+                @change="localStorage.setItem('pf-sort', sortBy); if (sortBy === 'random') reshuffle()"
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
           <option value="last_read">Last Read</option>
@@ -343,15 +345,17 @@
           <option value="title">Title</option>
           <option value="year">Year</option>
           <option value="size">Size</option>
+          <option value="random">랜덤</option>
         </select>
-        <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+        <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
                 class="p-2.5 rounded-md transition"
                 :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
-          <svg class="w-5 h-5 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+                :title="sortBy === 'random' ? '다시 섞기' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
+          <svg x-show="sortBy !== 'random'" class="w-5 h-5 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
                fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
           </svg>
+          <span x-show="sortBy === 'random'" class="block w-5 h-5 text-base leading-5 text-center">🎲</span>
         </button>
         <select x-model="filterDocType"
                 @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
