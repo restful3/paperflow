@@ -1750,6 +1750,14 @@ function papersApp() {
       this.shuffleKeys = keys;
     },
 
+    // Assign keys to any papers that don't have one yet (first load, tab switch, new upload),
+    // leaving existing keys — and thus the current random order — stable.
+    ensureShuffleKeys() {
+      const keys = { ...this.shuffleKeys };
+      for (const p of this.papers) if (keys[p.name] === undefined) keys[p.name] = Math.random();
+      this.shuffleKeys = keys;
+    },
+
     async switchTab(t) {
       this.tab = t;
       if (t === 'upload') {
@@ -1770,8 +1778,9 @@ function papersApp() {
           const expandedSet = new Set(this.papers.filter(p => p._expanded).map(p => p.name));
           papers.forEach(p => { p._expanded = expandedSet.has(p.name); });
           this.papers = papers;
-          // If random sort is active but no keys yet (e.g. restored from localStorage on reload), seed them once.
-          if (this.sortBy === 'random' && Object.keys(this.shuffleKeys).length === 0) this.reshuffle();
+          // Random sort: ensure every currently-shown paper has a stable key (covers first load,
+          // localStorage-restored 'random' on reload, and tab switches to a different paper set).
+          if (this.sortBy === 'random') this.ensureShuffleKeys();
         }
       } catch (e) {
         showToast('Failed to load papers', 'error');
