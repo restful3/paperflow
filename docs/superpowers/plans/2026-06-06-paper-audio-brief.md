@@ -149,6 +149,11 @@ def test_resolve_result_block_detects_brief(tmp_workspace):
     res = papers._resolve_result(d, "outputs")
     assert res["formats"]["md_ko_audio_brief"] is True
     assert res["formats"]["md_en"] is True
+    # brief-only (no real English): _resolve_result must NOT flag md_en (catch-all leak)
+    d2 = _make_paper(tmp_workspace, "RrOnly", {"RrOnly_ko_audio_brief.md": "# brief"})
+    res2 = papers._resolve_result(d2, "outputs")
+    assert res2["formats"]["md_ko_audio_brief"] is True
+    assert res2["formats"]["md_en"] is False
 
 
 def test_get_md_ko_path_excludes_brief(tmp_workspace):
@@ -868,7 +873,7 @@ if __name__ == '__main__':
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd /home/restful3/.openclaw/workspace/skills/paperflow-claude-batch-audio-brief/scripts && python3 -m pytest test_find_missing_audio_brief.py -v`
-Expected: PASS (4 tests).
+Expected: PASS (7 tests: long-listed, short-skip, fresh-skip, stale-relist, no-sidecar-relist, non-complete-relist, missing-explainer-skip).
 
 - [ ] **Step 5: Commit** (this dir is under `~/.openclaw`, a separate git context or none — if not a git repo, skip the commit and note it; otherwise:)
 
@@ -987,3 +992,12 @@ Invoke `/paper-audio-brief-korean` on a paper that has `_ko_explained.md` and a 
 - **[fix] mcp_zip test** used non-existent `build_paper_zip` → corrected to `build_zip_stream(paper_dir, *, include_pdf, include_translation, job_meta)`.
 - **[fix] API test cookie** `access_token` → `paperflow_token` (= `auth.COOKIE`).
 - **[ui] 전체 switch** hidden on brief-only papers (`hasMdKoAudioBrief && hasMdKoAudio`).
+
+## Round 3 peer review (Codex) — GO
+
+Verdict: **GO** — all round-2 defects + precision fixes confirmed resolved. Applied two
+quick items now: `_resolve_result` brief-only assertion; corrected finder test count.
+Remaining minors to handle **during** implementation (non-blocking):
+- Template-presence assertions are string-sensitive — keep the plan's exact JS expressions, or relax to regex if line-wrapping differs.
+- Verify the batch env's proven `PAPERFLOW_OUTPUTS` root in the Task 7 dry-run before enabling the cron.
+- `is_brief_stale` judges on `source_sha256` only (sufficient); keep recording mtime/size in the sidecar for diagnostics.
