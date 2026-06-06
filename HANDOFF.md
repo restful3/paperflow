@@ -1,147 +1,92 @@
-# 세션 핸드오프 — PaperFlow 관리형 오디오 큐 UI + 듣기/합성 분리 + 시스템 상태 칩
-_최종 갱신: 2026-06-04 17:17_
+# 세션 핸드오프 — PaperFlow 축약 낭독판(`_ko_audio_brief`) 기능
+_최종 갱신: 2026-06-06 (세션 클리어 준비)_
+
+> ⚠️ 이 파일은 **현재 세션(축약 낭독판 기능 + 목록 UI/크론)** 을 맨 위에 두고, 그 아래에 **이전 세션(콘텐츠 일괄생성)** 과 **더 이전 워크스트림(그림 임베딩 / 오디오 큐 UI / 절대금지)** 을 압축 보존했습니다. 아래 섹션들은 별개 작업이니 혼동 주의.
+
+## 🎯 목표 (현재 세션)
+논문 풀 낭독판(`_ko_audio.md`)이 너무 길어(~69분) 듣기 괴로움 → **축약 낭독판 `_ko_audio_brief.md`(~20분/~7천자)** 를 추가 tier로 구현. 해설판에서 핵심만 요약, 뷰어 "듣기"에서 축약을 기본 노출 + "전체" 스위치, 길이 게이팅 야간 크론으로 자동 생성.
+
+## ✅ 완료 (현재 세션)
+**축약 낭독판 기능 — main 병합 완료(8커밋, push 안 함), 255 테스트 green, 배포·실검증 끝:**
+- 백엔드: `_ko_audio_brief.md` 감지(2블록)·`get_md_ko_audio_brief_path`·API `/md-ko-audio-brief`·en/ko/RAG/mcp_zip 제외 가드.
+- 뷰어: 듣기=축약 우선 + "전체/요약" 스위치(`hasMdKoAudioBrief && hasMdKoAudio`일 때만), mp3는 full 전용(`!audioUsesBrief`), 첫화면 기본 `audio_brief>audio>해설>원문`. 헬퍼 `hasAudioText`/`audioUsesBrief`/`activeAudioApiType`.
+- 스킬 신규: `.claude/skills/paper-audio-brief-korean/SKILL.md` (해설판→~7천자 요약, 위생규칙 계승).
+- 자동화: `~/.openclaw/workspace/skills/paperflow-claude-batch-audio-brief/scripts/{find_missing_audio_brief.py,dispatch_batch_audio_brief.sh}` + **Tori 크론 `84813b2b…` 매일 06:00 KST**.
+- 목록 UI: 듣기 스피커가 축약본 있으면 **틸(teal)** 색(없으면 sky), mp3는 emerald 링 직교. 커밋 `2028dd2`.
+- **실검증**: `outputs/데이터 프라이버시가 성장 전략이다/` 에 수동으로 `_ko_audio_brief.md`(7,251자) 1편 생성·CRITICAL grep 0건·sidecar OK → 뷰어 `info.md_ko_audio_brief:true`·`/md-ko-audio-brief` 200 확인.
+
+**이번 세션 그 외(이미 main 커밋):**
+- `pub_label` 발행 연·월 배지(`publication_date→arXiv YYMM→year`, "25.12") + 모바일 리스트 연월/사이즈 노출 — `211f328`.
+- viewer 첫화면 기본 우선순위(낭독>해설>원문) — `536fe0b`.
+- `article` 정식 doc_type(추출기 canonical) + 목록 타입필터 데이터기반화 + 배지색 — `211f328`,`75368ea`.
+
+**운영(크론) 변경:**
+- 해설판 크론 `261432e6…` → `0 1-23/2 * * *`(홀수시), 낭독판 `989addee…` → `0 0-22/2 * * *`(짝수시). 2시간 간격으로 변경(원래 03:30/05:00 1회).
+- busy-skip 집계 1회성 크론 `25e31ac4…` → 2026-06-08 09:00 KST 텔레그램 보고. 스크립트 `~/.openclaw/workspace/scripts/paperflow_busyskip_report.py`.
+
+## 🔄 진행 중 (현재 세션)
+- 없음. 축약 낭독판 전체 완료·병합·배포·실검증까지 끝.
+
+## ⏭️ 다음 단계 (현재 세션)
+1. **오늘 밤(06-07 06:00) 축약 크론 첫 실행** 관찰 — 텔레그램 "대상 N편" 보고 + 목록에서 그 논문들 스피커 틸 확인. (대기열 ~10편, dispatch `--limit 10`/밤.)
+2. (사용자에게 물어본 미결) 크론 결과 **자동 집계 1회성 리포트** 만들지 여부 — 원하면 busy-skip 리포트처럼 추가.
+3. (후속) **phase 2 — 축약본 mp3 합성**: 현재 텍스트만(iPhone 내장 TTS로 듣기). `tts_service` 큐에 `_ko_audio_brief.md` 태우는 별도 스펙 필요.
+4. (선택) 며칠 써보고 teal 색·"전체/요약" pill 가독성·축약 분량(~7천자) 피드백 → 스킬 프롬프트/뷰어 미세조정.
+
+## 🧠 대화에만 있던 핵심 컨텍스트 (현재 세션)
+- **설계 결정(사용자 승인)**: ① 추가형(풀 낭독판 유지, 대체 아님) ② 소스=해설판(`_ko_explained`, 번역본 아님) ③ 목표 ~7천자/~20분 ④ 길이 게이팅: **풀 audio >10,000자**일 때만 ⑤ 스킬은 별도 형제 스킬(모드 아님) ⑥ 듣기=축약 우선 + 전체 스위치.
+- **stale 재생성**: finder는 brief 있어도 sidecar 없음/`status!=complete`/`source_sha256` 불일치면 재생성(=해설판 갱신 시 자동). `is_brief_stale()`에 `isinstance(meta,dict)` 가드 있음(비-dict JSON 크래시 방지).
+- **경로 동일성**: `/home/restful3/workspace` → `/media/restful3/data/workspace` **심링크**(동일 inode). cron이 쓰는 `/home/...outputs` = docker 뷰어가 읽는 `/media/...outputs`. 불일치 없음(검증함).
+- **피어리뷰 3라운드(Codex)**: NO-GO×2 → GO. 잡은 실버그: split뷰 동기화 누락, RAG 테스트가 `.content`(ChatChunk) 아닌 `.text`로 빈검증하던 것, mcp_zip 누출, brief-only 경로. 회의록은 council(현 tmux 세션).
+- **teal 색 주의**: venue 배지(틸 pill)와 색 계열 겹치나 모양·위치 달라 구분. amber는 해설 링과 겹쳐서 기각하고 teal 선택.
+- **목록 발견성 phase-1**: 축약 전용 배지는 스피커 색만(별도 텍스트 칩 안 만듦). 더 또렷하게 원하면 추가 가능.
+- **doc_type `article`**: 추출기 canonical 아니었고 웹임포트(HBR/네이버)만 붙이던 타입 → 추출기에 추가해 통일(기존 43편 그대로 일관).
+- **한글/이모지 폴더 NFC/NFD 함정**: 리터럴 매칭 실패 잦음 → `find outputs -path "*ASCII조각*"` / `ls -d outputs/*/ | grep` 우회. `outputs/`는 gitignored.
+
+## ⚠️ 클리어 전 주의 (현재 세션 기준)
+- **커밋 안 됨(내 작업 아님 — 건드리지 않음)**: `M main_terminal.py`(이전 세션 dedup `check_duplicate_batch`, +28줄). untracked: `scripts/audio_finalize.sh`, `HANDOFF.codex-explainer-20260604.md`, `docs/superpowers/plans/2026-06-04-*-plan.md`, `samples/`, `scripts/dsba_poll/`, `tmp/`, `.claude/skills/paper-output-validator/`. **이번 세션 변경 아님 → 그대로 둠.**
+- **내 작업은 전부 커밋됨(main, push 안 함)**: audio-brief 8커밋 + pub_label/article/뷰어우선순위 3커밋 + teal 1커밋. 미커밋 없음.
+- **백그라운드**: 없음(converter 빌드 완료). docker 컨테이너·크론은 durable.
+- **미완료 todo**: 없음(구현 9 Task 전부 완료).
+
+## 📂 관련 파일 (현재 세션)
+- `docs/superpowers/specs/2026-06-06-paper-audio-brief-design.md` — 스펙(상태=구현완료).
+- `docs/superpowers/plans/2026-06-06-paper-audio-brief.md` — 구현계획(피어리뷰 3라운드 포함, 단계별 TDD).
+- `viewer/app/services/papers.py`,`chat.py`,`mcp_zip.py`,`routers/api.py`,`routers/pages.py` — 백엔드 brief 배선.
+- `viewer/app/templates/viewer.html` — 듣기 축약/전체, `papers.html` — 목록 teal 스피커.
+- `viewer/tests/{test_papers_audio_brief.py,test_default_audio_brief.mjs,test_viewer_audio_brief_template.py}` — 회귀 테스트.
+- `.claude/skills/paper-audio-brief-korean/SKILL.md` — 생성 스킬.
+- `~/.openclaw/workspace/skills/paperflow-claude-batch-audio-brief/scripts/` — finder+dispatch(+테스트). **openclaw는 git repo 아님 → 디스크에만 저장**.
 
 ---
 
-## ✅ 완료 (2026-06-04 17:17): URL 임포트 다운로드 4건 수정 + 배포
+# 📦 이전 세션 — 해설판/낭독판 콘텐츠 일괄 생성 (2026-06-05, 완료)
 
-> 위 오디오 작업과 **무관**. `viewer` 의 "링크 주면 받아서 newones 에 넣기" (URL→PDF) 기능 버그 수정.
+> 별개 작업. `paper-explainer`/`paper-audio-korean` 스킬로 `outputs/` 대상 해설판·낭독판 생성. 진행 중 없음(완료).
 
-**증상**: 사용자가 "URL 임포트가 잘 안 된다" → 진단 결과 가장 흔한 입력(arXiv "Download PDF" 버튼 링크 `arxiv.org/pdf/<id>`)이 dead-end. 그 URL 자체가 이미 PDF인데도 site transformer 가 `/abs/` 만 매칭하고 arxiv.org 는 strict 도메인이라 다운로드 대신 예외를 던짐.
-
-**수정 4건** (`viewer/app/services/papers.py`):
-1. **arXiv `/pdf/` 링크 인식** — `_SITE_PDF_TRANSFORMERS` 에 신/구 스타일 `/pdf/` 패턴 추가 (확장자 유무·v1 모두).
-2. **브라우저 UA 통일** — `_BROWSER_UA` 상수 신설, 직접 fetch/download(`_download_pdf`/`_fetch_url_html`/`_resolve_doi_redirect`)도 headless 와 동일한 진짜 Chrome UA 사용 (봇 차단 회피).
-3. **strict 도메인 실패 메시지 구체화** — "페이월/자동접근 차단 가능, PDF 직접 링크 복사" 안내.
-4. **품질 게이트 완화** — 인라인 로직을 순수 헬퍼 `_capture_rejection_reason()` 로 추출, 푸터 단어(terms/copyright/privacy)는 **짧은 캡처에서만** 거부(긴 본문 오탈락 제거); chromium 에 `--no-pdf-header-footer`·`--hide-scrollbars` 추가.
-
-**TDD**: 실패 테스트 12개 선작성 → 구현 → 통과. `viewer/tests/test_papers_url_resolve.py` (16개 전체 green, viewer 전체 215개 회귀 없음).
-
-**검증 (end-to-end, 실네트워크)**: `arxiv.org/pdf/2508.14052`·`…v1` → 2MB 다운로드 OK(이전 실패), IEEE strict → 새 안내 메시지, 일반 블로그 헤드리스 캡처 1.2MB(푸터 단어 있어도 통과).
-
-**배포**: `docker compose build paperflow-viewer && up -d` 완료. 컨테이너 내부에서 수정 반영 + arxiv `/pdf/` 다운로드 재확인. converter 컨테이너 무영향.
-
-**커밋**: `27d93e2` (papers.py + test 만). 워킹트리의 다른 수정 파일들(main_terminal.py, tts_service/*, templates 등)은 **이 작업과 무관 — 건드리지 않음**.
+- **완료**: 낭독판 일괄 33편(누락 0), 소배치(How we contain Claude / AI in SRE / ruvnetruflo / shanraisshan / When AI builds itself 해설+낭독 각 4~5) + HBR 한국어 에세이 해설판 5편.
+- **사용자 반복 지침**: ① 반드시 Skill 도구로 호출 ② 생성은 Claude Code 안에서(tmux 우회 금지) ③ 파이프라인은 paperflow MCP 우선 ④ 산출물 있으면 skip ⑤ 한 건씩, 끝나면 폴더·성공·경로 정리.
+- **낭독판 확정(인라인)**: `.part`→CRITICAL grep 0건→`mv`→sidecar `_ko_audio.meta.json`(status=complete+source mtime/size/sha256). 본문 YAML/배너/메타 금지. grep 금지: `$$`/인라인`$…$`/`\(`/`\[`/표`|---`/코드펜스/`[n]`/`[^`/HTML/`](#`/URL=0, alt있는 이미지=0. 그림은 `![](상대경로)` 빈 alt만.
+- **웹 해설판 디클러터링**: 히어로 장식·페이월·GitHub UI 제거; 본문 figure·인용링크·원문URL·저자약력 보존.
+- **분량**: "원문 이상" 하드요구. HBR 정제 산문은 1.3~1.55x 경향. 저장 후 `grep '�'` 깨진 유니코드 점검.
 
 ---
 
-## 🆕 별도 진행 작업 (2026-06-04 시작): 듣기판(`_ko_audio.md`) **그림 임베딩** 재생성
+# 📦 더 이전 워크스트림 (별개 — 미해결·주의 보존)
 
-> 아래 "관리형 오디오 큐" 작업과 **무관**. 이건 mp3가 아니라 **낭독용 마크다운(`_ko_audio.md`) 텍스트**를, paper-audio-korean 스킬의 **그림 임베딩 규칙(규칙 #3)** 에 맞게 다시 쓰는 콘텐츠 작업.
+## 🅰️ 듣기판 그림 임베딩 재생성 — 미완 (22/32 후 중단)
+- 그림 임베딩 규칙 생기기 전 만든 듣기판(소스 해설판엔 그림 있으나 듣기판 `![](경로)` 0개) 재생성. ※ 위 "낭독판 33편"과 다른 백로그.
+- 남은 대상 재도출:
+  ```bash
+  cd /home/restful3/workspace/paperflow
+  for base in outputs archives; do for f in "$base"/*/*_ko_audio.md; do [ -f "$f" ]||continue; dir=$(dirname "$f"); exp=$(ls "$dir"/*_ko_explained.md 2>/dev/null|head -1); [ -n "$exp" ]||continue; ia=$(grep -cE '!\[\]\(' "$f"); ie=$(grep -cE '!\[' "$exp"); [ "$ie" -gt 0 ]&&[ "$ia" -eq 0 ]&&echo "[$ie img] $dir"; done; done
+  ```
+- **⚠️ 데이터 위생(미해결)**: `outputs/Developer's guide to multi-agent patterns in ADK/` 에 직선(')·곡선(') 아포스트로피 basename 중복(explained+audio+meta). 동일본 확인 후 처리(임의 삭제 금지 — 사용자 확인).
+- 임베딩 불가 예외: 외부 http URL 이미지 / 깨진·빈 경로 / 순수 장식(묘사만).
 
-**왜**: 기존 듣기판 다수가 그림 임베딩 규칙 생기기 전에 만들어져 `![](경로)` 이미지가 0개. 사용자가 "듣기판도 그림 임베딩하라"고 재확인 → 소스 해설판엔 그림 있는데 듣기판엔 임베딩 0개인 것을 전수 재생성.
+## 🅱️ 오디오 큐 UI / TTS(mp3) — 대체로 완료·배포
+- **TTS 엔진 VoxCPM2**, `VOXCPM_VOICE=09_chaewon`, ~11.4GB VRAM(12GB 카드), 단일 GPU 순차.
+- **CUDA 오염 복구**: `docker compose stop paperflow-tts` → `echo "[]" > outputs/.audio_queue.json` → 문제 논문 `audio/.locks`·`*_ko_audio.<sha>`·`*_ko_audio.manifest.json` rm → `start`.
 
-**범위/방식 (사용자 확정)**: 대상 **32개 전부 재생성**, **메인 에이전트 순차 처리**(서브에이전트 X). 큰 파일도 메인이 직접.
-
-**재개용 — 남은 대상 도출 grep** (outputs+archives 스캔, "소스 그림>0 && 듣기판 임베딩==0"):
-```bash
-cd /media/restful3/data/workspace/paperflow
-for base in outputs archives; do for f in "$base"/*/*_ko_audio.md; do [ -f "$f" ]||continue; dir=$(dirname "$f"); exp=$(ls "$dir"/*_ko_explained.md 2>/dev/null|head -1); [ -n "$exp" ]||continue; ia=$(grep -cE '!\[\]\(' "$f"); ie=$(grep -cE '!\[' "$exp"); [ "$ie" -gt 0 ]&&[ "$ia" -eq 0 ]&&echo "[$ie img] $dir"; done; done
-```
-
-**작업 절차 (한 폴더당)**:
-1. 소스 `_ko_explained.md` 전체 통독(인벤토리: 섹션/표/그림/수식/코드/각주). 그림 위치 `grep -nE '!\[' 소스`.
-2. paper-audio-korean 스킬 규칙대로 `.part`에 **완전 낭독판** 작성. 그림은 **묘사 문장 바로 뒤(1문단 내)** 에 `![](상대경로)` **alt 비움**으로 임베딩.
-3. 검증+확정: `scripts/audio_finalize.sh "<paper_dir>" "<basename>" <expected_img>` → CRITICAL grep 통과 시 `.part`→최종 rename + sidecar 기록.
-
-**결정 사항(일관 적용)**:
-- 순수 장식/빈 이미지(예: hero 배너, 빈 색면)도 **임베딩 유지** + 짧고 정직한 한 줄 묘사(disk-todo 정합 + 사용자 선호). 묘사 없는 단독 이미지 금지.
-- 뉴스레터 광고/푸터 내비게이션/이메일/URL은 **제거**(듣기 무가치). References/감사의 글도 제거.
-- 숫자·참조번호: 그림 N→"그림 N 번", 장/절→"제N 장/절", 수식·표는 자연어 서술.
-
-**⚠️ 데이터 위생 이슈 (미해결, 신중 처리)**: `outputs/Developer's guide to multi-agent patterns in ADK/` 폴더 **1개 안에 직선(') / 곡선(') 아포스트로피 basename 이 각각 `_ko_explained.md`+`_ko_audio.md`+`.meta.json` 으로 중복** 존재. 두 explained 동일본인지 확인 후 처리(임의 삭제 금지, 사용자 확인).
-
-**이미지 출처 분류 (중요)**: 소스의 `![](URL)` 이 **외부 http(s) URL 이면 임베딩 불가**(스킬: 내부 상대경로만, URL 금지 + 다운로드 안 함) → 자연어 묘사만, grep-todo 에 영구 잔류(예외). **외부 전용 2편**: `Can the stockmarket...`(ext=1, 완료) · `유휴 Inference GPU Pool...`(ext=9, describe-only 예정). 나머지는 로컬 이미지라 임베딩 가능.
-
-**임베딩 불가 예외 3종**(0 embed, describe-only, grep-todo 영구 잔류):
-1. 외부 http(s) URL 이미지 (스킬: 내부 상대경로만)
-2. 깨진/빈 경로 이미지 — `![alt](images/)` 처럼 파일명 없음, images/ 폴더에 실제 파일 0개 (추출 실패). 처리 전 `ls "<dir>/images/"` 로 실제 파일 유무 확인할 것.
-3. 순수 장식/빈 색면 — 이건 임베딩은 함(짧은 묘사).
-→ expected_img 정할 때 소스 `![` 개수가 아니라 **실제 임베딩 가능한 로컬 파일 수**로 셀 것.
-
-**진행 (22/32 완료)** — +✅ Developer's Guide to AI Agent Protocols(12).  (구) — 앞 20편 + ✅ 5 OpenClaw agents(9). (완료 전체: Attention5·OpenTelemetry1·AI Agent Frameworks 2026 LangChain1·Can the stockmarket0외부·Anthropic Agent Skills1·AIAgent 8 SDKs2·7 Agentic AI Trends2·Microsoft Build2026 0빈경로·AI Agent Frameworks Detailed5·A2A5·TurboQuant5·VIBEVOICE6·Six search engines6·Equipping agents6·Agent observability7·Developer's guide multi-agent ADK15(양쪽basename)·Build Better AI Agents7·2026년 기업AI전환7·Building effective agents8·SelfExtend8·5 OpenClaw9)
-
-finalize: `scripts/audio_finalize.sh "<dir>" "<basename>" <expected_img>` (expected = 실제 로컬 그림 수 localref).
-
-**남은 8편 (+ 유휴GPU 외부 describe-only 1) — 전부 대형, expected_img**:
-- Multi-Agent Collaboration Mechanisms A Survey of LLMs — 8 (⚠️1427줄 서베이, 그림 alt에 설명 있음)
-- Build Long-running AI agents that pause... ADK — 13
-- State of Model Context Protocol in Software 2026 — 13
-- LLM Powered Autonomous Agents — 14
-- DeepSeek-V3 Technical Report — 15
-- (arc)State of Agent Engineering — 17
-- 2026 Physician Survey on Augmented Intelligence — 24
-- Bitcoin trader recovers $400,000... — 42 (최대)
-- (outputs)유휴 Inference GPU Pool... — 0 (외부URL 9개, describe-only)
-> 재개: 위 grep으로 남은 대상 재도출 → 소스 통독 → .part 작성(그림 묘사 뒤 `![](경로)` alt비움) → finalize. 학술논문은 그림 캡션이 본문 "그림 N 해설/캡션"에 있으면 그걸로 묘사(이미지 직접 안 봐도 됨).
-> NFD 한글 경로(예: 2026년 기업…) 처리 패턴: explained를 /tmp ASCII로 cp → Read → .part를 /tmp에 작성 → bash로 실제 경로에 cp + sidecar.
-
----
-
-## 🎯 목표
-논문 오디오(mp3) 생성을 **관리형 큐**로 통합(등록 큐 UX 미러)하고, 뷰어의 **듣기 모드와 합성을 분리**하며, 앱 전역 **시스템 상태(CPU/RAM/GPU/VRAM) 칩**을 추가. 계획서: `docs/superpowers/plans/2026-06-04-paperflow-audio-queue-ui-plan.md`(Phase 1 + Phase 2 일부 완료).
-
-## ✅ 완료 (이번 세션, 전부 배포·검증됨 — 미커밋)
-### 관리형 오디오 큐 (Phase 1)
-- **`tts_service/app/queue.py`(신규)**: `AudioQueue` — 영속 `.audio_queue.json` + enqueue(중복무시)/remove(processing 거부)/snapshot/enqueue_missing + 순차 드레인 워커(`drain_once`/`run_worker`) + 재시작 복구(`_recover`: processing→pending, fresh면 done). stage→status 매핑: ready→done, preempted/skipped→pending, failed→failed.
-- **`tts_service/tests/test_queue.py`(신규, TDD 12개)** + **`test_system.py`(신규 2개)**. TTS 전체 **70 passed**.
-- **`tts_service/app/main.py`**: `POST/DELETE/GET /queue`, `POST /queue/enqueue-missing`(내부전용, 웹 노출 제거), startup 워커 스레드, `GET /system`(GPU util+VRAM via nvidia-smi). 기존 `_process_candidate`(epoch 선점)·`should_run`(idle 게이트) 재사용.
-- **`viewer/app/routers/api.py`**: 프록시 `POST/DELETE/GET /api/audio/queue`, `GET /api/audio/candidates`(outputs, md_ko_audio && !audio_mp3), `POST /api/audio/queue/batch`, `GET /api/system`(psutil CPU/RAM + TTS /system 프록시→gpu). 뷰어 **203 passed**.
-
-### 듣기/합성 분리 + 라이브 TTS 제거 (`viewer/app/templates/viewer.html`)
-- 듣기 토글은 **합성 안 함** — 완성 mp3만 재생, 없으면 "아이폰 내장 TTS로 들으세요" + **🎧 오디오 생성(큐)** 버튼.
-- `generateAudio()`: foreground `/jobs` → **큐 추가**(`POST /api/audio/queue`)로 전환. `pollAudioGen()` 큐 인지 폴러(대기/생성중→완료시 ▶ 플레이어). 라이브 스트리밍 재생 경로는 이미 비활성(`audioStreamingPlayback=false`)이라 死분기.
-
-### UI (`viewer/app/templates/papers.html`)
-- **"🎧 오디오 큐" 탭**: 생성중(단계 분할/합성/병합 + N/M %)·대기·실패(재시도)·완료 + **활동 로그**(큐 폴링 diff로 ＋추가/▶시작/✓완료/✗실패 타임라인, 접기/펼치기).
-- **카드/목록 행 🎧 버튼**(md_ko_audio 있을 때만 활성, mp3 있으면 emerald).
-- **"오디오 없는 논문 선택…" 모달**("누락 전체 추가" 대체): 후보 목록(정렬 추가일/최근읽음/제목 · 종류 필터 · 전체/개별 체크박스 · 제출→batch enqueue).
-
-### 시스템 상태 칩 (`viewer/app/templates/base.html` + papers/viewer 헤더)
-- `systemStat()` 컴포넌트(base.html) + **각 페이지 헤더 안 인라인 칩**(papers nav lg+, viewer 상단바 xl+). CPU·RAM 4초 폴링, GPU·VRAM은 TTS `/system` 프록시로 채움. **떠있는 fixed 오버레이는 제거**(헤더 버튼과 겹쳐서).
-- `viewer/requirements.txt`에 `psutil` 추가.
-
-## 🔄 진행 중
-- 없음. 큐 비어 있고 GPU idle(0%). 시스템 정상.
-
-## ⏭️ 다음 단계
-1. **커밋** — 아래 "미커밋" 목록 참고. 사용자 결정 대기(자동 커밋 안 함).
-2. **"Do Multimodal Agents" 논문 실패 처리 결정** — 아래 발견 참고. 꼭 필요하면 GPU 쉰 뒤 재시도(산발적이면 통과) 또는 청크 격리/입력 검증.
-3. **(선택) TTS 견고성 하드닝** — 한 청크의 CUDA assert가 전체 작업 죽이고 컨텍스트 오염 → "assert 감지 시 해당 작업만 fail + 컨텍스트 자동 복구(프로세스 재시작)" 별도 작업.
-4. **(선택) Phase 2 잔여** — 카드 상태 배지 고도화, 자동 등록(크론 연계).
-
-## 🧠 대화에만 있던 핵심 컨텍스트
-- **GPU 경쟁 범인 = 하네스 백그라운드 작업 `bt1ssrj3a` "Run 6-paper audio re-synthesis"**(이전 세션 잔존). `docker exec curl`로 **foreground `/jobs`**를 쏘며 124편 백로그를 돌려 새 큐와 GPU 경쟁 → 호스트/컨테이너 프로세스로 안 보였음(하네스 작업이라). **이번 세션 중 완료(사망).** audio_watch 아님.
-- **CUDA 컨텍스트 오염 메커니즘**: foreground 드라이버 + 큐가 동시에 12GB VRAM 점유 → OOM/충돌 → **device-side assert(`index out of bounds: 0 <= tmp5 < 8192`)** → 컨텍스트 poison → 이후 모든 합성 즉시 실패(error 필드 None, assert는 비동기). **복구 = TTS 재기동(새 CUDA 컨텍스트)**.
-- **TTS 클린 리셋 레시피**: `docker compose stop paperflow-tts` → `echo "[]" > outputs/.audio_queue.json` → 문제 논문 `audio/.locks`·`*_ko_audio.<sha>`·`*_ko_audio.manifest.json` rm → `docker compose start paperflow-tts`. (flock은 재시작 시 해제됨.)
-- **audio_watch는 무관 — 절대 건드리지 말 것**: `~/.openclaw/workspace/scripts/audio_watch/`는 **음성 녹음(.m4a) 받아쓰기 → 회의록/랩노트** 시스템(watcher가 "새로운 녹음 40.m4a" 류 enqueue). 논문 TTS와 무관. cron은 `#PAUSED#`. 정리하면 회의록 파이프라인 손상.
-- **설계 결정**: ① 듣기≠합성(듣기=텍스트+완성mp3, 합성은 명시적 큐) ② 라이브 TTS 스트리밍 제거(완성본만 재생) ③ "누락 전체 추가"는 위험 → 후보 선택 모달로 대체 ④ 시스템 칩은 헤더 인라인(오버레이 겹침 회피) ⑤ GPU/VRAM은 viewer에 GPU 없으니 TTS `/system` 프록시(viewer `/api/system`이 실패 시 gpu=null → TTS만 추가하면 자동 채워지게 배선).
-- **"Do Multimodal Agents Really Benefit from Tool Use..." 논문 발견**: 12/105까지 정상 진행하다 **CUDA assert로 실패**. 청크 9\~14 텍스트는 지극히 정상(이상 유니코드/초장문 없음) → 단순 데이터 문제로 보긴 어려움. 이 논문 특정 입력이거나 오늘 혹사된 GPU 산발적 불안정. **자동 재시도 꺼둠(큐 비움)**.
-- **큐 워커 메커니즘**: 큐 워커가 foreground와 **같은 `_jobs` 진행 dict 공유** → viewer `/audio/status` 폴링이 큐 진행률도 반영. `should_start`는 idle일 때만(foreground 선점). **실패 항목 재투입은 중복 생성**(enqueue 중복판정은 pending/processing만) → 실패 재시도 시 큐 파일 비우고 재enqueue 권장.
-- **TTS 엔진 = VoxCPM2**(이전 핸드오프의 Qwen 아님). `VOXCPM_VOICE=09_chaewon`, ~11.4GB VRAM 피크(12GB 카드). 단일 GPU → 큐 순차.
-- **이미지 스킵 청커**(`tts_service/app/chunker.py`, 세션 시작 전부터 M): 이미지 전용 라인(`![](...)`) 제거 — 긴 hex 파일명이 TTS wedge 유발 방지. 큐 워커가 그대로 사용.
-- **테스트 실행**: tts `cd tts_service && rtk proxy python -m pytest`(70 passed), viewer `cd viewer && rtk proxy python -m pytest`(203 passed). **rtk proxy 필수**(아니면 pytest 출력이 "No tests collected"로 요약됨). JS 문법은 Jinja 렌더 후 `<script>` 추출 → `node --check`.
-- **큐/시스템 런타임 조회**(TTS 외부포트 없음): `docker exec paperflow_viewer python3 -c "import urllib.request,json; print(urllib.request.urlopen('http://paperflow-tts:8100/queue',timeout=8).read().decode())"`. /system도 동일.
-
-## ⚠️ 클리어 전 주의
-- **미커밋(이번 세션 산출물 — 커밋은 사용자 결정)**:
-  - 수정(M): `tts_service/app/main.py`, `viewer/app/routers/api.py`, `viewer/app/templates/{base,papers,viewer}.html`, `viewer/requirements.txt`
-  - 신규(??): `tts_service/app/queue.py`, `tts_service/tests/test_queue.py`, `tts_service/tests/test_system.py`
-  - **세션 무관(건드리지 말 것 — 세션 시작 전부터 있던 상태)**: `main_terminal.py`(M), `tts_service/app/chunker.py`(M), `docs/superpowers/plans/2026-06-04-*-plan.md`(??), `samples/`·`scripts/dsba_poll/`·`tests/`(??), `tts_service/tests/test_chunker_image_skip.py`(??).
-  - 이 핸드오프 갱신으로 `HANDOFF.md`도 M 상태가 됨.
-- **백그라운드**: 내 monitor/watch 스크립트 전부 종료(임시 `/tmp/wait_*.sh`·`watch_synth.sh` 삭제됨). 경쟁 드라이버 `bt1ssrj3a` 사망. docker **3컨테이너 정상 가동**(converter/tts/viewer) — 클리어해도 유지. **큐 비어있고 GPU idle**이라 진행 중 합성 없음.
-- **미완료 todo**: 없음(이번 세션 task 전부 completed).
-- **배포 상태**: 모든 변경이 **배포 이미지에 반영됨**(tts·viewer 재빌드 완료). 코드는 워킹트리에만, 이미지에는 빌드돼 있음. 브라우저는 하드 리프레시(Ctrl+Shift+R) 필요.
-
-## 🧩 이전 작업(별개 워크스트림, 참고용)
-- **HLS 실시간 스트리밍**(2026-06-01 세션): 구현·배포 완료, **유일 미해결 = 실기기 iPhone Safari preflight**(스펙 §12.3). 상세는 git 히스토리(commit 트레일 `f5752e4`까지 push) + `docs/superpowers/plans/2026-05-31-paperflow-hls-streaming-*.md`. 이번 듣기/합성 분리에서 라이브 스트리밍 재생 경로는 비활성화됨(완성 mp3만 재생).
-
-## 📂 관련 파일
-- `docs/superpowers/plans/2026-06-04-paperflow-audio-queue-ui-plan.md` — 이번 작업 계획(Phase 1 완료, Phase 2 일부)
-- `tts_service/app/queue.py` — 큐 엔진(핵심)
-- `tts_service/app/main.py` — 큐 4 엔드포인트 + `/system`(GPU) + 워커 기동
-- `viewer/app/routers/api.py` — 큐 프록시 + `/api/audio/candidates` + `/api/audio/queue/batch` + `/api/system`
-- `viewer/app/templates/papers.html` — 오디오 큐 탭 + 후보 모달 + 카드/목록 🎧
-- `viewer/app/templates/viewer.html` — 듣기/합성 분리 + 큐 생성 버튼 + 시스템 칩(xl)
-- `viewer/app/templates/base.html` — `systemStat()` 컴포넌트
-- `~/.openclaw/workspace/scripts/audio_watch/` — ⚠️ 음성 녹음 받아쓰기(논문 무관, 건드리지 말 것)
+## 🚫 절대 건드리지 말 것
+- **`~/.openclaw/workspace/scripts/audio_watch/`** = 음성녹음(.m4a) 받아쓰기→회의록/랩노트 시스템. 논문 TTS와 무관. 정리하면 회의록 파이프라인 손상. cron `#PAUSED#`.
