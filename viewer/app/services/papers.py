@@ -576,6 +576,40 @@ def _has_playable_audio(paper_dir: Path) -> bool:
     return False
 
 
+# arXiv new-style ID encodes year+month: arxiv.org/abs/2508.10146 -> 2025-08.
+_ARXIV_YYMM_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{2})(\d{2})\.\d+")
+# publication_date stored as "YYYY-MM" or "YYYY-MM-DD".
+_PUBDATE_YYMM_RE = re.compile(r"^(\d{2})(\d{2})-(\d{2})")
+
+
+def _publication_label(meta: dict) -> str | None:
+    """Year-month badge for the paper list.
+
+    Prefers the most precise real date available:
+      1. publication_date (full date) -> "YY.MM"
+      2. arXiv submission month from the URL -> "YY.MM"
+      3. publication_year (year only) -> "YYYY"
+      4. nothing -> None
+    """
+    pub_date = meta.get("publication_date")
+    if pub_date:
+        m = _PUBDATE_YYMM_RE.match(str(pub_date).strip())
+        if m:
+            return f"{m.group(2)}.{m.group(3)}"
+
+    for url_key in ("paper_url", "source_url_original"):
+        url = meta.get(url_key)
+        if url:
+            m = _ARXIV_YYMM_RE.search(str(url))
+            if m:
+                return f"{m.group(1)}.{m.group(2)}"
+
+    year = meta.get("publication_year")
+    if year:
+        return str(year)
+    return None
+
+
 def _paper_info(paper_dir: Path, location: str) -> dict:
     """Build info dict for a single paper directory."""
     files: dict[str, bool] = {
@@ -638,6 +672,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["original_filename"] = meta.get("original_filename")
         info["extracted_at"] = meta.get("extracted_at")
         info["publication_year"] = meta.get("publication_year")
+        info["pub_label"] = _publication_label(meta)
         info["doc_type"] = meta.get("doc_type")
         info["venue"] = meta.get("venue")
         info["doi"] = meta.get("doi")
@@ -653,6 +688,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["original_filename"] = None
         info["extracted_at"] = None
         info["publication_year"] = None
+        info["pub_label"] = None
         info["doc_type"] = None
         info["venue"] = None
         info["doi"] = None

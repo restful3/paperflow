@@ -296,11 +296,9 @@
                   class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                   :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
             <option value="">All Types</option>
-            <option value="paper">Paper</option>
-            <option value="blog">Blog</option>
-            <option value="essay">Essay</option>
-            <option value="news">News</option>
-            <option value="report">Report</option>
+            <template x-for="t in docTypeOptions" :key="t">
+              <option :value="t" x-text="t.charAt(0).toUpperCase() + t.slice(1)"></option>
+            </template>
           </select>
           <span class="text-gray-300 dark:text-gray-600">|</span>
           <!-- View mode toggle -->
@@ -360,11 +358,9 @@
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
           <option value="">Type</option>
-          <option value="paper">Paper</option>
-          <option value="blog">Blog</option>
-          <option value="essay">Essay</option>
-          <option value="news">News</option>
-          <option value="report">Report</option>
+          <template x-for="t in docTypeOptions" :key="t">
+            <option :value="t" x-text="t.charAt(0).toUpperCase() + t.slice(1)"></option>
+          </template>
         </select>
       </div>
       <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
@@ -433,12 +429,14 @@
                           'bg-purple-500/15 text-purple-400 border border-purple-500/30': paper.doc_type === 'report',
                           'bg-green-500/15 text-green-400 border border-green-500/30': paper.doc_type === 'blog',
                           'bg-rose-500/15 text-rose-400 border border-rose-500/30': paper.doc_type === 'news',
-                          'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay' }[paper.doc_type] || ''
+                          'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay',
+                          'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-700/40 text-gray-300 border border-gray-600/50'
                       : { 'bg-indigo-50 text-indigo-600 border border-indigo-200': paper.doc_type === 'paper',
                           'bg-purple-50 text-purple-600 border border-purple-200': paper.doc_type === 'report',
                           'bg-green-50 text-green-600 border border-green-200': paper.doc_type === 'blog',
                           'bg-rose-50 text-rose-600 border border-rose-200': paper.doc_type === 'news',
-                          'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay' }[paper.doc_type] || ''"
+                          'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay',
+                          'bg-cyan-50 text-cyan-600 border border-cyan-200': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-100 text-gray-500 border border-gray-200'"
                     x-text="paper.doc_type"></span>
               <div x-show="paper.authors && paper.authors.length > 0" class="flex items-center gap-1 min-w-0">
                 <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -447,10 +445,10 @@
                 <span class="text-xs truncate"
                       x-text="paper.authors ? paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : '') : ''"></span>
               </div>
-              <span x-show="paper.publication_year || paper.extracted_at"
+              <span x-show="paper.pub_label || paper.extracted_at"
                     class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
                     :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'"
-                    x-text="paper.publication_year || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
+                    x-text="paper.pub_label || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
               <span x-show="paper.venue || paper.source_domain"
                     class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 transition-colors"
                     :class="$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'"
@@ -691,12 +689,14 @@
                             'bg-purple-500/15 text-purple-400 border border-purple-500/30': paper.doc_type === 'report',
                             'bg-green-500/15 text-green-400 border border-green-500/30': paper.doc_type === 'blog',
                             'bg-rose-500/15 text-rose-400 border border-rose-500/30': paper.doc_type === 'news',
-                            'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay' }[paper.doc_type] || ''
+                            'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay',
+                            'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-700/40 text-gray-300 border border-gray-600/50'
                         : { 'bg-indigo-50 text-indigo-600 border border-indigo-200': paper.doc_type === 'paper',
                             'bg-purple-50 text-purple-600 border border-purple-200': paper.doc_type === 'report',
                             'bg-green-50 text-green-600 border border-green-200': paper.doc_type === 'blog',
                             'bg-rose-50 text-rose-600 border border-rose-200': paper.doc_type === 'news',
-                            'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay' }[paper.doc_type] || ''"
+                            'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay',
+                            'bg-cyan-50 text-cyan-600 border border-cyan-200': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-100 text-gray-500 border border-gray-200'"
                       x-text="paper.doc_type"></span>
                 <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
                   <span class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors max-w-[10rem] truncate"
@@ -725,16 +725,16 @@
                   </span>
                 </div>
 
-                <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-[5.5rem] text-center"
-                      :class="[$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600', !(paper.publication_year || paper.extracted_at) && 'invisible']"
-                      x-text="paper.publication_year || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
+                <span class="inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-auto sm:w-[5.5rem] text-center shrink-0"
+                      :class="[$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600', !(paper.pub_label || paper.extracted_at) && 'invisible']"
+                      x-text="paper.pub_label || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
                 <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-24 text-center truncate"
                       :class="[$store.darkMode.on ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700', !(paper.venue || paper.source_domain) && 'invisible']"
                       x-text="paper.venue || paper.source_domain || ''"></span>
                 <span class="hidden sm:inline text-[10px] w-24 text-right transition-colors tabular-nums"
                       :class="[$store.darkMode.on ? 'text-gray-500' : 'text-gray-400', !paperDateLabel(paper) && 'invisible']"
                       x-text="paperDateLabel(paper) || ''"></span>
-                <span class="hidden sm:inline text-[10px] w-12 text-right transition-colors"
+                <span class="inline text-[10px] w-auto sm:w-12 text-right transition-colors shrink-0 tabular-nums"
                       :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
                       x-text="paper.size_mb + ' MB'"></span>
               </div>
@@ -1451,6 +1451,10 @@ function papersApp() {
 
     get candDocTypes() {
       return [...new Set(this.candidates.map(p => p.doc_type).filter(t => t && t !== 'other'))].sort();
+    },
+    // 메인 목록 타입 필터 옵션 — 하드코딩 대신 실제 로드된 논문의 doc_type 에서 도출(새 타입 자동 반영).
+    get docTypeOptions() {
+      return [...new Set(this.papers.map(p => p.doc_type).filter(t => t && t !== 'other'))].sort();
     },
     get candFiltered() {
       let list = this.candidates.slice();
