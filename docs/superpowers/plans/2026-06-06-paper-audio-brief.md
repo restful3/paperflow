@@ -15,11 +15,19 @@
 ## File Structure
 
 **Backend (viewer image — rebuild `paperflow-viewer`):**
-- `viewer/app/services/papers.py` — detection (2 blocks), `get_md_ko_audio_brief_path()`, exclusion guards in `get_md_en_path()` + `save_markdown()`.
+- `viewer/app/services/papers.py` — detection (2 blocks: `_paper_info` + `_resolve_result`), `get_md_ko_audio_brief_path()`, exclusion guards in `get_md_en_path()` + `get_md_ko_path()` + `save_markdown()`.
 - `viewer/app/services/chat.py` — RAG skip guard.
+- `viewer/app/services/mcp_zip.py` — `include_translation` gating for the brief.
 - `viewer/app/routers/api.py` — `GET /papers/{name}/md-ko-audio-brief`.
-- `viewer/app/templates/viewer.html` — brief-first 듣기 + 전체 switch + getters + default priority.
-- `viewer/tests/test_papers_audio_brief.py` — backend regression tests (new).
+- `viewer/app/routers/pages.py` — pass `has_md_ko_audio_brief` to the template.
+- `viewer/app/templates/viewer.html` — brief-first 듣기 + 전체 switch + getters + default priority + mp3-player gating.
+- `viewer/tests/test_papers_audio_brief.py`, `test_default_audio_brief.mjs`, `test_viewer_audio_brief_template.py` — regression tests (new).
+
+**List view (papers.html) — explicit phase-1 decision (Codex review):** NO new
+list-view icon/marker for the brief. The existing 한국어-자산 dot already signals
+"audio exists"; a separate brief marker is out of scope for phase 1. (Revisit only
+if the user asks.) `list_papers()` reuses `_paper_info`, so the new flag rides along
+harmlessly without sort/filter changes.
 
 **Generator skill (not in any Docker image — read by Claude Code directly):**
 - `.claude/skills/paper-audio-brief-korean/SKILL.md` — new sibling skill.
@@ -63,7 +71,10 @@ from app.services import papers, chat
 
 @pytest.fixture(autouse=True)
 def _rebind_settings(tmp_workspace, monkeypatch):
+    # papers.py AND chat.py both do `from ..config import settings` (module-level
+    # binding), so rebind BOTH or chat.load_paper_chunks() won't see tmp_workspace.
     monkeypatch.setattr(papers, "settings", _cfg.settings)
+    monkeypatch.setattr(chat, "settings", _cfg.settings)
 
 
 def _make_paper(ws, name, files):
@@ -126,7 +137,44 @@ def test_rag_skips_brief(tmp_workspace):
     chunks = chat.load_paper_chunks("Qux")
     joined = " ".join(c.get("text", "") if isinstance(c, dict) else str(c) for c in chunks)
     assert "brief narration" not in joined
+
+
+def test_resolve_result_block_detects_brief(tmp_workspace):
+    # The SECOND detection block lives in _resolve_result() (reached via
+    # find_processed_paper). Guard it too — not just _paper_info().
+    d = _make_paper(tmp_workspace, "Rr", {
+        "Rr.md": "# en",
+        "Rr_ko_audio_brief.md": "# brief",
+    })
+    res = papers._resolve_result(d, "outputs")
+    assert res["formats"]["md_ko_audio_brief"] is True
+    assert res["formats"]["md_en"] is True
+
+
+def test_get_md_ko_path_excludes_brief(tmp_workspace):
+    _make_paper(tmp_workspace, "Kp", {
+        "Kp_ko.md": "# ko",
+        "Kp_ko_audio_brief.md": "# brief",
+    })
+    p = papers.get_md_ko_path("Kp")
+    assert p is not None and p.name == "Kp_ko.md"
+
+
+def test_mcp_zip_excludes_brief_when_translation_off(tmp_workspace):
+    # mcp_zip gates _ko*.md by include_translation; brief must be gated identically,
+    # else _ko_audio_brief.md leaks into the translation-excluded zip as a plain .md.
+    import zipfile, io
+    from app.services import mcp_zip
+    d = _make_paper(tmp_workspace, "Zz", {
+        "Zz.md": "# en",
+        "Zz_ko_audio_brief.md": "# brief",
+    })
+    chunks = b"".join(mcp_zip.build_paper_zip(d, "Zz", include_pdf=False, include_translation=False))
+    names = zipfile.ZipFile(io.BytesIO(chunks)).namelist()
+    assert "Zz_ko_audio_brief.md" not in names
+    assert "Zz.md" in names
 ```
+(Adjust `mcp_zip.build_paper_zip(...)` to the module's actual generator signature — grep `def ` in `viewer/app/services/mcp_zip.py`; it returns a chunk iterator.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -218,6 +266,20 @@ In `viewer/app/services/chat.py` (~157-166) — skip brief in RAG (place before 
                 md_en_file = f
 ```
 
+(g) `viewer/app/services/mcp_zip.py` (~48) — gate brief by `include_translation` like the other `_ko*` files:
+```python
+                if lower.endswith("_ko_audio.md") and not include_translation:
+                    continue
+                if lower.endswith("_ko_audio_brief.md") and not include_translation:
+                    continue
+```
+
+(h) `get_md_ko_path` (~991) — add the brief exclusion to its existing guard chain (mirror `get_md_en_path`; defensive — brief does not end with `_ko.md` so this is consistency, not a live bug):
+```python
+            and not f.name.endswith("_ko_audio.md")
+            and not f.name.endswith("_ko_audio_brief.md")
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd viewer && python3 -m pytest tests/test_papers_audio_brief.py tests/test_papers_audio.py -v`
@@ -226,7 +288,7 @@ Expected: PASS (new + existing audio tests green).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add viewer/app/services/papers.py viewer/app/services/chat.py viewer/tests/test_papers_audio_brief.py
+git add viewer/app/services/papers.py viewer/app/services/chat.py viewer/app/services/mcp_zip.py viewer/tests/test_papers_audio_brief.py
 git commit -m "feat(viewer): detect _ko_audio_brief.md as a first-class KO format
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -356,8 +418,13 @@ The `has_md_ko_audio_brief` template var must be passed from the page route — 
 
 - [ ] **Step 4: Add resolution helpers + thread them through getters**
 
-Add a getter near `activeMdContent` (~1415):
+Add getters near `activeMdContent` (~1415). `hasAudioText` covers the brief-only
+edge (manual/partial generation where only the brief exists) so the audio branches
+don't silently fall through when `hasMdKoAudio` is false (Codex review):
 ```javascript
+    get hasAudioText() {
+      return this.hasMdKoAudio || this.hasMdKoAudioBrief;
+    },
     get audioUsesBrief() {
       return this.audioMode && this.hasMdKoAudioBrief && !this.audioFull;
     },
@@ -370,12 +437,17 @@ Add a getter near `activeMdContent` (~1415):
       if (this.audioMode) {
         if (this.audioUsesBrief && this.mdKoAudioBriefContent) return this.mdKoAudioBriefContent;
         if (this.mdKoAudioContent) return this.mdKoAudioContent;
+        if (this.mdKoAudioBriefContent) return this.mdKoAudioBriefContent;  // brief-only fallback
       }
 ```
 `contentLang` getter (~1433): keep `if (this.audioMode && (this.mdKoAudioContent || this.mdKoAudioBriefContent)) return 'ko';`
-`downloadUrl` (~1447): `if (this.audioMode && this.hasMdKoAudio) return '/api/papers/' + name + '/' + this.activeAudioApiType;`
-`downloadFilename` (~1462): `if (this.audioMode && this.hasMdKoAudio) return p + (this.audioUsesBrief ? '_ko_audio_brief.md' : '_ko_audio.md');`
-`downloadLabel` (~1476): `if (this.audioMode && this.hasMdKoAudio) return this.audioUsesBrief ? '듣기·요약 (KO)' : '듣기 (KO)';`
+`downloadUrl` (~1447): `if (this.audioMode && this.hasAudioText) return '/api/papers/' + name + '/' + this.activeAudioApiType;`
+`downloadFilename` (~1462): `if (this.audioMode && this.hasAudioText) return p + (this.audioUsesBrief ? '_ko_audio_brief.md' : '_ko_audio.md');`
+`downloadLabel` (~1476): `if (this.audioMode && this.hasAudioText) return this.audioUsesBrief ? '듣기·요약 (KO)' : '듣기 (KO)';`
+
+Also widen the 듣기 button gate and `toggleAudio()` guard from `hasMdKoAudio` to
+`hasAudioText` (both 듣기 button locations ~314, ~571, and the early-return in
+`toggleAudio` ~2051) so a brief-only paper can still enter 듣기.
 
 - [ ] **Step 5: Load brief content + gate the mp3 player to full-only**
 
@@ -398,6 +470,14 @@ mp3 player is **phase 2** for brief → only load the player when NOT using brie
         if (this.audioMode && !this.audioUsesBrief) await this.loadAudio();
 ```
 (Replace the existing unconditional `if (this.audioMode) await this.loadAudio();` / `if (newMode) await this.loadAudio();` with the `!this.audioUsesBrief` guard.)
+
+**Gate the mp3 player UI to full-only (Codex review)** — function gating alone isn't
+enough; the template's player/generation regions must not show under a brief. Add
+`&& !audioUsesBrief` to every audio-player/generation `x-show`:
+- the player container (~790 `audioMode && audioReady`), the generating banner
+  (~824), and the "미생성 안내 + 큐 생성" block (~845) → `audioMode && !audioUsesBrief && ...`.
+- the "오디오 생성 (큐에 추가)/오디오 듣기" mobile menu button (~352) → add `!audioUsesBrief`
+  to its `x-show` (no brief mp3 in phase 1, so don't offer to synthesize it).
 
 - [ ] **Step 6: Add the "전체"/"요약" switch + toggleAudioFull()**
 
@@ -426,6 +506,35 @@ Add the toggle button beside the 듣기 button (both rows ~314 and ~571). Exampl
 ```
 (Mirror the same button at the second 듣기 location ~571.)
 
+- [ ] **Step 6b: Template-presence regression test (ties the truth-table to viewer.html)**
+
+The `.mjs` only tests a logic mirror. Add a cheap pytest that fails if the wiring is
+removed/renamed in the real template. Create `viewer/tests/test_viewer_audio_brief_template.py`:
+
+```python
+from pathlib import Path
+
+TPL = Path(__file__).resolve().parents[1] / "app" / "templates" / "viewer.html"
+
+def test_brief_wiring_present_in_template():
+    html = TPL.read_text(encoding="utf-8")
+    for token in [
+        "hasMdKoAudioBrief",
+        "mdKoAudioBriefContent",
+        "audioUsesBrief",
+        "activeAudioApiType",
+        "toggleAudioFull",
+        "/md-ko-audio-brief",
+        "'md-ko-audio-brief'",
+        "!audioUsesBrief",   # mp3 player gated to full-only
+        "pf-audiofull-",
+    ]:
+        assert token in html, f"missing brief wiring token: {token}"
+```
+
+Run: `cd viewer && python3 -m pytest tests/test_viewer_audio_brief_template.py -v`
+Expected: PASS after Steps 3-6 (FAIL before — good red check if run early).
+
 - [ ] **Step 7: Run the truth-table + deploy**
 
 Run: `node viewer/tests/test_default_audio_brief.mjs`  → `ALL PASS`
@@ -441,7 +550,7 @@ With a paper that has `_ko_audio_brief.md` (create one by hand if needed: copy i
 - [ ] **Step 9: Commit**
 
 ```bash
-git add viewer/app/templates/viewer.html viewer/tests/test_default_audio_brief.mjs
+git add viewer/app/templates/viewer.html viewer/tests/test_default_audio_brief.mjs viewer/tests/test_viewer_audio_brief_template.py
 git commit -m "feat(viewer): brief-first 듣기 with 전체 switch (_ko_audio_brief)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -562,9 +671,27 @@ def test_short_audio_is_skipped(tmp_path):
     _paper(tmp_path, "Short", audio_chars=5000)
     assert _run(tmp_path) == []
 
-def test_existing_brief_is_skipped(tmp_path):
-    _paper(tmp_path, "Done", audio_chars=12000, brief=True)
-    assert _run(tmp_path) == []
+def test_fresh_brief_is_skipped(tmp_path):
+    import hashlib, json
+    d = _paper(tmp_path, "Fresh", audio_chars=12000, brief=True)
+    exp = d / "Fresh_ko_explained.md"
+    sha = hashlib.sha256(exp.read_bytes()).hexdigest()
+    (d / "Fresh_ko_audio_brief.meta.json").write_text(
+        json.dumps({"status": "complete", "source_sha256": sha}), encoding="utf-8")
+    assert _run(tmp_path) == []   # sidecar matches current explainer -> not stale
+
+def test_stale_brief_is_relisted(tmp_path):
+    import json
+    d = _paper(tmp_path, "Stale", audio_chars=12000, brief=True)
+    (d / "Stale_ko_audio_brief.meta.json").write_text(
+        json.dumps({"status": "complete", "source_sha256": "deadbeef"}), encoding="utf-8")
+    items = _run(tmp_path)
+    assert any(i["folder"].endswith("Stale") for i in items)  # explainer changed -> regenerate
+
+def test_brief_without_sidecar_is_relisted(tmp_path):
+    d = _paper(tmp_path, "NoMeta", audio_chars=12000, brief=True)  # brief exists, no .meta.json
+    items = _run(tmp_path)
+    assert any(i["folder"].endswith("NoMeta") for i in items)
 
 def test_missing_explainer_is_skipped(tmp_path):
     _paper(tmp_path, "NoExp", audio_chars=12000, explained=False)
@@ -583,14 +710,15 @@ Expected: FAIL — script missing.
 """Find long listen editions (_ko_audio.md) that lack an abridged brief.
 
 A doc qualifies when: a sibling _ko_audio.md exists AND its length exceeds
-AUDIO_FULL_MIN_CHARS (~30분) AND a _ko_explained.md source exists AND no
-_ko_audio_brief.md exists yet. The brief is generated FROM the explainer, so
-`source` points at the explainer and `expected_output` at the brief.
+AUDIO_FULL_MIN_CHARS (~30분) AND a _ko_explained.md source exists AND the
+_ko_audio_brief.md is missing OR stale (its sidecar's source_sha256 != the
+current explainer). The brief is generated FROM the explainer, so `source`
+points at the explainer and `expected_output` at the brief.
 
 Newest-first by the full audio's mtime, capped (default 10). Exits 0 whether or
 not anything is missing; only a crash exits non-zero.
 """
-import argparse, json, os, sys
+import argparse, hashlib, json, os, sys
 from pathlib import Path
 
 DEFAULT_ROOT = os.environ.get('PAPERFLOW_OUTPUTS', '/home/restful3/workspace/paperflow/outputs')
@@ -616,6 +744,24 @@ def is_denied(p: Path) -> bool:
     return any(tok.lower() in hay for tok in DENYLIST)
 
 
+def is_brief_stale(brief: Path, explained: Path) -> bool:
+    """True if an existing brief should be regenerated: sidecar missing/garbled,
+    or its recorded source_sha256 differs from the current explainer."""
+    sidecar = brief.with_name(brief.name[: -len('.md')] + '.meta.json')
+    try:
+        meta = json.loads(sidecar.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return True
+    recorded = meta.get('source_sha256')
+    if not recorded:
+        return True
+    try:
+        cur = hashlib.sha256(explained.read_bytes()).hexdigest()
+    except OSError:
+        return False  # can't read source now -> don't churn
+    return recorded != cur
+
+
 def find_missing(root: Path) -> list[dict]:
     items: list[dict] = []
     if not root.is_dir():
@@ -627,11 +773,14 @@ def find_missing(root: Path) -> list[dict]:
         stem = audio.name[: -len(AUDIO_SUFFIX)]
         explained = audio.with_name(stem + EXPLAINED_SUFFIX)
         brief = audio.with_name(stem + BRIEF_SUFFIX)
-        if brief.exists() or not explained.exists():
+        if not explained.exists():
+            continue
+        # regenerate when brief is missing OR stale vs the current explainer
+        if brief.exists() and not is_brief_stale(brief, explained):
             continue
         try:
             n = len(audio.read_text(encoding='utf-8', errors='ignore'))
-            mtime = audio.stat().st_mtime
+            mtime = explained.stat().st_mtime   # sort by source (explainer) recency
         except OSError:
             continue
         if n <= AUDIO_FULL_MIN_CHARS:
@@ -704,6 +853,10 @@ cp /home/restful3/.openclaw/workspace/skills/paperflow-claude-batch-audio/script
 
 - [ ] **Step 2: Adapt the copy** (edit `dispatch_batch_audio_brief.sh`):
 - `SCRIPT_DIR` is already relative — keep.
+- **Pin the scan root explicitly** (Codex review): right after `SCRIPT_DIR=...` add
+  `export PAPERFLOW_OUTPUTS="${PAPERFLOW_OUTPUTS:-/home/restful3/workspace/paperflow/outputs}"`.
+  This is the same proven root `find_missing_audio.py` defaults to (the batch env's working tree),
+  so the brief finder scans the real outputs regardless of cwd — avoiding a silent 0-result night.
 - finder call: `find_missing_audio.py` → `find_missing_audio_brief.py`.
 - tmp paths / buffer names: `..._audio_*` → `..._audio_brief_*` (prompt, json, buffer `paperflow-batch-audio-brief`).
 - `ENSURE_TMUX` path: keep pointing at the explainer skill's `ensure_paperflow_tmux.sh` (single source of truth, unchanged).
@@ -771,4 +924,18 @@ Invoke `/paper-audio-brief-korean` on a paper that has `_ko_explained.md` and a 
 
 - **Spec coverage:** §3 artifact/naming → T1,T5; §4 skill → T5; §5 backend → T1,T2; §6 viewer → T3,T4; §7 batch/cron/gating → T6,T7,T8; §8 mp3 deferred → T9 Step 4 (noted, not built); §9 testing → tests in T1,T2,T3,T6 + T9. No gaps.
 - **Placeholders:** none — all code blocks concrete; the two "grep/mirror the exact existing line" steps (T3 Step5 content var, T4 Step2 context key) are deliberate because those exact lines are below/around the read window — each has an exact grep to locate.
-- **Type/name consistency:** `md_ko_audio_brief` (flag), `get_md_ko_audio_brief_path`, `/md-ko-audio-brief`, `hasMdKoAudioBrief`, `mdKoAudioBriefContent`, `audioFull`, `audioUsesBrief`, `activeAudioApiType`, `_ko_audio_brief.md`, `find_missing_audio_brief.py`, `dispatch_batch_audio_brief.sh` — used consistently across tasks. Gate const `AUDIO_FULL_MIN_CHARS=10000`; target ~7,000자 lives only in the skill prompt.
+- **Type/name consistency:** `md_ko_audio_brief` (flag), `get_md_ko_audio_brief_path`, `/md-ko-audio-brief`, `hasMdKoAudioBrief`, `hasAudioText`, `mdKoAudioBriefContent`, `audioFull`, `audioUsesBrief`, `activeAudioApiType`, `toggleAudioFull`, `_ko_audio_brief.md`, `find_missing_audio_brief.py`, `dispatch_batch_audio_brief.sh` — used consistently across tasks. Gate const `AUDIO_FULL_MIN_CHARS=10000`; target ~7,000자 lives only in the skill prompt.
+
+## Round 1 peer review (Codex) — incorporated
+
+- **[critical] mcp_zip leak** → Task 1 (g) gates `_ko_audio_brief.md` by `include_translation`; `test_mcp_zip_excludes_brief_when_translation_off`.
+- **[critical] stale brief not regenerated** → Task 6 `is_brief_stale()` (sidecar `source_sha256` vs current explainer); `test_stale_brief_is_relisted`, `test_brief_without_sidecar_is_relisted`, `test_fresh_brief_is_skipped`.
+- **[critical] finder root mismatch** → Task 7 pins `PAPERFLOW_OUTPUTS` to the proven audio-batch root.
+- **[critical] `_resolve_result` untested** → Task 1 `test_resolve_result_block_detects_brief`.
+- **[rec] chat.settings rebind** → Task 1 fixture rebinds `chat.settings` too.
+- **[rec] get_md_ko_path guard** → Task 1 (h) + `test_get_md_ko_path_excludes_brief`.
+- **[rec] brief-only robustness** → `hasAudioText` getter widens the 듣기 gate/getters.
+- **[rec] mp3 UI must hide under brief** → Task 3 Step 5 gates player/generate `x-show` with `!audioUsesBrief`.
+- **[rec] truth-table ↔ template coupling** → Task 3 Step 6b `test_viewer_audio_brief_template.py`.
+- **[rec] list-view intent** → File Structure: explicit no-new-icon phase-1 decision.
+- **[noted, accepted] full-audio freshness** not gated (source is the explainer; brief regenerates from current explainer) — acceptable per spec.
