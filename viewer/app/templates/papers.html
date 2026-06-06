@@ -278,12 +278,12 @@
               <option value="size">Size</option>
               <option value="progress">Progress</option>
               <option value="rating">Rating</option>
-              <option value="random">랜덤</option>
+              <option value="random">Random</option>
             </select>
             <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
                     class="p-1.5 rounded-md transition"
                     :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                    :title="sortBy === 'random' ? '다시 섞기' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
+                    :title="sortBy === 'random' ? 'Shuffle' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
               <svg x-show="sortBy !== 'random'" class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
                    fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
@@ -345,12 +345,12 @@
           <option value="title">Title</option>
           <option value="year">Year</option>
           <option value="size">Size</option>
-          <option value="random">랜덤</option>
+          <option value="random">Random</option>
         </select>
         <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
                 class="p-2.5 rounded-md transition"
                 :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                :title="sortBy === 'random' ? '다시 섞기' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
+                :title="sortBy === 'random' ? 'Shuffle' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
           <svg x-show="sortBy !== 'random'" class="w-5 h-5 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
                fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
