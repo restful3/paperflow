@@ -311,13 +311,19 @@
                 x-text="explainedMode ? 'Original' : 'Easy'">Easy</button>
 
         <!-- Audio (listen) toggle — moved out of hamburger, KO-only when audio exists -->
-        <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
+        <button x-show="!editMode && $store.lang.ko && hasAudioText"
                 @click="toggleAudio()"
                 class="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
                 :class="audioMode
                   ? ($store.darkMode.on ? 'bg-sky-900 text-sky-300' : 'bg-sky-100 text-sky-700')
                   : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')"
                 x-text="audioMode ? '원본' : '듣기'">듣기</button>
+        <button x-show="!editMode && audioMode && hasMdKoAudioBrief && hasMdKoAudio"
+                @click="toggleAudioFull()"
+                class="ml-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors"
+                :class="$store.darkMode.on ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-600'"
+                x-text="audioFull ? '요약' : '전체'"
+                :title="audioFull ? '축약본으로' : '전체 낭독판으로'"></button>
       </div>
 
       <!-- Collapsible action menu -->
@@ -349,7 +355,7 @@
 
         <!-- Audio action (KO narration) — same slot, switches by MP3 presence:
              no MP3 → queue synthesis; MP3 exists → enter listen mode. -->
-        <button x-show="!editMode && hasMdKoAudio"
+        <button x-show="!editMode && hasMdKoAudio && !audioUsesBrief"
                 @click="((hasAudioMp3 || audioReady) ? (!audioMode && toggleAudio()) : generateAudio()); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
                 :class="(hasAudioMp3 || audioReady)
@@ -568,7 +574,7 @@
       </button>
 
       <!-- Audio (listen) toggle — KO-only, only when an audio version exists -->
-      <button x-show="!editMode && $store.lang.ko && hasMdKoAudio"
+      <button x-show="!editMode && $store.lang.ko && hasAudioText"
               @click="toggleAudio()"
               class="p-1.5 rounded-lg transition shrink-0"
               :class="audioMode
@@ -579,6 +585,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6 9l6-3v12l-6-3H4a1 1 0 01-1-1v-2a1 1 0 011-1h2z"/>
         </svg>
       </button>
+      <button x-show="!editMode && audioMode && hasMdKoAudioBrief && hasMdKoAudio"
+              @click="toggleAudioFull()"
+              class="ml-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors shrink-0"
+              :class="$store.darkMode.on ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-600'"
+              x-text="audioFull ? '요약' : '전체'"
+              :title="audioFull ? '축약본으로' : '전체 낭독판으로'"></button>
 
       <span class="shrink-0 text-[11px]"
             :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
@@ -787,7 +799,7 @@
     <template x-if="view === 'md' && !editMode">
       <div class="flex flex-col flex-1 min-h-0">
         <!-- Live TTS player bar (audio mode, generated) -->
-        <div x-show="audioMode && audioReady"
+        <div x-show="audioMode && !audioUsesBrief && audioReady"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800 shadow'">
           <audio x-ref="audioEl" preload="metadata"
@@ -821,7 +833,7 @@
         </div>
 
         <!-- Live TTS progress bar — 수동 '오디오 생성' 버튼 제거(오디오는 배치 생성). 생성 진행 중일 때만 표시. -->
-        <div x-show="audioMode && !audioReady && audioGenerating"
+        <div x-show="audioMode && !audioUsesBrief && !audioReady && audioGenerating"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-100' : 'bg-sky-50 text-gray-800 border-b border-sky-200'">
           <template x-if="audioGenerating">
@@ -842,7 +854,7 @@
         </div>
 
         <!-- 미생성 안내 + 큐 생성 버튼 — 듣기 모드지만 합성 mp3가 아직 없을 때. 듣기≠합성: 텍스트는 아이폰 내장 TTS로 읽고, 합성 mp3는 명시적으로 큐에 추가. -->
-        <div x-show="audioMode && !audioReady && !audioGenerating"
+        <div x-show="audioMode && !audioUsesBrief && !audioReady && !audioGenerating"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm flex-wrap"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-200' : 'bg-sky-50 text-gray-700 border-b border-sky-200'">
           <span class="opacity-80">합성 오디오 없음 — 아래 낭독 텍스트를 아이폰 내장 TTS로 들으세요.</span>
@@ -1342,8 +1354,10 @@ function viewerApp() {
     hasMdEnExplained: {{ 'true' if has_md_en_explained else 'false' }},
     explainedMode: false,
     hasMdKoAudio: {{ 'true' if has_md_ko_audio else 'false' }},
+    hasMdKoAudioBrief: {{ 'true' if has_md_ko_audio_brief else 'false' }},
     hasAudioMp3: {{ 'true' if has_audio_mp3 else 'false' }},   // 서버 렌더 시점의 합성 mp3 존재 여부(페이지 로드용)
     audioMode: false,
+    audioFull: false,   // 듣기 내 축약(false)/전체(true) — 축약본 있을 때만 의미
     // ── Live TTS audio player state (Plan 2) ──
     audioManifest: null,        // {chunks:[{id,dom_id,start_sec,end_sec,...}], audio:{duration_sec,file}}
     audioReady: false,          // 생성된 stitched 오디오 존재 + manifest complete
@@ -1396,6 +1410,7 @@ function viewerApp() {
     mdKoExplainedContent: '',
     mdEnExplainedContent: '',
     mdKoAudioContent: '',
+    mdKoAudioBriefContent: '',
     splitMdContent: '',
 
     // Editor state
@@ -1412,8 +1427,24 @@ function viewerApp() {
     _beforeUnloadHandler: null,
     _editorKeyHandler: null,
 
+    get hasAudioText() {
+      return this.hasMdKoAudio || this.hasMdKoAudioBrief;
+    },
+    get audioUsesBrief() {
+      // brief when: brief exists AND (not switched to 전체 OR no full audio exists)
+      return this.audioMode && this.hasMdKoAudioBrief && (!this.audioFull || !this.hasMdKoAudio);
+    },
+    get activeAudioApiType() {
+      // fall back to brief whenever full audio is absent (brief-only papers)
+      return (this.audioUsesBrief || !this.hasMdKoAudio) ? 'md-ko-audio-brief' : 'md-ko-audio';
+    },
+
     get activeMdContent() {
-      if (this.audioMode && this.mdKoAudioContent) return this.mdKoAudioContent;
+      if (this.audioMode) {
+        if (this.audioUsesBrief && this.mdKoAudioBriefContent) return this.mdKoAudioBriefContent;
+        if (this.mdKoAudioContent) return this.mdKoAudioContent;
+        if (this.mdKoAudioBriefContent) return this.mdKoAudioBriefContent;  // brief-only fallback
+      }
       if (this.explainedMode) {
         if (this.$store.lang.ko && this.mdKoExplainedContent) return this.mdKoExplainedContent;
         if (!this.$store.lang.ko && this.mdEnExplainedContent) return this.mdEnExplainedContent;
@@ -1430,7 +1461,7 @@ function viewerApp() {
     // which detect language from the extracted article element (not just <html lang>),
     // pick Korean for KO/듣기 docs even when the title is English-heavy.
     get activeMdLang() {
-      if (this.audioMode && this.mdKoAudioContent) return 'ko';
+      if (this.audioMode && (this.mdKoAudioContent || this.mdKoAudioBriefContent)) return 'ko';
       if (this.explainedMode) {
         if (this.$store.lang.ko && this.mdKoExplainedContent) return 'ko';
         if (!this.$store.lang.ko && this.mdEnExplainedContent) return 'en';
@@ -1444,7 +1475,7 @@ function viewerApp() {
 
     get downloadUrl() {
       if (this.view === 'pdf') return this.pdfUrl;
-      if (this.audioMode && this.hasMdKoAudio) return '/api/papers/' + name + '/md-ko-audio';
+      if (this.audioMode && this.hasAudioText) return '/api/papers/' + name + '/' + this.activeAudioApiType;
       if (this.explainedMode) {
         if (this.$store.lang.ko && this.hasMdKoExplained) return '/api/papers/' + name + '/md-ko-explained';
         if (!this.$store.lang.ko && this.hasMdEnExplained) return '/api/papers/' + name + '/md-en-explained';
@@ -1459,7 +1490,7 @@ function viewerApp() {
     get downloadFilename() {
       const p = decodeURIComponent(name);
       if (this.view === 'pdf') return p + '.pdf';
-      if (this.audioMode && this.hasMdKoAudio) return p + '_ko_audio.md';
+      if (this.audioMode && this.hasAudioText) return p + (this.audioUsesBrief ? '_ko_audio_brief.md' : '_ko_audio.md');
       if (this.explainedMode) {
         if (this.$store.lang.ko && this.hasMdKoExplained) return p + '_ko_explained.md';
         if (!this.$store.lang.ko && this.hasMdEnExplained) return p + '_explained.md';
@@ -1473,7 +1504,7 @@ function viewerApp() {
 
     get downloadLabel() {
       if (this.view === 'pdf') return 'PDF';
-      if (this.audioMode && this.hasMdKoAudio) return '듣기 (KO)';
+      if (this.audioMode && this.hasAudioText) return this.audioUsesBrief ? '듣기·요약 (KO)' : '듣기 (KO)';
       if (this.explainedMode) {
         if (this.$store.lang.ko && this.hasMdKoExplained) return 'Easy (KO)';
         if (!this.$store.lang.ko && this.hasMdEnExplained) return 'Easy (EN)';
@@ -1647,7 +1678,8 @@ function viewerApp() {
       }
       // 듣기(audio) 모드는 논문별(per-paper)로만 기억한다 — 다른 논문으로 전이되지 않음.
       // 마지막으로 그 논문에서 듣기를 켰으면 다시 열 때 복원(KO 전용, Easy 와 상호배타).
-      if (this.hasMdKoAudio && localStorage.getItem('pf-audio-' + name) === 'true') {
+      this.audioFull = (localStorage.getItem('pf-audiofull-' + name) === 'true');
+      if (this.hasAudioText && localStorage.getItem('pf-audio-' + name) === 'true') {
         this.audioMode = true;
         this.explainedMode = false;
         if (this.$store?.lang) this.$store.lang.ko = true;
@@ -1663,7 +1695,7 @@ function viewerApp() {
         const explainedPref = localStorage.getItem('pf-explained');
         const langPref = localStorage.getItem('pf-lang');
         const allowKo = langPref !== 'en';
-        if (this.hasMdKoAudio && audioPref === null && allowKo) {
+        if (this.hasAudioText && audioPref === null && allowKo) {
           // 1순위 낭독판 (KO 전용)
           this.audioMode = true;
           if (this.$store?.lang) this.$store.lang.ko = true;
@@ -1691,7 +1723,7 @@ function viewerApp() {
       // Pre-load markdown if default view is markdown
       if (this.view === 'md') {
         await this.loadMdForCurrentLang();
-        if (this.audioMode) await this.loadAudio();   // 복원된 듣기 모드면 플레이어 활성화
+        if (this.audioMode && !this.audioUsesBrief) await this.loadAudio();   // 복원된 듣기 모드면 플레이어 활성화(전체 낭독만)
       }
 
       // Watch language toggle: reload markdown content
@@ -1981,8 +2013,12 @@ function viewerApp() {
       const wantKo = this.$store.lang.ko;
 
       // Load audio (listen) version if in audio mode (KO-only)
-      if (this.audioMode && this.hasMdKoAudio) {
-        if (!this.mdKoAudioContent) await this.loadMarkdown('md-ko-audio');
+      if (this.audioMode && this.hasAudioText) {
+        if (this.activeAudioApiType === 'md-ko-audio-brief') {
+          if (!this.mdKoAudioBriefContent) await this.loadMarkdown('md-ko-audio-brief');
+        } else {
+          if (!this.mdKoAudioContent) await this.loadMarkdown('md-ko-audio');
+        }
         // Ensure original KO is loaded for fallback
         if (this.hasMdKo && !this.mdKoContent) await this.loadMarkdown('md-ko');
         return;
@@ -2048,7 +2084,7 @@ function viewerApp() {
     },
 
     async toggleAudio() {
-      if (!this.hasMdKoAudio) {
+      if (!this.hasAudioText) {
         showToast('듣기판이 없습니다', 'warning');
         return;
       }
@@ -2063,10 +2099,10 @@ function viewerApp() {
       localStorage.setItem('pf-audio-' + name, newMode ? 'true' : 'false');  // per-paper 기억
       this.refreshProgressStats();
       await this.loadMdForCurrentLang();   // 정적 텍스트 baseline(읽기용)
-      if (newMode) {
-        await this.loadAudio();            // 생성됐으면 서버 span-HTML로 업그레이드(플레이어 활성)
+      if (newMode && !this.audioUsesBrief) {
+        await this.loadAudio();            // 생성됐으면 서버 span-HTML로 업그레이드(플레이어 활성, 전체 낭독만)
       } else {
-        this.detachAudio();                // 듣기 끄면 깨끗이 분리(폴링·소스·타이머·상태 초기화)
+        this.detachAudio();                // 듣기 끄거나 축약본이면 깨끗이 분리(폴링·소스·타이머·상태 초기화)
       }
       if (this.view === 'split') {
         this.splitMdContent = this.activeMdContent;
@@ -2075,6 +2111,14 @@ function viewerApp() {
         this.extractTocItems();
         this.setupTocObserver();
       });
+    },
+
+    async toggleAudioFull() {
+      this.audioFull = !this.audioFull;
+      localStorage.setItem('pf-audiofull-' + name, this.audioFull ? 'true' : 'false');
+      await this.loadMdForCurrentLang();
+      if (this.audioMode && !this.audioUsesBrief) await this.loadAudio(); else this.detachAudio();
+      this.$nextTick(() => { this.extractTocItems(); this.setupTocObserver(); });
     },
 
     // ── Live TTS: load / generate / poll ──
@@ -2566,6 +2610,7 @@ function viewerApp() {
         'md-ko-explained': '/api/papers/' + name + '/md-ko-explained',
         'md-en-explained': '/api/papers/' + name + '/md-en-explained',
         'md-ko-audio': '/api/papers/' + name + '/md-ko-audio',
+        'md-ko-audio-brief': '/api/papers/' + name + '/md-ko-audio-brief',
       };
       const url = urlMap[type] || this.mdEnUrl;
       try {
@@ -2615,6 +2660,7 @@ function viewerApp() {
             'md-ko-explained': 'mdKoExplainedContent',
             'md-en-explained': 'mdEnExplainedContent',
             'md-ko-audio': 'mdKoAudioContent',
+            'md-ko-audio-brief': 'mdKoAudioBriefContent',
           };
           this[contentMap[type] || 'mdEnContent'] = html;
           // Extract TOC items, setup scroll spy, restore scroll position
@@ -2633,6 +2679,7 @@ function viewerApp() {
             'md-ko-explained': 'mdKoExplainedContent',
             'md-en-explained': 'mdEnExplainedContent',
             'md-ko-audio': 'mdKoAudioContent',
+            'md-ko-audio-brief': 'mdKoAudioBriefContent',
           };
           this[contentMap[type] || 'mdEnContent'] = errorMsg;
         }
@@ -2645,6 +2692,7 @@ function viewerApp() {
           'md-ko-explained': 'mdKoExplainedContent',
           'md-en-explained': 'mdEnExplainedContent',
           'md-ko-audio': 'mdKoAudioContent',
+          'md-ko-audio-brief': 'mdKoAudioBriefContent',
         };
         this[contentMap[type] || 'mdEnContent'] = errorMsg;
       }
