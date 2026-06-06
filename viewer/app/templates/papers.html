@@ -267,7 +267,7 @@
           <!-- Sort controls -->
           <div class="flex items-center space-x-1">
             <select x-model="sortBy"
-                    @change="localStorage.setItem('pf-sort', sortBy)"
+                    @change="localStorage.setItem('pf-sort', sortBy); if (sortBy === 'random') reshuffle()"
                     class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                     :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
               <option value="last_read">Last Read</option>
@@ -278,15 +278,17 @@
               <option value="size">Size</option>
               <option value="progress">Progress</option>
               <option value="rating">Rating</option>
+              <option value="random">Random</option>
             </select>
-            <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+            <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
                     class="p-1.5 rounded-md transition"
                     :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                    :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
-              <svg class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+                    :title="sortBy === 'random' ? 'Shuffle' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
+              <svg x-show="sortBy !== 'random'" class="w-4 h-4 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
                    fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
               </svg>
+              <span x-show="sortBy === 'random'" class="block w-4 h-4 text-sm leading-4 text-center">🎲</span>
             </button>
           </div>
           <!-- Doc type filter -->
@@ -334,7 +336,7 @@
          :class="$store.darkMode.on ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'">
       <div class="flex items-center space-x-1">
         <select x-model="sortBy"
-                @change="localStorage.setItem('pf-sort', sortBy)"
+                @change="localStorage.setItem('pf-sort', sortBy); if (sortBy === 'random') reshuffle()"
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
           <option value="last_read">Last Read</option>
@@ -343,15 +345,17 @@
           <option value="title">Title</option>
           <option value="year">Year</option>
           <option value="size">Size</option>
+          <option value="random">Random</option>
         </select>
-        <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; localStorage.setItem('pf-sort-order', sortOrder)"
+        <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
                 class="p-2.5 rounded-md transition"
                 :class="$store.darkMode.on ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-600'"
-                :title="sortOrder === 'asc' ? 'Ascending' : 'Descending'">
-          <svg class="w-5 h-5 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
+                :title="sortBy === 'random' ? 'Shuffle' : (sortOrder === 'asc' ? 'Ascending' : 'Descending')">
+          <svg x-show="sortBy !== 'random'" class="w-5 h-5 transition-transform" :class="sortOrder === 'desc' && 'rotate-180'"
                fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
           </svg>
+          <span x-show="sortBy === 'random'" class="block w-5 h-5 text-base leading-5 text-center">🎲</span>
         </button>
         <select x-model="filterDocType"
                 @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
@@ -1406,6 +1410,7 @@ function papersApp() {
     viewMode: localStorage.getItem('pf-view') || 'card',
     sortBy: localStorage.getItem('pf-sort') || 'last_read',
     sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
+    shuffleKeys: {},   // {name: number} stable random keys for sortBy==='random'; not persisted
     filterDocType: localStorage.getItem('pf-filter-doctype') || '',
     modal: { show: false, action: '', paper: null, title: '', message: '' },
     dupModal: { show: false, filename: '', size_mb: '', papers: [], resolve: null },
@@ -1733,11 +1738,28 @@ function papersApp() {
         results = [...results].sort((a, b) => dir * (this.getProgress(a.name) - this.getProgress(b.name)));
       } else if (this.sortBy === 'rating') {
         results = [...results].sort((a, b) => dir * (this.getRating(a.name) - this.getRating(b.name)));
+      } else if (this.sortBy === 'random') {
+        // sortOrder ignored — random has no direction. Stable keys from this.shuffleKeys.
+        results = [...results].sort((a, b) => (this.shuffleKeys[a.name] ?? 0) - (this.shuffleKeys[b.name] ?? 0));
       } else {
         results = [...results].sort((a, b) => dir * a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
       }
 
       return results;
+    },
+
+    reshuffle() {
+      const keys = {};
+      for (const p of this.papers) keys[p.name] = Math.random();
+      this.shuffleKeys = keys;
+    },
+
+    // Assign keys to any papers that don't have one yet (first load, tab switch, new upload),
+    // leaving existing keys — and thus the current random order — stable.
+    ensureShuffleKeys() {
+      const keys = { ...this.shuffleKeys };
+      for (const p of this.papers) if (keys[p.name] === undefined) keys[p.name] = Math.random();
+      this.shuffleKeys = keys;
     },
 
     async switchTab(t) {
@@ -1760,6 +1782,9 @@ function papersApp() {
           const expandedSet = new Set(this.papers.filter(p => p._expanded).map(p => p.name));
           papers.forEach(p => { p._expanded = expandedSet.has(p.name); });
           this.papers = papers;
+          // Random sort: ensure every currently-shown paper has a stable key (covers first load,
+          // localStorage-restored 'random' on reload, and tab switches to a different paper set).
+          if (this.sortBy === 'random') this.ensureShuffleKeys();
         }
       } catch (e) {
         showToast('Failed to load papers', 'error');
