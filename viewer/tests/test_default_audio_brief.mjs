@@ -6,7 +6,7 @@ function decide(p) {
   let langKo = (langPref === 'ko');
   let audioMode = false, explainedMode = false;
   if ((hasMdKoExplained) && explainedPref === 'true') explainedMode = true;
-  if (hasMdKoAudio && audioPref === 'true') { audioMode = true; explainedMode = false; langKo = true; }
+  if ((hasMdKoAudio || hasMdKoAudioBrief) && audioPref === 'true') { audioMode = true; explainedMode = false; langKo = true; }
   if (!audioMode && !explainedMode) {
     const allowKo = langPref !== 'en';
     const hasAudioText = hasMdKoAudio || hasMdKoAudioBrief;
@@ -31,4 +31,5 @@ T('lang=en + brief -> orig en (no force ko)', decide({...FULL, langPref:'en'}), 
 T('explicit audio on -> brief (default sub-mode)', decide({...FULL, audioPref:'true'}), 'AUDIO_BRIEF');
 T('brief-only fresh -> brief', decide({hasMdKoAudioBrief:true, hasMdKo:true}), 'AUDIO_BRIEF');
 T('brief-only + audioFull -> still brief (no full to switch)', decide({hasMdKoAudioBrief:true, hasMdKo:true, audioFull:true}), 'AUDIO_BRIEF');
+T('brief-only + explicit audioPref=true (restore) -> brief', decide({hasMdKoAudioBrief:true, hasMdKo:true, audioPref:'true'}), 'AUDIO_BRIEF');
 console.log(process.exitCode ? 'FAIL' : 'ALL PASS');

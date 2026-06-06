@@ -18,7 +18,7 @@ def test_brief_wiring_is_actually_connected():
     # load branch gates on hasAudioText (not bare hasMdKoAudio)
     assert "this.audioMode && this.hasAudioText" in html
     # mp3 player + generate regions gated to full-only (player, generating, 미생성, mobile btn)
-    assert html.count("!audioUsesBrief") >= 3
+    assert html.count("!audioUsesBrief") >= 4
     # 전체 switch shown only when BOTH brief and full exist
     assert "hasMdKoAudioBrief && hasMdKoAudio" in html
     # first-view auto-default + per-paper restore widened to hasAudioText

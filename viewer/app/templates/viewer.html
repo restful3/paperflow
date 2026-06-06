@@ -1435,7 +1435,7 @@ function viewerApp() {
       return this.audioMode && this.hasMdKoAudioBrief && (!this.audioFull || !this.hasMdKoAudio);
     },
     get activeAudioApiType() {
-      // fall back to brief whenever full audio is absent (brief-only papers)
+      if (!this.audioMode) return 'md-ko-audio';
       return (this.audioUsesBrief || !this.hasMdKoAudio) ? 'md-ko-audio-brief' : 'md-ko-audio';
     },
 
@@ -2118,6 +2118,9 @@ function viewerApp() {
       localStorage.setItem('pf-audiofull-' + name, this.audioFull ? 'true' : 'false');
       await this.loadMdForCurrentLang();
       if (this.audioMode && !this.audioUsesBrief) await this.loadAudio(); else this.detachAudio();
+      if (this.view === 'split') {
+        this.splitMdContent = this.activeMdContent;
+      }
       this.$nextTick(() => { this.extractTocItems(); this.setupTocObserver(); });
     },
 
