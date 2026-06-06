@@ -77,7 +77,7 @@ def test_rag_skips_brief(tmp_workspace):
     })
     # get_or_create_chunks must pick the Korean body, never the brief.
     chunks = chat.get_or_create_chunks("Qux")
-    joined = " ".join(c.text if hasattr(c, "text") else (c.get("text", "") if isinstance(c, dict) else str(c)) for c in chunks)
+    joined = " ".join(c.content for c in chunks)
     assert "brief narration" not in joined
 
 
@@ -124,12 +124,10 @@ def test_mcp_zip_excludes_brief_when_translation_off(tmp_workspace):
 
 
 def test_api_serves_brief(tmp_workspace):
-    import importlib
     from fastapi.testclient import TestClient
     from app import main as _main
     from app.dependencies import get_current_user_api
     _make_paper(tmp_workspace, "Foo", {"Foo_ko_audio_brief.md": "# brief body"})
-    importlib.reload(_main)
     app = _main.create_app()
     app.dependency_overrides[get_current_user_api] = lambda: "tester"
     client = TestClient(app)

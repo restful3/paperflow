@@ -1017,6 +1017,7 @@ def get_md_ko_path(name: str) -> Path | None:
             continue
         if fn.endswith("_ko_explained.md"):
             continue
+        # (defensive/consistency — the _ko.md prefilter above already excludes these)
         if fn.endswith("_ko_audio.md"):
             continue
         if fn.endswith("_ko_audio_brief.md"):
