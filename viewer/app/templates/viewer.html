@@ -355,7 +355,7 @@
 
         <!-- Audio action (KO narration) — same slot, switches by MP3 presence:
              no MP3 → queue synthesis; MP3 exists → enter listen mode. -->
-        <button x-show="!editMode && hasMdKoAudio && !audioUsesBrief"
+        <button x-show="!editMode && hasMdKoAudio"
                 @click="((hasAudioMp3 || audioReady) ? (!audioMode && toggleAudio()) : generateAudio()); mobileMenuOpen = false"
                 class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
                 :class="(hasAudioMp3 || audioReady)
@@ -695,7 +695,19 @@
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
              style="display: none;">
 
-          <!-- Audio (listen) toggle moved to the desktop top bar (speaker icon) -->
+          <!-- Audio (KO narration) — same slot, switches by MP3 presence:
+               no MP3 → queue synthesis; MP3 exists → enter listen mode.
+               Shown whenever the full narration source (_ko_audio.md) exists,
+               regardless of current view (md/pdf/explained/brief). -->
+          <button x-show="!editMode && hasMdKoAudio"
+                  @click="((hasAudioMp3 || audioReady) ? (!audioMode && toggleAudio()) : generateAudio()); moreMenuOpen = false"
+                  class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
+                  :class="$store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'">
+            <svg class="w-4 h-4 shrink-0 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5 5 0 010 7.424M6 9l6-3v12l-6-3H4a1 1 0 01-1-1v-2a1 1 0 011-1h2z"/>
+            </svg>
+            <span x-text="(hasAudioMp3 || audioReady) ? '오디오 듣기' : '오디오 생성 (큐에 추가)'">오디오 생성 (큐에 추가)</span>
+          </button>
 
           <!-- Archive (if in outputs) -->
           <template x-if="location === 'outputs'">
@@ -853,17 +865,12 @@
           </button>
         </div>
 
-        <!-- 미생성 안내 + 큐 생성 버튼 — 듣기 모드지만 합성 mp3가 아직 없을 때. 듣기≠합성: 텍스트는 아이폰 내장 TTS로 읽고, 합성 mp3는 명시적으로 큐에 추가. -->
+        <!-- 미생성 안내 — 듣기 모드지만 합성 mp3가 아직 없을 때. 듣기≠합성: 텍스트는 기기 내장 TTS로 읽고,
+             합성 mp3 생성은 상단 메뉴(데스크톱 ⋯ / 모바일 ☰)의 '오디오 생성'으로 일원화. -->
         <div x-show="audioMode && !audioUsesBrief && !audioReady && !audioGenerating"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2 text-sm flex-wrap"
              :class="$store.darkMode.on ? 'bg-gray-800 text-gray-200' : 'bg-sky-50 text-gray-700 border-b border-sky-200'">
-          <span class="opacity-80">합성 오디오 없음 — 아래 낭독 텍스트를 아이폰 내장 TTS로 들으세요.</span>
-          <!-- 모바일에선 햄버거(☰) 메뉴의 '오디오 생성'으로 대체 → 본문 버튼은 데스크톱(md+)에서만 노출 -->
-          <button @click="generateAudio()"
-                  class="ml-auto hidden md:flex px-2.5 py-1 rounded font-medium transition items-center gap-1"
-                  :class="$store.darkMode.on ? 'text-sky-300 bg-sky-900/40 hover:bg-sky-900/60' : 'text-sky-700 bg-sky-100 hover:bg-sky-200'">
-            🎧 오디오 생성 (큐에 추가)
-          </button>
+          <span class="text-xs opacity-80">아직 합성된 오디오가 없습니다 — 상단 메뉴(데스크톱 <b>⋯</b> / 모바일 <b>☰</b>)의 <b>오디오 생성</b>을 눌러 큐에 추가하세요.</span>
         </div>
 
         <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
@@ -2270,12 +2277,19 @@ function viewerApp() {
     async pollAudioGen() {
       // 큐 인지 폴러: 완성되면 재생 mount, 아니면 큐 상태(대기/생성 중)를 반영. detach 시 취소.
       if (this._genPollTimer) { clearTimeout(this._genPollTimer); this._genPollTimer = null; }
-      if (!this.audioMode || !this.audioGenerating) return;
+      // 듣기 모드가 아니어도(PDF·해설·원문을 보는 중) 폴링은 계속 — 햄버거/⋯에서 화면 무관 큐 추가 지원.
+      if (!this.audioGenerating) return;
       try {
         const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
         if (r && r.ok) {
           const m = await r.json();
-          if (m.status === 'complete') { this.audioGenerating = false; await this.loadAudio(); return; }
+          if (m.status === 'complete') {
+            this.audioGenerating = false;
+            this.hasAudioMp3 = true;                  // 화면 무관: 버튼 '생성'→'듣기' 전환
+            if (this.audioMode) { await this.loadAudio(); }   // 듣기 중이면 즉시 플레이어 mount
+            else { showToast('오디오 생성 완료 — 듣기로 전환하면 재생됩니다'); }   // player DOM 없음 → mount 보류
+            return;
+          }
           if (m.status === 'failed' || m.status === 'failed_partial') {
             this.audioGenerating = false; showToast('오디오 생성 실패 — 다시 시도하세요', 'error'); return;
           }
