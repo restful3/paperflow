@@ -294,6 +294,7 @@
           <!-- Doc type filter -->
           <span class="text-gray-300 dark:text-gray-600">|</span>
           <select x-model="filterDocType"
+                  x-effect="docTypeOptions.length; if (filterDocType) $el.value = filterDocType"
                   @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
                   class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                   :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
@@ -360,6 +361,7 @@
           <span x-show="sortBy === 'random'" class="block w-5 h-5 text-base leading-5 text-center">🎲</span>
         </button>
         <select x-model="filterDocType"
+                x-effect="docTypeOptions.length; if (filterDocType) $el.value = filterDocType"
                 @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
