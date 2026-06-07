@@ -1262,6 +1262,7 @@ def delete_paper(name: str) -> tuple[bool, str]:
     delete_progress(name)
     delete_rating(name)
     delete_last_read(name)
+    delete_video_progress(name)
     return True, f"'{name}' deleted ({size:.1f} MB freed)."
 
 
@@ -1683,6 +1684,59 @@ def delete_progress(paper_name: str) -> None:
         del data[paper_name]
         try:
             with open(_progress_path(), "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+
+# ── Video Playback Progress (resume + watched) ─────────────────────────────
+# Separate store from reading_progress: videos need a resume position (seconds)
+# and a watched flag, not a 0-100 scroll percent. Keyed by paper (folder) name.
+
+_VIDEO_PROGRESS_FILE = "video_progress.json"
+
+
+def _video_progress_path() -> Path:
+    return settings.outputs_dir / _VIDEO_PROGRESS_FILE
+
+
+def get_all_video_progress() -> dict[str, dict]:
+    path = _video_progress_path()
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+
+def save_video_progress(paper_name: str, position: float, duration: float, watched: bool) -> bool:
+    if not _is_safe_paper_name(paper_name):
+        return False
+    position = max(0.0, float(position))
+    duration = max(0.0, float(duration))
+    data = get_all_video_progress()
+    data[paper_name] = {
+        "position": round(position, 1),
+        "duration": round(duration, 1),
+        "watched": bool(watched),
+        "last_played_at": _dt.datetime.now().isoformat(),
+    }
+    try:
+        with open(_video_progress_path(), "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def delete_video_progress(paper_name: str) -> None:
+    data = get_all_video_progress()
+    if paper_name in data:
+        del data[paper_name]
+        try:
+            with open(_video_progress_path(), "w", encoding="utf-8") as f:
                 _json.dump(data, f, ensure_ascii=False)
         except Exception:
             pass

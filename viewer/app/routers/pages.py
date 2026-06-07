@@ -110,6 +110,11 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     all_progress = paper_svc.get_all_progress()
     server_progress = all_progress.get(name, 0)
 
+    # Server-side video resume position + watched flag (for doc_type == "video")
+    vp = paper_svc.get_all_video_progress().get(name) or {}
+    video_position = vp.get("position", 0) or 0
+    video_watched = bool(vp.get("watched", False))
+
     return templates.TemplateResponse(request=request, name="viewer.html", context={
         "paper_name": name,
         "paper_name_encoded": quote(name, safe=""),
@@ -132,6 +137,8 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "has_video": has_video,
         "video_poster_url": video_poster_url,
         "video_duration_hms": video_duration_hms,
+        "video_position": video_position,
+        "video_watched": video_watched,
         "location": location,
         "default_view": default_view,
         "server_progress": server_progress,

@@ -831,8 +831,13 @@
       <div class="flex-1 min-h-0 flex items-center justify-center p-3 sm:p-6"
            :class="$store.darkMode.on ? 'bg-black' : 'bg-gray-900'">
         <video controls preload="metadata" playsinline
+               x-ref="videoEl"
                :poster="videoPoster || null"
                :src="videoUrl"
+               @loadedmetadata="onVideoLoaded($el)"
+               @timeupdate="onVideoTime($el)"
+               @pause="flushVideoProgress($el)"
+               @ended="onVideoEnded($el)"
                class="max-w-full max-h-full w-auto h-auto rounded-lg shadow-lg"
                style="max-height: calc(100vh - 120px);">
           이 브라우저는 동영상 재생을 지원하지 않습니다.
@@ -1433,6 +1438,10 @@ function viewerApp() {
     pdfUrl: '/api/papers/' + name + '/pdf',
     videoUrl: '/api/papers/' + name + '/video',
     videoPoster: '{{ video_poster_url }}',   // full assets URL built server-side ('' if none)
+    videoPosition: {{ video_position | default(0) }},   // server resume position (sec)
+    videoWatched: {{ 'true' if video_watched else 'false' }},
+    _videoSaveTimer: null,
+    _videoLastServerSave: -999,
 
     get mobilePdfUrl() {
       // Mobile PDF viewer hint: fit page width/height first
@@ -1906,6 +1915,58 @@ function viewerApp() {
           e.preventDefault();
         }
       }, { passive: false });
+    },
+
+    // ── Video playback: resume + watched (mirrors reading-progress dual save) ──
+    _videoResumeKey() { return 'pf-videopos-' + name; },
+    fmtVideoTime(s) {
+      s = Math.max(0, Math.floor(s || 0));
+      const m = Math.floor(s / 60), ss = s % 60;
+      return m + ':' + String(ss).padStart(2, '0');
+    },
+    onVideoLoaded(el) {
+      // Resume point: localStorage (instant, updated every tick) > server fallback.
+      // Near the end (>95%) → start from the beginning instead of replaying the tail.
+      let pos = this.videoPosition || 0;
+      const ls = parseFloat(localStorage.getItem(this._videoResumeKey()) || '');
+      if (Number.isFinite(ls)) pos = ls;
+      const dur = el.duration || 0;
+      if (dur > 0 && pos > 3 && pos < dur * 0.95) {
+        try { el.currentTime = pos; } catch (e) {}
+        showToast('이어보기: ' + this.fmtVideoTime(pos) + '부터 재생');
+      }
+    },
+    onVideoTime(el) {
+      const now = el.currentTime || 0;
+      const dur = el.duration || 0;
+      localStorage.setItem(this._videoResumeKey(), String(Math.floor(now)));   // 즉시(가벼움)
+      if (Math.abs(now - this._videoLastServerSave) < 5) return;               // 서버는 5초마다
+      this._videoLastServerSave = now;
+      this.saveVideoProgress(now, dur, dur > 0 && now / dur >= 0.9);
+    },
+    onVideoEnded(el) {
+      const dur = el.duration || 0;
+      this.videoWatched = true;
+      localStorage.setItem(this._videoResumeKey(), '0');   // 다음엔 처음부터
+      this.saveVideoProgress(dur, dur, true);
+    },
+    flushVideoProgress(el) {
+      if (!el) return;
+      const now = el.currentTime || 0, dur = el.duration || 0;
+      if (dur <= 0) return;
+      this._videoLastServerSave = now;
+      this.saveVideoProgress(now, dur, now / dur >= 0.9);
+    },
+    saveVideoProgress(position, duration, watched) {
+      if (watched) this.videoWatched = true;
+      if (this._videoSaveTimer) clearTimeout(this._videoSaveTimer);
+      this._videoSaveTimer = setTimeout(() => {
+        apiFetch('/api/papers/' + name + '/video-progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ position, duration, watched }),
+        });
+      }, 1000);
     },
 
     async switchView(v) {

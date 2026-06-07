@@ -434,6 +434,26 @@ async def save_paper_rating(
     return {"ok": True}
 
 
+@router.get("/video-progress")
+async def get_video_progress(_user: str = Depends(get_current_user_api)):
+    return paper_svc.get_all_video_progress()
+
+
+@router.post("/papers/{name:path}/video-progress")
+async def save_video_progress(
+    name: str, payload: dict, _user: str = Depends(get_current_user_api)
+):
+    name = unquote(name)
+    position = payload.get("position")
+    duration = payload.get("duration")
+    if not isinstance(position, (int, float)) or not isinstance(duration, (int, float)):
+        raise HTTPException(status_code=400, detail="'position' and 'duration' (numbers) required")
+    watched = bool(payload.get("watched", False))
+    if not paper_svc.save_video_progress(name, float(position), float(duration), watched):
+        raise HTTPException(status_code=400, detail="failed to save video progress")
+    return {"ok": True}
+
+
 # NOTE: greedy `{name:path}` 인 delete_paper 보다 먼저 등록해야 `.../audio` 가 섀도잉되지 않는다.
 @router.delete("/papers/{name:path}/audio")
 async def delete_audio_artifacts(name: str, _user: str = Depends(get_current_user_api)):
