@@ -345,6 +345,8 @@
           <option value="title">Title</option>
           <option value="year">Year</option>
           <option value="size">Size</option>
+          <option value="progress">Progress</option>
+          <option value="rating">Rating</option>
           <option value="random">Random</option>
         </select>
         <button @click="sortBy === 'random' ? reshuffle() : (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc', localStorage.setItem('pf-sort-order', sortOrder))"
@@ -361,7 +363,7 @@
                 @change="localStorage.setItem('pf-filter-doctype', filterDocType)"
                 class="text-xs rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
                 :class="$store.darkMode.on ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'">
-          <option value="">Type</option>
+          <option value="">All Types</option>
           <template x-for="t in docTypeOptions" :key="t">
             <option :value="t" x-text="t.charAt(0).toUpperCase() + t.slice(1)"></option>
           </template>
