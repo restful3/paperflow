@@ -763,7 +763,7 @@
                 </div>
 
                 <!-- Publication date (fixed-width column) -->
-                <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-auto sm:w-[5.5rem] text-center shrink-0"
+                <span class="inline-block text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors w-[5.5rem] text-center shrink-0"
                       :class="[$store.darkMode.on ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600', !(paper.pub_label || paper.extracted_at) && 'invisible']"
                       x-text="paper.pub_label || (paper.extracted_at ? paper.extracted_at.substring(0, 10) : '')"></span>
 
