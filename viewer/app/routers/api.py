@@ -583,7 +583,7 @@ async def serve_asset(name: str, filename: str, _user: str = Depends(get_current
         raise HTTPException(status_code=404, detail="Asset not found")
     # Guess media type from extension
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    media_types = {"jpeg": "image/jpeg", "jpg": "image/jpeg", "png": "image/png", "gif": "image/gif", "svg": "image/svg+xml"}
+    media_types = {"jpeg": "image/jpeg", "jpg": "image/jpeg", "png": "image/png", "gif": "image/gif", "svg": "image/svg+xml", "webp": "image/webp"}
     return FileResponse(path, media_type=media_types.get(ext, "application/octet-stream"))
 
 

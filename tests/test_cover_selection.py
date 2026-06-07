@@ -250,3 +250,19 @@ def test_stage_count_matches_default_pipeline():
     }
     # convert + metadata + duplicate + select_cover + translate = 5
     assert mt._count_active_stages(pipeline) == 5
+
+
+def test_vision_picks_subdir_image_stores_relative_path(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "images", "fig.jpg"), 900, 700)
+    meta = {"doc_type": "report"}
+    _write_meta(d, meta)
+    client = _mock_client_returning('{"choice": 1}')
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    assert out.get("cover") == os.path.join("images", "fig.jpg")
+    assert _read_cover(d) == os.path.join("images", "fig.jpg")
+
+
+def test_select_cover_handles_none_metadata(tmp_path):
+    out = mt.select_cover_image(str(tmp_path), None, _default_config_for_test(), client=MagicMock())
+    assert out is None
