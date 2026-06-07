@@ -98,7 +98,7 @@
     padding: 0.5rem 0;
   }
   .markdown-container.dark .katex { color: #d1d5db; }
-  .markdown-container img { max-width: 100%; height: auto; }
+  .markdown-container img { max-width: 100%; height: auto; cursor: zoom-in; }
 
   /* iOS Safari input auto-zoom prevention for chat input */
   .chat-input-nozoom {
@@ -1382,6 +1382,26 @@
     </div>
   </div>
 
+  <!-- Image lightbox (pan/zoom) -->
+  <div x-cloak x-show="lightbox.show"
+       @keydown.escape.window="closeLightbox()"
+       @wheel.prevent="onLightboxWheel($event)"
+       @pointerdown="onLightboxPointerDown($event)"
+       @pointermove="onLightboxPointerMove($event)"
+       @pointerup="onLightboxPointerUp($event)"
+       @pointercancel="onLightboxPointerUp($event)"
+       @dblclick="onLightboxDblClick($event)"
+       @click.self="onLightboxBackdrop()"
+       class="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 select-none overflow-hidden"
+       style="touch-action: none;">
+    <img :src="lightbox.src" :alt="lightbox.alt" draggable="false"
+         class="max-w-[95vw] max-h-[95vh] object-contain will-change-transform"
+         :style="`transform: translate(${lightbox.tx}px, ${lightbox.ty}px) scale(${lightbox.scale}); transition: ${_lbStart ? 'none' : 'transform 0.15s ease-out'};`">
+    <button @click="closeLightbox()"
+            class="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/60 text-white text-xl flex items-center justify-center hover:bg-black/80"
+            aria-label="Close">✕</button>
+  </div>
+
 </div>
 
 <script>
@@ -1390,6 +1410,11 @@ function viewerApp() {
   const paperNameRaw = decodeURIComponent(name);   // URL-decoded 폴더명: JSON 바디/이름 비교용(safe_paper_dir 는 정확매칭이라 raw 필요)
 
   return {
+    // Image lightbox (pan/zoom)
+    lightbox: { show: false, src: '', alt: '', scale: 1, tx: 0, ty: 0 },
+    _lbPointers: null,   // Map<pointerId,{x,y}> during a gesture
+    _lbDragged: false,   // moved during this gesture (backdrop-close guard)
+    _lbStart: null,      // gesture start snapshot
     view: '{{ default_view }}',
     hasPdf: {{ 'true' if has_pdf else 'false' }},
     hasVideo: {{ 'true' if has_video else 'false' }},
@@ -2593,6 +2618,18 @@ function viewerApp() {
         }
       });
     },
+    openLightbox(src, alt) {
+      this.lightbox = { show: true, src, alt, scale: 1, tx: 0, ty: 0 };
+      this._lbPointers = new Map();
+      this._lbDragged = false;
+      this._lbStart = null;
+      document.body.style.overflow = 'hidden';
+    },
+    closeLightbox() {
+      this.lightbox.show = false;
+      document.body.style.overflow = '';
+    },
+    _lbClamp(s) { return Math.max(1, Math.min(5, s)); },
     onMarkdownClick(e) {
       this.onSentenceTap(e);                 // 오디오 모드면 그 문장부터 재생
       this.handleMarkdownClickDesktop(e);    // 기존 데스크톱 동작 유지
