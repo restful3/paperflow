@@ -102,3 +102,123 @@ def test_downscale_small_image_not_upscaled(tmp_path):
     raw = base64.b64decode(url.split(",", 1)[1])
     with Image.open(io.BytesIO(raw)) as im:
         assert im.size == (400, 300)  # 확대하지 않음
+
+
+def _default_config_for_test():
+    return {
+        "cover_selection": {
+            "max_candidates": 6,
+            "min_dimension": 200,
+            "downscale_px": 768,
+            "timeout_seconds": 60,
+            "max_retries": 2,
+        }
+    }
+
+
+def _write_meta(d, meta):
+    with open(os.path.join(d, "paper_meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f)
+
+
+def _read_cover(d):
+    with open(os.path.join(d, "paper_meta.json"), encoding="utf-8") as f:
+        return json.load(f).get("cover")
+
+
+def test_skip_when_doc_type_video(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "big.jpg"), 800, 600)
+    meta = {"doc_type": "video"}
+    _write_meta(d, meta)
+    client = MagicMock()
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    client.chat.completions.create.assert_not_called()
+    assert out.get("cover") is None
+
+
+def test_skip_when_cover_already_set(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "big.jpg"), 800, 600)
+    meta = {"doc_type": "article", "cover": "hero.jpg"}
+    _write_meta(d, meta)
+    client = MagicMock()
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    client.chat.completions.create.assert_not_called()
+    assert out.get("cover") == "hero.jpg"  # 덮어쓰지 않음
+
+
+def test_skip_when_no_candidates(tmp_path):
+    d = str(tmp_path)
+    meta = {"doc_type": "blog"}
+    _write_meta(d, meta)
+    client = MagicMock()
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    client.chat.completions.create.assert_not_called()
+    assert out.get("cover") is None
+
+
+def _mock_client_returning(content):
+    client = MagicMock()
+    msg = MagicMock()
+    msg.content = content
+    choice = MagicMock()
+    choice.message = msg
+    resp = MagicMock()
+    resp.choices = [choice]
+    client.chat.completions.create.return_value = resp
+    return client
+
+
+def test_vision_picks_index_sets_cover(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a_large.jpg"), 900, 700)  # 후보 1 (면적 최대)
+    _make_img(os.path.join(d, "b_mid.jpg"), 400, 400)    # 후보 2
+    meta = {"doc_type": "report"}
+    _write_meta(d, meta)
+    client = _mock_client_returning('{"choice": 1}')
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    assert out.get("cover") == "a_large.jpg"
+    assert _read_cover(d) == "a_large.jpg"  # 디스크에도 기록
+
+
+def test_vision_none_leaves_cover_unset(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a.jpg"), 900, 700)
+    meta = {"doc_type": "paper"}
+    _write_meta(d, meta)
+    client = _mock_client_returning('{"choice": null}')
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    assert out.get("cover") is None
+    assert _read_cover(d) is None
+
+
+def test_vision_out_of_range_leaves_unset(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a.jpg"), 900, 700)
+    meta = {"doc_type": "paper"}
+    _write_meta(d, meta)
+    client = _mock_client_returning('{"choice": 99}')
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    assert out.get("cover") is None
+
+
+def test_vision_bad_json_leaves_unset(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a.jpg"), 900, 700)
+    meta = {"doc_type": "paper"}
+    _write_meta(d, meta)
+    client = _mock_client_returning("not json at all")
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    assert out.get("cover") is None
+
+
+def test_vision_exception_does_not_propagate(tmp_path):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a.jpg"), 900, 700)
+    meta = {"doc_type": "paper"}
+    _write_meta(d, meta)
+    client = MagicMock()
+    client.chat.completions.create.side_effect = RuntimeError("api down")
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+    assert out.get("cover") is None  # 예외 삼킴, cover 미설정

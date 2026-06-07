@@ -3168,6 +3168,116 @@ def _downscale_to_data_url(abs_path, downscale_px):
     return f"data:image/jpeg;base64,{b64}"
 
 
+COVER_SELECTION_PROMPT = (
+    "다음은 어떤 {doc_type} 문서에서 추출한 후보 이미지들이다(1번부터 번호 매김). "
+    "컨텐츠 카드의 표지(cover)로 가장 적합하고 대표성 있는 이미지 1장을 골라라. "
+    "전부 수식·표·플롯·로고·인물 증명샷처럼 표지로 부적합하면 고르지 마라. "
+    'JSON 으로만 답하라: {{"choice": <후보 번호 정수 또는 null>}}'
+)
+
+
+def select_cover_image(output_dir, metadata, config, client=None):
+    """비전 모델로 커버 이미지를 선별해 metadata['cover']에 기록한다.
+
+    optional 스테이지 — 어떤 실패도 예외를 전파하지 않고 cover 미설정으로 종료.
+    가드: doc_type=='video' / cover 이미 존재 / 후보 0장 → 비전 호출 없이 스킵.
+    선택 시 폴더 상대경로를 metadata['cover']에 넣고 paper_meta.json을 저장한다.
+    """
+    try:
+        if not metadata:
+            return metadata
+        if metadata.get("doc_type") == "video":
+            return metadata
+        if metadata.get("cover"):
+            return metadata
+
+        cov = config.get("cover_selection", {})
+        max_candidates = cov.get("max_candidates", 6)
+        min_dimension = cov.get("min_dimension", 200)
+        downscale_px = cov.get("downscale_px", 768)
+        timeout = cov.get("timeout_seconds", 60)
+        max_retries = cov.get("max_retries", 2)
+
+        candidates = _gather_cover_candidates(output_dir, min_dimension, max_candidates)
+        if not candidates:
+            print_info("Cover selection: no candidate images, skipping")
+            return metadata
+
+        if client is None:
+            api_base = os.getenv("OPENAI_BASE_URL")
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_base or not api_key:
+                print_warning("Cover selection skipped: OPENAI_BASE_URL or OPENAI_API_KEY not set")
+                return metadata
+            from openai import OpenAI
+            client = OpenAI(base_url=api_base, api_key=api_key)
+
+        model = os.getenv("COVER_MODEL") or os.getenv("TRANSLATION_MODEL", "gemini-claude-sonnet-4-5")
+        doc_type = metadata.get("doc_type") or "document"
+
+        content = [{"type": "text",
+                    "text": COVER_SELECTION_PROMPT.format(doc_type=doc_type)}]
+        for idx, rel in enumerate(candidates, start=1):
+            content.append({"type": "text", "text": f"후보 {idx}:"})
+            data_url = _downscale_to_data_url(os.path.join(output_dir, rel), downscale_px)
+            content.append({"type": "image_url", "image_url": {"url": data_url}})
+
+        choice = None
+        for attempt in range(max_retries):
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": content}],
+                    temperature=0.1,
+                    timeout=timeout,
+                )
+                raw = (resp.choices[0].message.content or "").strip()
+                choice = _parse_cover_choice(raw, len(candidates))
+                break
+            except Exception as e:
+                print_warning(f"Cover selection attempt {attempt+1} failed: {e}")
+
+        if choice is None:
+            print_info("Cover selection: no suitable cover chosen")
+            return metadata
+
+        chosen_rel = candidates[choice - 1]
+        metadata["cover"] = chosen_rel
+        meta_path = os.path.join(output_dir, "paper_meta.json")
+        try:
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+            print_success(f"Cover selected: {chosen_rel}")
+        except Exception as e:
+            print_warning(f"Failed to persist cover to paper_meta.json: {e}")
+        return metadata
+    except Exception as e:
+        print_warning(f"Cover selection error (continuing): {e}")
+        return metadata
+
+
+def _parse_cover_choice(raw, n_candidates):
+    """비전 응답 문자열에서 1..n_candidates 정수 또는 None을 파싱.
+
+    JSON {"choice": <int|null>} 우선, 실패 시 None. 범위 밖이면 None.
+    """
+    try:
+        s = raw.strip()
+        if s.startswith("```"):
+            s = s.strip("`")
+            if s.lower().startswith("json"):
+                s = s[4:]
+        data = json.loads(s)
+        c = data.get("choice")
+        if isinstance(c, bool):  # bool 은 int 의 서브타입 — 배제
+            return None
+        if isinstance(c, int) and 1 <= c <= n_candidates:
+            return c
+        return None
+    except Exception:
+        return None
+
+
 def process_single_pdf(pdf_path, config, prompt):
     """Process single PDF file with configurable pipeline"""
     try:
