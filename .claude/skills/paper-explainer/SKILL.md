@@ -585,10 +585,12 @@ When the user does **NOT specify a target** and says "논문 해설판 만들어
 1. Recursively scan **both** `/home/restful3/workspace/paperflow/outputs` **and** `/home/restful3/workspace/paperflow/archives` subdirectories.
 2. Build the candidate set. A directory is an **eligible paper folder** only if ALL of these hold:
    - The folder name does NOT start with `.` (skip config/hidden folders like `.claude/`)
+   - **`paper_meta.json`의 `doc_type` 가 `"video"` 가 아니다** — 동영상 폴더(HBR Premium 등)는
+     폴백 `*_ko.md` 가 있어도 해설판 생성 대상이 **아니다**. 무조건 건너뛴다 (재생용 mp4 문서이므로).
    - It contains at least one **source MD**: a `*_ko.md`, OR a non-explained/non-backup `*.md`
      (excluding `*_ko_explained.md`, `*_explained.md`, `*_backup_*.md`)
    - It is missing `*_ko_explained.md`
-   Folders that are empty, contain no source MD, or are hidden/config folders are NOT candidates —
+   Folders that are empty, contain no source MD, are doc_type=="video", or are hidden/config folders are NOT candidates —
    skip them (never create, rename, or delete them). If any sourceless/orphan folders are found,
    list them in the completion report so the operator can clean them up.
 3. **Select only one target per run**: the most recently updated source file among missing candidates.

@@ -91,6 +91,7 @@ If it fails this, (re)run `paper-explainer` first.
 
 Inherit the `paper-explainer` batch rules and add audio conditions:
 - Scan `outputs/` and `archives/` non-recursively. A directory is an **eligible paper folder** only if: name does NOT start with `.`, it contains a source MD, it is not empty/config/symlink.
+- **`paper_meta.json`의 `doc_type` 가 `"video"` 인 폴더는 후보에서 제외** — 동영상(HBR Premium 등)은 낭독판 대상이 아니다(소스는 해설판이며, 동영상엔 해설판을 만들지 않으므로 자연히 낭독판도 없음). 폴백 `*_ko.md` 가 있어도 무조건 건너뛴다.
 - Exclusions: `_backup_`, `.bak`, `_mdlint_report.json`, and audio artifacts `*_ko_audio.md`, `*.part`.
 - Among folders whose `<basename>_ko_audio.md` is missing (by completion-sidecar standard), pick the **single most recently updated source**. Treat "audio older than source" as a regeneration candidate.
 - Sourceless/orphan folders: skip and list them in the completion report. **Never create, rename, or delete folders.**
