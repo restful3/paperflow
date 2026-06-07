@@ -622,12 +622,15 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         "md_ko_audio_brief": False,
         "audio_mp3": False,
         "md_lint_report": False,
+        "video": False,
     }
     for f in paper_dir.iterdir():
         if not f.is_file():
             continue
         if f.name.endswith(".pdf"):
             files["pdf"] = True
+        elif f.name.endswith(".mp4"):
+            files["video"] = True
         elif f.name.endswith("_ko_explained.md"):
             files["md_ko_explained"] = True
         elif f.name.endswith("_explained.md"):
@@ -681,6 +684,14 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["doi"] = meta.get("doi")
         info["paper_url"] = meta.get("paper_url")
         info["source_url"] = meta.get("source_url_original") or meta.get("paper_url")
+        # Video docs (doc_type == "video"): expose the isolated video block + display meta
+        info["video"] = meta.get("video")
+        info["video_no"] = meta.get("video_no")
+        info["tags"] = meta.get("tags", [])
+        info["issue"] = meta.get("issue")
+        info["issue_url"] = meta.get("issue_url")
+        if meta.get("video"):
+            files["video"] = True
     else:
         info["title"] = None
         info["title_ko"] = None
@@ -697,6 +708,11 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["doi"] = None
         info["paper_url"] = None
         info["source_url"] = None
+        info["video"] = None
+        info["video_no"] = None
+        info["tags"] = []
+        info["issue"] = None
+        info["issue_url"] = None
 
     # Sidecar fallback: if source_url still missing, check source sidecar in .meta then legacy path
     if not info.get("source_url") and info.get("original_filename"):
@@ -989,6 +1005,30 @@ def get_pdf_path(name: str) -> Path | None:
         return None
     for f in paper_dir.iterdir():
         if f.name.endswith(".pdf"):
+            return f
+    return None
+
+
+def get_video_path(name: str) -> Path | None:
+    """Resolve the local mp4 for a video doc, pinned inside the paper dir.
+
+    Filename comes from paper_meta.json's ``video.filename`` (folder-relative);
+    falls back to the first ``*.mp4`` in the folder. The ``_is_within`` guard
+    rejects path escapes so a crafted meta cannot read outside the paper dir
+    (e.g. ``video.filename`` = ``../../etc/passwd``).
+    """
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    meta = _load_paper_metadata(paper_dir)
+    vid = (meta or {}).get("video") or {}
+    rel = vid.get("filename")
+    if rel:
+        cand = paper_dir / rel
+        if cand.is_file() and _is_within(paper_dir, cand):
+            return cand
+    for f in paper_dir.iterdir():
+        if f.is_file() and f.name.endswith(".mp4"):
             return f
     return None
 

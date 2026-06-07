@@ -419,6 +419,21 @@
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:shadow-lg hover:border-indigo-500' : 'bg-white border-gray-100 hover:shadow-md hover:border-indigo-200'">
           <!-- Gradient accent bar -->
           <div class="h-1" :class="$store.darkMode.on ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600' : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500'"></div>
+          <!-- Video poster thumbnail (doc_type == "video") -->
+          <template x-if="paper.doc_type === 'video' && paper.video && paper.video.poster">
+            <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="block relative group/poster">
+              <img :src="'/api/papers/' + encodeURIComponent(paper.name) + '/assets/' + paper.video.poster"
+                   class="w-full aspect-video object-cover" loading="lazy" alt="">
+              <span class="absolute inset-0 flex items-center justify-center">
+                <span class="w-10 h-10 rounded-full bg-black/55 flex items-center justify-center transition-transform group-hover/poster:scale-110">
+                  <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </span>
+              </span>
+              <span x-show="paper.video.duration_hms"
+                    class="absolute bottom-1.5 right-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70 text-white"
+                    x-text="paper.video.duration_hms"></span>
+            </a>
+          </template>
           <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="block p-4">
             <h3 class="font-semibold text-sm leading-snug mb-1.5 line-clamp-2 transition-colors"
                 :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
@@ -434,13 +449,13 @@
                           'bg-green-500/15 text-green-400 border border-green-500/30': paper.doc_type === 'blog',
                           'bg-rose-500/15 text-rose-400 border border-rose-500/30': paper.doc_type === 'news',
                           'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay',
-                          'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-700/40 text-gray-300 border border-gray-600/50'
+                          'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30': paper.doc_type === 'article', 'bg-red-500/15 text-red-400 border border-red-500/30': paper.doc_type === 'video' }[paper.doc_type] || 'bg-gray-700/40 text-gray-300 border border-gray-600/50'
                       : { 'bg-indigo-50 text-indigo-600 border border-indigo-200': paper.doc_type === 'paper',
                           'bg-purple-50 text-purple-600 border border-purple-200': paper.doc_type === 'report',
                           'bg-green-50 text-green-600 border border-green-200': paper.doc_type === 'blog',
                           'bg-rose-50 text-rose-600 border border-rose-200': paper.doc_type === 'news',
                           'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay',
-                          'bg-cyan-50 text-cyan-600 border border-cyan-200': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-100 text-gray-500 border border-gray-200'"
+                          'bg-cyan-50 text-cyan-600 border border-cyan-200': paper.doc_type === 'article', 'bg-red-50 text-red-600 border border-red-200': paper.doc_type === 'video' }[paper.doc_type] || 'bg-gray-100 text-gray-500 border border-gray-200'"
                     x-text="paper.doc_type"></span>
               <div x-show="paper.authors && paper.authors.length > 0" class="flex items-center gap-1 min-w-0">
                 <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -694,13 +709,13 @@
                             'bg-green-500/15 text-green-400 border border-green-500/30': paper.doc_type === 'blog',
                             'bg-rose-500/15 text-rose-400 border border-rose-500/30': paper.doc_type === 'news',
                             'bg-orange-500/15 text-orange-400 border border-orange-500/30': paper.doc_type === 'essay',
-                            'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-700/40 text-gray-300 border border-gray-600/50'
+                            'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30': paper.doc_type === 'article', 'bg-red-500/15 text-red-400 border border-red-500/30': paper.doc_type === 'video' }[paper.doc_type] || 'bg-gray-700/40 text-gray-300 border border-gray-600/50'
                         : { 'bg-indigo-50 text-indigo-600 border border-indigo-200': paper.doc_type === 'paper',
                             'bg-purple-50 text-purple-600 border border-purple-200': paper.doc_type === 'report',
                             'bg-green-50 text-green-600 border border-green-200': paper.doc_type === 'blog',
                             'bg-rose-50 text-rose-600 border border-rose-200': paper.doc_type === 'news',
                             'bg-orange-50 text-orange-600 border border-orange-200': paper.doc_type === 'essay',
-                            'bg-cyan-50 text-cyan-600 border border-cyan-200': paper.doc_type === 'article' }[paper.doc_type] || 'bg-gray-100 text-gray-500 border border-gray-200'"
+                            'bg-cyan-50 text-cyan-600 border border-cyan-200': paper.doc_type === 'article', 'bg-red-50 text-red-600 border border-red-200': paper.doc_type === 'video' }[paper.doc_type] || 'bg-gray-100 text-gray-500 border border-gray-200'"
                       x-text="paper.doc_type"></span>
                 <template x-for="cat in (paper.categories || []).slice(0, 1)" :key="cat">
                   <span class="hidden sm:inline px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors max-w-[10rem] truncate"

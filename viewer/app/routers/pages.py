@@ -72,10 +72,23 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     has_md_ko_audio = info["formats"].get("md_ko_audio", False) if info else False
     has_md_ko_audio_brief = info["formats"].get("md_ko_audio_brief", False) if info else False
     has_audio_mp3 = info["formats"].get("audio_mp3", False) if info else False
+    has_video = info["formats"].get("video", False) if info else False
     location = info["location"] if info else "outputs"
 
-    # Default view priority: md > pdf
-    if has_md_ko or has_md_en:
+    # Video block (doc_type == "video"): poster + duration for the player
+    video_meta = info.get("video") if info else None
+    video_poster_rel = (video_meta or {}).get("poster") if video_meta else None
+    video_duration_hms = (video_meta or {}).get("duration_hms") if video_meta else None
+    # Build full poster URL via the assets endpoint (keep "/" between path segments)
+    video_poster_url = (
+        f"/api/papers/{quote(name, safe='')}/assets/{quote(video_poster_rel, safe='/')}"
+        if video_poster_rel else ""
+    )
+
+    # Default view priority: video > md > pdf
+    if has_video:
+        default_view = "video"
+    elif has_md_ko or has_md_en:
         default_view = "md"
     elif has_pdf:
         default_view = "pdf"
@@ -116,6 +129,9 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "has_md_ko_audio": has_md_ko_audio,
         "has_md_ko_audio_brief": has_md_ko_audio_brief,
         "has_audio_mp3": has_audio_mp3,
+        "has_video": has_video,
+        "video_poster_url": video_poster_url,
+        "video_duration_hms": video_duration_hms,
         "location": location,
         "default_view": default_view,
         "server_progress": server_progress,

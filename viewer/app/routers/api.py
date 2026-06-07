@@ -466,6 +466,18 @@ async def serve_pdf(name: str, _user: str = Depends(get_current_user_api)):
     return FileResponse(path, media_type="application/pdf")
 
 
+@router.get("/papers/{name:path}/video")
+async def serve_video(name: str, _user: str = Depends(get_current_user_api)):
+    name = unquote(name)
+    path = paper_svc.get_video_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Video file not found")
+    ext = path.suffix.lower().lstrip(".")
+    media_types = {"mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime", "m4v": "video/mp4"}
+    # Starlette FileResponse handles HTTP Range (206) for in-video seeking.
+    return FileResponse(path, media_type=media_types.get(ext, "video/mp4"))
+
+
 @router.get("/papers/{name:path}/md-ko")
 async def serve_md_ko(name: str, _user: str = Depends(get_current_user_api)):
     name = unquote(name)
