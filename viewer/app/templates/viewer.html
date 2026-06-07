@@ -982,7 +982,8 @@
           <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 w-full lg:w-1/2 h-1/2 lg:h-full overflow-y-auto min-h-0"
                :class="[$store.darkMode.on && 'dark', $store.darkMode.on ? 'border-b lg:border-b-0 lg:border-r border-gray-700' : 'border-b lg:border-b-0 lg:border-r border-gray-300']"
                :lang="activeMdLang"
-               x-html="splitMdContent"></div>
+               x-html="splitMdContent"
+               @click="onContentImageClick($event)"></div>
 
           <!-- iPad/touch devices: avoid inline iframe scroll lock -->
           <div x-show="isTabletTouch()"
@@ -2630,7 +2631,14 @@ function viewerApp() {
       document.body.style.overflow = '';
     },
     _lbClamp(s) { return Math.max(1, Math.min(5, s)); },
+    onContentImageClick(e) {
+      const t = e.target;
+      if (!t || t.tagName !== 'IMG' || !t.closest('.markdown-container')) return false;
+      this.openLightbox(t.currentSrc || t.src, t.alt || '');
+      return true;
+    },
     onMarkdownClick(e) {
+      if (this.onContentImageClick(e)) return;   // 이미지면 라이트박스만 열고 종료
       this.onSentenceTap(e);                 // 오디오 모드면 그 문장부터 재생
       this.handleMarkdownClickDesktop(e);    // 기존 데스크톱 동작 유지
     },
@@ -3508,7 +3516,7 @@ function viewerApp() {
       // Only toggle if: no movement + quick release + not on interactive element + not right after scroll
       if (!this.touchMoved && touchDuration < this.TOUCH_TIME_LIMIT) {
         const target = event.target;
-        const isInteractive = target.closest('a, button, input, textarea, select, [contenteditable], iframe');
+        const isInteractive = target.closest('a, button, input, textarea, select, [contenteditable], iframe, img');
 
         const debounceOk = (now - this.lastTapToggleAt) > this.MIN_TAP_INTERVAL;
         const notAfterScroll = (now - this.lastScrollAt) > 350;
@@ -3542,7 +3550,7 @@ function viewerApp() {
       if (!this.isMobile()) return;
 
       const target = event.target;
-      const isInteractive = target.closest('a, button, input, textarea, select, [contenteditable]');
+      const isInteractive = target.closest('a, button, input, textarea, select, [contenteditable], img');
 
       if (isInteractive) {
         this.isTouching = false;
