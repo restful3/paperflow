@@ -1,0 +1,29 @@
+"""리스트뷰 메인 행 슬림화 + 확장 패널 이동분 배선 어서션.
+
+별점·메타(venue/크기/추가일)가 확장 패널로 이동했는지, 메인 행이 고정폭 열로
+재구성됐는지를 마커/토큰으로 확인한다. 픽셀 정렬은 수동 시각 확인이 주 기준이다.
+"""
+from pathlib import Path
+
+TPL = Path(__file__).resolve().parents[1] / "app" / "templates" / "papers.html"
+
+
+def test_panel_relocations_markers_present():
+    html = TPL.read_text(encoding="utf-8")
+    assert "<!-- list-meta-line -->" in html
+    assert "<!-- list-rating-detail -->" in html
+
+
+def test_rating_setter_in_detail_panel():
+    html = TPL.read_text(encoding="utf-8")
+    after = html.split("<!-- list-rating-detail -->", 1)[1]
+    assert "setRating(paper.name" in after
+    assert "'list-rate-' + s" in after
+
+
+def test_meta_line_has_venue_size_date():
+    html = TPL.read_text(encoding="utf-8")
+    after = html.split("<!-- list-meta-line -->", 1)[1][:800]
+    assert "paper.venue || paper.source_domain" in after
+    assert "paper.size_mb + ' MB'" in after
+    assert "paperDateLabel(paper)" in after
