@@ -3259,15 +3259,14 @@ def select_cover_image(output_dir, metadata, config, client=None):
 def _parse_cover_choice(raw, n_candidates):
     """비전 응답 문자열에서 1..n_candidates 정수 또는 None을 파싱.
 
-    JSON {"choice": <int|null>} 우선, 실패 시 None. 범위 밖이면 None.
+    응답에서 첫 JSON 객체를 추출해 {"choice": <int|null>} 를 읽는다.
+    실패/범위 밖/불리언이면 None. 절대 예외를 던지지 않는다.
     """
     try:
-        s = raw.strip()
-        if s.startswith("```"):
-            s = s.strip("`")
-            if s.lower().startswith("json"):
-                s = s[4:]
-        data = json.loads(s)
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not m:
+            return None
+        data = json.loads(m.group(0))
         c = data.get("choice")
         if isinstance(c, bool):  # bool 은 int 의 서브타입 — 배제
             return None

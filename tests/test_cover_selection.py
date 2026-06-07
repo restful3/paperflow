@@ -222,3 +222,19 @@ def test_vision_exception_does_not_propagate(tmp_path):
     client.chat.completions.create.side_effect = RuntimeError("api down")
     out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
     assert out.get("cover") is None  # 예외 삼킴, cover 미설정
+
+
+def test_parse_cover_choice_rejects_bool():
+    assert mt._parse_cover_choice('{"choice": true}', 3) is None
+
+
+def test_parse_cover_choice_handles_json_fence():
+    assert mt._parse_cover_choice('```json\n{"choice": 2}\n```', 3) == 2
+
+
+def test_parse_cover_choice_extracts_from_prose():
+    assert mt._parse_cover_choice('내 선택은 다음과 같다: {"choice": 1} 입니다.', 3) == 1
+
+
+def test_parse_cover_choice_out_of_range_returns_none():
+    assert mt._parse_cover_choice('{"choice": 9}', 3) is None
