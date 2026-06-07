@@ -2628,6 +2628,8 @@ function viewerApp() {
     },
     closeLightbox() {
       this.lightbox.show = false;
+      this._lbPointers = new Map();
+      this._lbStart = null;
       document.body.style.overflow = '';
     },
     _lbClamp(s) { return Math.max(1, Math.min(5, s)); },
