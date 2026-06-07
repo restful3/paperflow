@@ -306,6 +306,7 @@ Before writing anything, choose 3-5 core analogies:
   > 일상적인 비유와 풀어쓴 설명으로 재구성한 해설판입니다.
   ```
 - Add author context: briefly explain who the authors are and where they work (institution context)
+- **도입부 상투구 자제**: 출처·저자·글의 성격을 소개할 때 **"학술 논문이라기보다는 ~에 가깝습니다"** 류의 정형 대비 문구를 쓰지 않는다 (여러 해설판에서 똑같이 반복되어 거슬리고, 듣기판으로도 그대로 옮겨진다). 글의 성격을 밝힐 필요가 있으면 "논문이 아니라 ~"로 대비시키지 말고, 그것이 무엇인지(블로그·에세이·기술 보고서 등)만 한 번 자연스럽게 언급하거나 곧장 내용으로 들어간다. 저자 소개도 매번 같은 틀로 시작하지 않는다.
 
 ### Step 4: Rewrite Each Section (with per-section verification)
 For each section in the original paper:
