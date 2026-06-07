@@ -421,19 +421,22 @@
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:shadow-lg hover:border-indigo-500' : 'bg-white border-gray-100 hover:shadow-md hover:border-indigo-200'">
           <!-- Gradient accent bar -->
           <div class="h-1" :class="$store.darkMode.on ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600' : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500'"></div>
-          <!-- Video poster thumbnail (doc_type == "video") -->
-          <template x-if="paper.doc_type === 'video' && paper.video && paper.video.poster">
+          <!-- Card cover thumbnail: video poster OR curated `cover` (any doc_type) -->
+          <template x-if="cardCoverSrc(paper)">
             <a :href="'/viewer/' + encodeURIComponent(paper.name)" class="block relative group/poster">
-              <img :src="'/api/papers/' + encodeURIComponent(paper.name) + '/assets/' + paper.video.poster"
+              <img :src="cardCoverSrc(paper)"
                    class="w-full aspect-video object-cover" loading="lazy" alt="">
-              <span class="absolute inset-0 flex items-center justify-center">
-                <span class="w-10 h-10 rounded-full bg-black/55 flex items-center justify-center transition-transform group-hover/poster:scale-110">
-                  <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <!-- play overlay + duration: video only -->
+              <template x-if="paper.doc_type === 'video'">
+                <span class="absolute inset-0 flex items-center justify-center">
+                  <span class="w-10 h-10 rounded-full bg-black/55 flex items-center justify-center transition-transform group-hover/poster:scale-110">
+                    <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
                 </span>
-              </span>
-              <span x-show="paper.video.duration_hms"
+              </template>
+              <span x-show="paper.doc_type === 'video' && paper.video && paper.video.duration_hms"
                     class="absolute bottom-1.5 right-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70 text-white"
-                    x-text="paper.video.duration_hms"></span>
+                    x-text="paper.video && paper.video.duration_hms"></span>
               <!-- watched / resume state -->
               <span x-show="videoStateOf(paper) === 'watched'"
                     class="absolute top-1.5 left-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-600 text-white flex items-center gap-0.5">
@@ -1864,6 +1867,15 @@ function papersApp() {
         const resp = await apiFetch('/api/video-progress');
         if (resp?.ok) this.serverVideoProgress = await resp.json();
       } catch (e) { /* silent */ }
+    },
+
+    // Card cover image URL: video poster, else curated `cover` meta (any doc_type). '' if none.
+    cardCoverSrc(paper) {
+      const rel = (paper.doc_type === 'video' && paper.video && paper.video.poster)
+        ? paper.video.poster
+        : (paper.cover || '');
+      if (!rel) return '';
+      return '/api/papers/' + encodeURIComponent(paper.name) + '/assets/' + rel;
     },
 
     // Card badge helper: 'watched' | 'resume' | '' for a video paper

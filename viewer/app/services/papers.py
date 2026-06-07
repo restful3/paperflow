@@ -690,6 +690,10 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["tags"] = meta.get("tags", [])
         info["issue"] = meta.get("issue")
         info["issue_url"] = meta.get("issue_url")
+        # Curated card cover (folder-relative path), any doc_type. Optional — only
+        # set by collectors when a genuine lead/hero image exists (NOT an arbitrary
+        # inline figure). Videos use video.poster instead.
+        info["cover"] = meta.get("cover")
         if meta.get("video"):
             files["video"] = True
     else:
@@ -713,6 +717,7 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["tags"] = []
         info["issue"] = None
         info["issue_url"] = None
+        info["cover"] = None
 
     # Sidecar fallback: if source_url still missing, check source sidecar in .meta then legacy path
     if not info.get("source_url") and info.get("original_filename"):
