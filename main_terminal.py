@@ -3146,6 +3146,28 @@ def _gather_cover_candidates(output_dir, min_dimension, max_candidates):
     return [rel for _, rel in scored[:max_candidates]]
 
 
+def _downscale_to_data_url(abs_path, downscale_px):
+    """이미지를 긴 변 downscale_px 이하 JPEG로 줄여 base64 data URL 반환.
+
+    원본보다 크게 확대하지 않는다. RGBA/팔레트는 RGB로 변환.
+    """
+    import base64
+    import io
+    from PIL import Image
+
+    with Image.open(abs_path) as im:
+        im = im.convert("RGB")
+        w, h = im.size
+        longest = max(w, h)
+        if longest > downscale_px:
+            scale = downscale_px / float(longest)
+            im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))))
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=85)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
+
+
 def process_single_pdf(pdf_path, config, prompt):
     """Process single PDF file with configurable pipeline"""
     try:

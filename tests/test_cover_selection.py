@@ -81,3 +81,24 @@ def test_gather_caps_at_max_candidates(tmp_path):
 def test_gather_empty_when_no_images(tmp_path):
     out = mt._gather_cover_candidates(str(tmp_path), min_dimension=200, max_candidates=6)
     assert out == []
+
+
+def test_downscale_returns_data_url_within_bounds(tmp_path):
+    p = os.path.join(str(tmp_path), "big.jpg")
+    _make_img(p, 2000, 1500)
+    url = mt._downscale_to_data_url(p, downscale_px=768)
+    assert url.startswith("data:image/jpeg;base64,")
+    import base64, io
+    raw = base64.b64decode(url.split(",", 1)[1])
+    with Image.open(io.BytesIO(raw)) as im:
+        assert max(im.size) <= 768
+
+
+def test_downscale_small_image_not_upscaled(tmp_path):
+    p = os.path.join(str(tmp_path), "small.jpg")
+    _make_img(p, 400, 300)
+    url = mt._downscale_to_data_url(p, downscale_px=768)
+    import base64, io
+    raw = base64.b64decode(url.split(",", 1)[1])
+    with Image.open(io.BytesIO(raw)) as im:
+        assert im.size == (400, 300)  # 확대하지 않음
