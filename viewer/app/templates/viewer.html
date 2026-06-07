@@ -435,15 +435,15 @@
           <span>Edit</span>
         </button>
 
-        <!-- Download (dynamic: PDF / MD / Easy) -->
-        <a :href="downloadUrl" :download="downloadFilename"
+        <!-- Download (현재 보고 있는 문서를 받음; 실제 파일명은 title 툴팁) -->
+        <a :href="downloadUrl" :download="downloadFilename" :title="downloadFilename"
            @click="mobileMenuOpen = false"
            class="flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition"
            :class="$store.darkMode.on ? 'bg-gray-600 text-blue-400 hover:bg-gray-500' : 'bg-white text-blue-600 hover:bg-blue-50'">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
-          <span x-text="downloadLabel"></span>
+          <span>다운받기</span>
         </a>
       </div>
     </div>
@@ -733,15 +733,15 @@
             </button>
           </template>
 
-          <!-- Download (dynamic: PDF / MD / Easy) -->
-          <a :href="downloadUrl" :download="downloadFilename"
+          <!-- Download (현재 보고 있는 문서를 받음; 실제 파일명은 title 툴팁) -->
+          <a :href="downloadUrl" :download="downloadFilename" :title="downloadFilename"
              @click="moreMenuOpen = false"
              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
              :class="$store.darkMode.on ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'">
             <svg class="w-4 h-4 shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
-            <span x-text="downloadLabel">Download</span>
+            <span>다운받기</span>
           </a>
 
           <!-- separator before destructive action -->
@@ -1507,20 +1507,6 @@ function viewerApp() {
       if (this.hasMdKo) return p + '_ko.md';
       if (this.hasMdEn) return p + '.md';
       return p + '.pdf';
-    },
-
-    get downloadLabel() {
-      if (this.view === 'pdf') return 'PDF';
-      if (this.audioMode && this.hasAudioText) return this.audioUsesBrief ? '듣기·요약 (KO)' : '듣기 (KO)';
-      if (this.explainedMode) {
-        if (this.$store.lang.ko && this.hasMdKoExplained) return 'Easy (KO)';
-        if (!this.$store.lang.ko && this.hasMdEnExplained) return 'Easy (EN)';
-      }
-      if (this.$store.lang.ko && this.hasMdKo) return 'MD (KO)';
-      if (!this.$store.lang.ko && this.hasMdEn) return 'MD (EN)';
-      if (this.hasMdKo) return 'MD (KO)';
-      if (this.hasMdEn) return 'MD (EN)';
-      return 'PDF';
     },
 
     tocVisible: localStorage.getItem('pf-toc') !== 'hidden',
