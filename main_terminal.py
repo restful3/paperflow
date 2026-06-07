@@ -3506,6 +3506,18 @@ def process_single_pdf(pdf_path, config, prompt):
                 print_warning(f"Duplicate check error (continuing): {e}")
                 results["duplicate_check"] = "error"
 
+        # Step 1.8: Cover image selection (optional, vision)
+        if pipeline.get("select_cover", True) and metadata:
+            current_stage += 1
+            write_processing_status(pdf_name, "selecting_cover", current_stage, total_stages, "Selecting Cover Image")
+            print_info("Step 1.8: Selecting cover image with vision AI...")
+            try:
+                metadata = select_cover_image(output_dir, metadata, config)
+                results["cover_selection"] = "done"
+            except Exception as e:
+                print_warning(f"Cover selection error (continuing): {e}")
+                results["cover_selection"] = "error"
+
         # Step 2: Translation (optional, skip if duplicate found)
         ko_md_path = None
         if skip_translation:

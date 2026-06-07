@@ -238,3 +238,15 @@ def test_parse_cover_choice_extracts_from_prose():
 
 def test_parse_cover_choice_out_of_range_returns_none():
     assert mt._parse_cover_choice('{"choice": 9}', 3) is None
+
+
+def test_stage_count_matches_default_pipeline():
+    pipeline = {
+        "convert_to_markdown": True,
+        "extract_metadata": True,
+        "check_duplicate": True,
+        "select_cover": True,
+        "translate_to_korean": True,
+    }
+    # convert + metadata + duplicate + select_cover + translate = 5
+    assert mt._count_active_stages(pipeline) == 5

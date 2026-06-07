@@ -8,7 +8,8 @@
     "translate_to_korean": true,
     "url_html_first": true,
     "browser_fallback": true,
-    "pdf_ocr_fallback": true
+    "pdf_ocr_fallback": true,
+    "select_cover": true
   },
   "converter": {
     "mineru": {
@@ -44,5 +45,12 @@
     "max_ocr_artifacts": 5,
     "max_mixed_language_ratio": 0.35,
     "allow_warn_save": false
+  },
+  "cover_selection": {
+    "max_candidates": 6,
+    "min_dimension": 200,
+    "downscale_px": 768,
+    "timeout_seconds": 60,
+    "max_retries": 2
   }
 }

@@ -33,7 +33,7 @@ cd viewer && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Batch Pipeline (`main_terminal.py`)
 
-`process_single_pdf()` orchestrates 6 stages:
+`process_single_pdf()` orchestrates 7 stages:
 
 | # | Stage | Function | Notes |
 |---|-------|----------|-------|
@@ -42,7 +42,8 @@ cd viewer && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | 3 | Metadata | `extract_paper_metadata()` | AI: title/authors/abstract/categories, smart folder rename |
 | 4 | Web Search | `enrich_metadata_with_web_search()` | Brave Search: venue/DOI/year/URL (optional) |
 | 5 | Duplicate | `check_duplicate_batch()` | AI title comparison against existing papers |
-| 6 | Translation | `translate_md_to_korean_openai()` | 7-step pipeline, parallel (max 3 workers), quality verification |
+| 6 | Cover Select | `select_cover_image()` | Vision: pick 표지 image from extracted figures, write `cover` to paper_meta.json (skip video / existing-cover / no-image) |
+| 7 | Translation | `translate_md_to_korean_openai()` | 7-step pipeline, parallel (max 3 workers), quality verification |
 
 **Translation pipeline**: Split YAML → Clean OCR (+ math OCR fix) → Protect code blocks (math NOT protected — LLM sees and fixes OCR artifacts) → Classify sections (skip References/Appendix) → Translate with context (200 chars overlap) → Restore blocks → Verify quality
 
@@ -209,16 +210,18 @@ TRANSLATION_MODEL                 # e.g., gemini-2.5-pro
 CHATBOT_MODEL                     # e.g., gpt-4o (RAG chatbot)
 TRANSLATION_MAX_TOKENS, TRANSLATION_TEMPERATURE
 BRAVE_SEARCH_API_KEY              # Web search enrichment (optional)
+COVER_MODEL                       # Vision cover selection model (optional, falls back to TRANSLATION_MODEL)
 LOGIN_ID, LOGIN_PASSWORD          # Viewer auth
 JWT_SECRET_KEY                    # JWT signing (required, no default — startup rejects empty/short/placeholder substrings)
 COOKIE_SECURE                     # true on HTTPS deployments, false for local HTTP (default false)
 ```
 
 ### config.json
-- `processing_pipeline`: Toggle each stage (convert_to_markdown, normalize_headings, extract_metadata, enrich_with_web_search, check_duplicate, translate_to_korean)
+- `processing_pipeline`: Toggle each stage (convert_to_markdown, normalize_headings, extract_metadata, enrich_with_web_search, check_duplicate, select_cover, translate_to_korean)
 - `converter.mineru`: MinerU-specific settings (backend, parse_method, lang)
 - `metadata_extraction`: AI settings (temperature, max_tokens, timeout, smart_rename, max_folder_name_length)
 - `translation`: Retry/timeout, parallel translation (max_workers, min_chunks), verify_translation
+- `cover_selection`: vision cover picker settings (max_candidates, min_dimension, downscale_px, timeout_seconds, max_retries)
 
 ## Implementation Gotchas
 
