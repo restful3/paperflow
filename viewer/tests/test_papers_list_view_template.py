@@ -27,3 +27,15 @@ def test_meta_line_has_venue_size_date():
     assert "paper.venue || paper.source_domain" in after
     assert "paper.size_mb + ' MB'" in after
     assert "paperDateLabel(paper)" in after
+
+
+def test_main_row_single_category_tag_removed():
+    html = TPL.read_text(encoding="utf-8")
+    # 리스트뷰 메인 행의 단일 카테고리 칩만 slice(0, 1)을 쓴다(파일 내 유일).
+    assert "(paper.categories || []).slice(0, 1)" not in html
+
+
+def test_main_row_fixed_width_columns():
+    html = TPL.read_text(encoding="utf-8")
+    assert 'class="hidden sm:flex w-16 justify-end shrink-0"' in html  # doc_type 열
+    assert 'class="w-14 flex justify-end items-center gap-1 shrink-0"' in html  # 파일점 열
