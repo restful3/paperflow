@@ -53,6 +53,19 @@ def test_paper_without_doc_type_excluded_from_by_type_but_in_totals(tmp_workspac
     assert sum(v["unread"] for v in stats["by_type"].values()) == 1
 
 
+def test_doc_type_other_excluded_from_by_type_but_in_totals(tmp_workspace):
+    # 'other'는 프런트 docTypeOptions에서 제외되므로 by_type에도 넣지 않는다.
+    outputs = tmp_workspace / "outputs"
+    _make_paper(outputs, "p1", "paper")
+    _make_paper(outputs, "o1", "other")
+
+    stats = papers.get_stats()
+
+    assert stats["unread"] == 2  # 둘 다 전체값에 집계
+    assert "other" not in stats["by_type"]
+    assert stats["by_type"]["paper"] == {"unread": 1, "archived": 0}
+
+
 def test_empty_workspace_returns_empty_by_type(tmp_workspace):
     stats = papers.get_stats()
     assert stats == {"unread": 0, "archived": 0, "total": 0, "by_type": {}}

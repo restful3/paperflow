@@ -1285,7 +1285,8 @@ def get_stats() -> dict:
                 total += 1
                 meta = _load_paper_metadata(d)
                 dt = (meta or {}).get("doc_type")
-                if dt:  # null/없음/미지정은 by_type 제외, 전체값에만 집계
+                # null/없음/미지정·'other'는 by_type 제외(프런트 docTypeOptions와 정합), 전체값에만 집계
+                if dt and dt != "other":
                     by_type.setdefault(dt, {"unread": 0, "archived": 0})[key] += 1
         return total
 
