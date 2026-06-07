@@ -111,6 +111,8 @@ def _count_active_stages(pipeline):
         count += 1
     if pipeline.get("check_duplicate", True) and pipeline.get("extract_metadata", False):
         count += 1
+    if pipeline.get("select_cover", True) and pipeline.get("extract_metadata", False):
+        count += 1
     if pipeline.get("translate_to_korean", False):
         count += 1
     return max(count, 1)
@@ -365,7 +367,15 @@ def load_config():
             "convert_to_markdown": True,
             "normalize_headings": True,
             "extract_metadata": True,
+            "select_cover": True,
             "translate_to_korean": False,
+        },
+        "cover_selection": {
+            "max_candidates": 6,
+            "min_dimension": 200,
+            "downscale_px": 768,
+            "timeout_seconds": 60,
+            "max_retries": 2,
         },
         "metadata_extraction": {
             "max_input_chars": 8000,
