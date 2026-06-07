@@ -213,7 +213,7 @@
                   :class="tab === 'unread'
                     ? ($store.darkMode.on ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
                     : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
-                  x-text="stats.unread"></span>
+                  x-text="unreadBadge"></span>
           </button>
           <!-- Archived tab -->
           <button @click="switchTab('archived')" role="tab" :aria-selected="tab === 'archived'"
@@ -226,7 +226,7 @@
                   :class="tab === 'archived'
                     ? ($store.darkMode.on ? 'bg-indigo-900/50 text-indigo-300' : 'bg-indigo-100 text-indigo-600')
                     : ($store.darkMode.on ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')"
-                  x-text="stats.archived"></span>
+                  x-text="archivedBadge"></span>
           </button>
           <!-- Upload tab -->
           <button @click="switchTab('upload')" role="tab" :aria-selected="tab === 'upload'"
@@ -1440,7 +1440,7 @@ function papersApp() {
     searchText: '',
     searchTags: [],
     loading: true,
-    stats: { unread: 0, archived: 0 },
+    stats: { unread: 0, archived: 0, by_type: {} },
     viewMode: localStorage.getItem('pf-view') || 'card',
     sortBy: localStorage.getItem('pf-sort') || 'last_read',
     sortOrder: localStorage.getItem('pf-sort-order') || 'desc',
@@ -1497,6 +1497,16 @@ function papersApp() {
     // 메인 목록 타입 필터 옵션 — 하드코딩 대신 실제 로드된 논문의 doc_type 에서 도출(새 타입 자동 반영).
     get docTypeOptions() {
       return [...new Set(this.papers.map(p => p.doc_type).filter(t => t && t !== 'other'))].sort();
+    },
+    get unreadBadge() {
+      return this.filterDocType
+        ? (this.stats.by_type?.[this.filterDocType]?.unread ?? 0)
+        : this.stats.unread;
+    },
+    get archivedBadge() {
+      return this.filterDocType
+        ? (this.stats.by_type?.[this.filterDocType]?.archived ?? 0)
+        : this.stats.archived;
     },
     get candFiltered() {
       let list = this.candidates.slice();
