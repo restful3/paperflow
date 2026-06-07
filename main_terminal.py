@@ -3107,6 +3107,45 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
         print_error(traceback.format_exc())
         return None
 
+_COVER_IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+_COVER_SUBDIRS = ("", "images", "figures", "assets")
+
+
+def _gather_cover_candidates(output_dir, min_dimension, max_candidates):
+    """폴더에서 커버 후보 이미지의 폴더 상대경로 리스트를 반환.
+
+    루트 + images/figures/assets 서브디렉토리에서 알려진 확장자 이미지를 모으고,
+    긴 변이 min_dimension 미만인 것은 제외(아이콘/로고/수식조각). 면적 내림차순,
+    동률은 상대경로 문자열 순으로 정렬해 상위 max_candidates개를 반환한다.
+    AI 호출 없음 — 순수 함수.
+    """
+    from PIL import Image
+
+    scored = []  # (-area, relpath)
+    for sub in _COVER_SUBDIRS:
+        dir_path = os.path.join(output_dir, sub) if sub else output_dir
+        if not os.path.isdir(dir_path):
+            continue
+        for fname in os.listdir(dir_path):
+            if not fname.lower().endswith(_COVER_IMG_EXTS):
+                continue
+            abs_path = os.path.join(dir_path, fname)
+            if not os.path.isfile(abs_path):
+                continue
+            try:
+                with Image.open(abs_path) as im:
+                    w, h = im.size
+            except Exception:
+                continue
+            if max(w, h) < min_dimension:
+                continue
+            rel = os.path.join(sub, fname) if sub else fname
+            scored.append((-(w * h), rel))
+
+    scored.sort(key=lambda t: (t[0], t[1]))
+    return [rel for _, rel in scored[:max_candidates]]
+
+
 def process_single_pdf(pdf_path, config, prompt):
     """Process single PDF file with configurable pipeline"""
     try:
