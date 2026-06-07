@@ -1272,13 +1272,31 @@ def delete_paper(name: str) -> tuple[bool, str]:
 
 
 def get_stats() -> dict:
-    unread = 0
-    archived = 0
-    if settings.outputs_dir.exists():
-        unread = sum(1 for d in settings.outputs_dir.iterdir() if d.is_dir() and not d.name.startswith("."))
-    if settings.archives_dir.exists():
-        archived = sum(1 for d in settings.archives_dir.iterdir() if d.is_dir() and not d.name.startswith("."))
-    return {"unread": unread, "archived": archived, "total": unread + archived}
+    from ..config import settings  # lazy import so test fixtures can replace settings
+
+    by_type: dict = {}  # {doc_type: {"unread": n, "archived": n}}
+
+    def count_dir(base, key):
+        total = 0
+        if base.exists():
+            for d in base.iterdir():
+                if not d.is_dir() or d.name.startswith("."):
+                    continue
+                total += 1
+                meta = _load_paper_metadata(d)
+                dt = (meta or {}).get("doc_type")
+                if dt:  # null/없음/미지정은 by_type 제외, 전체값에만 집계
+                    by_type.setdefault(dt, {"unread": 0, "archived": 0})[key] += 1
+        return total
+
+    unread = count_dir(settings.outputs_dir, "unread")
+    archived = count_dir(settings.archives_dir, "archived")
+    return {
+        "unread": unread,
+        "archived": archived,
+        "total": unread + archived,
+        "by_type": by_type,
+    }
 
 
 def get_latest_log() -> dict | None:
