@@ -2631,6 +2631,78 @@ function viewerApp() {
       document.body.style.overflow = '';
     },
     _lbClamp(s) { return Math.max(1, Math.min(5, s)); },
+    onLightboxWheel(e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const cx = e.clientX - rect.left - rect.width / 2;
+      const cy = e.clientY - rect.top - rect.height / 2;
+      const prev = this.lightbox.scale;
+      const next = this._lbClamp(prev * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+      if (next === prev) return;
+      const ratio = next / prev;
+      this.lightbox.tx = cx - ratio * (cx - this.lightbox.tx);
+      this.lightbox.ty = cy - ratio * (cy - this.lightbox.ty);
+      this.lightbox.scale = next;
+      if (next === 1) { this.lightbox.tx = 0; this.lightbox.ty = 0; }
+    },
+    onLightboxPointerDown(e) {
+      if (e.currentTarget.setPointerCapture) {
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      this._lbPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this._lbDragged = false;
+      if (this._lbPointers.size === 1) {
+        this._lbStart = { x: e.clientX, y: e.clientY, tx: this.lightbox.tx, ty: this.lightbox.ty };
+      } else if (this._lbPointers.size === 2) {
+        const pts = [...this._lbPointers.values()];
+        this._lbStart = {
+          dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+          scale: this.lightbox.scale,
+        };
+      }
+    },
+    onLightboxPointerMove(e) {
+      if (!this._lbPointers || !this._lbPointers.has(e.pointerId)) return;
+      this._lbPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const n = this._lbPointers.size;
+      if (n === 1 && this.lightbox.scale > 1 && this._lbStart) {
+        this.lightbox.tx = this._lbStart.tx + (e.clientX - this._lbStart.x);
+        this.lightbox.ty = this._lbStart.ty + (e.clientY - this._lbStart.y);
+        this._lbDragged = true;
+      } else if (n === 2 && this._lbStart && this._lbStart.dist) {
+        const pts = [...this._lbPointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const next = this._lbClamp(this._lbStart.scale * (dist / this._lbStart.dist));
+        this.lightbox.scale = next;
+        this._lbDragged = true;
+        if (next === 1) { this.lightbox.tx = 0; this.lightbox.ty = 0; }
+      }
+    },
+    onLightboxPointerUp(e) {
+      if (!this._lbPointers) return;
+      this._lbPointers.delete(e.pointerId);
+      if (this._lbPointers.size === 0) {
+        this._lbStart = null;
+      } else if (this._lbPointers.size === 1) {
+        const p = [...this._lbPointers.values()][0];
+        this._lbStart = { x: p.x, y: p.y, tx: this.lightbox.tx, ty: this.lightbox.ty };
+      }
+    },
+    onLightboxDblClick(e) {
+      if (this.lightbox.scale > 1) {
+        this.lightbox.scale = 1; this.lightbox.tx = 0; this.lightbox.ty = 0;
+      } else {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const cx = e.clientX - rect.left - rect.width / 2;
+        const cy = e.clientY - rect.top - rect.height / 2;
+        const ratio = 2;
+        this.lightbox.tx = cx - ratio * (cx - this.lightbox.tx);
+        this.lightbox.ty = cy - ratio * (cy - this.lightbox.ty);
+        this.lightbox.scale = 2;
+      }
+    },
+    onLightboxBackdrop() {
+      if (this.lightbox.scale === 1 && !this._lbDragged) this.closeLightbox();
+    },
     onContentImageClick(e) {
       const t = e.target;
       if (!t || t.tagName !== 'IMG' || !t.closest('.markdown-container')) return false;
