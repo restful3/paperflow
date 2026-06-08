@@ -165,12 +165,19 @@
       left: 0;
       right: 0;
       z-index: 40;
+      /* iOS Safari: inline <video> playback promotes the video to its own GPU
+         compositing layer and repaints siblings, clobbering position:fixed
+         elements that lack their own layer (menu disappears during playback).
+         Force this bar onto a persistent compositing layer so it stays painted. */
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
       transition: transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1),
                   opacity 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
     }
 
     .mobile-top-bar-hidden {
-      transform: translateY(-100%);
+      -webkit-transform: translate3d(0, -100%, 0);
+      transform: translate3d(0, -100%, 0);
       opacity: 0;
       pointer-events: none;
     }
