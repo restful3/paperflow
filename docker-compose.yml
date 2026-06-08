@@ -40,6 +40,11 @@ services:
       dockerfile: Dockerfile
     image: paperflow-viewer:latest
     container_name: paperflow_viewer
+    # Run as host user (uid:gid 1000) so files written into ./outputs ./archives
+    # are owned by restful3, not root — lets Synology Drive (runs as restful3)
+    # sync/rename them instead of getting permission-denied (-3). converter/tts
+    # stay root due to their /root/.cache (CUDA model cache) mount.
+    user: "1000:1000"
     ports:
       - "8090:8000"
     volumes:
