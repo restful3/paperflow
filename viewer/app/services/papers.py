@@ -435,6 +435,10 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
     mcp_tmp_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=mcp_tmp_dir, suffix=".pdf", delete=False) as tf:
         tmp_path = Path(tf.name)
+    # Chrome/crashpad needs a writable HOME (its crash DB lives under it). When the
+    # viewer runs as a non-root user with HOME=/ (read-only), headless chrome aborts with
+    # "chrome_crashpad_handler: --database is required". Give it a private writable HOME.
+    chrome_home = Path(tempfile.mkdtemp(dir=mcp_tmp_dir, prefix="chrome-home-"))
     try:
         cmd = [
             browser_bin,
@@ -451,7 +455,10 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
             url,
         ]
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
+            subprocess.run(
+                cmd, check=True, capture_output=True, text=True, timeout=60,
+                env={**os.environ, "HOME": str(chrome_home)},
+            )
         except FileNotFoundError:
             raise ValueError("Headless browser executable missing.")
         except subprocess.TimeoutExpired:
@@ -472,6 +479,7 @@ def _resolve_url_to_pdf_bytes(url: str) -> tuple[bytes, str, str]:
         return tmp_path.read_bytes(), effective_url, "html_fallback"
     finally:
         tmp_path.unlink(missing_ok=True)
+        shutil.rmtree(chrome_home, ignore_errors=True)
 
 
 def import_url_as_paper(url: str, title: str | None = None) -> tuple[bool, str, str | None]:
