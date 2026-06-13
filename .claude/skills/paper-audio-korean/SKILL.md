@@ -25,6 +25,15 @@ Other principles:
 - **완전 낭독판**: never condense. Every section/subsection of the source appears in the output. Removing only happens for §"제거 대상" (listen-worthless) items.
 - **항상 해설판 기반**: the source is always the explainer (`_ko_explained.md`). The translation (`_ko.md`) is only the explainer's input, never a direct source. If no explainer exists, generate one first (see Lifecycle).
 
+## 분량 게이트 (침묵 축약 방지 — 필수)
+
+완전 낭독판의 가장 흔한 실패는 **침묵 축약** — 섹션 헤딩은 모두 남기고 각 섹션의 본문 산문을 압축하는 것이다. 섹션 coverage 체크(헤딩 존재 여부)만으로는 절대 잡히지 않는다. 실측에서 13.5만 자 해설판의 "완전 낭독판"이 1.3만 자(10%)로 붕괴한 사례가 다수 발견됐다.
+
+- **기준 분량(낭독 대상 본문)** = 해설판 자수 − §제거 대상(참고문헌·감사의 글 등) − raw 데이터 부록(원문 보존형 — 규칙 4c에 따라 구조 요약으로만 서술되는 블록). 자수는 `wc -m`으로 재되, rtk 훅 환경에서는 일반 `wc`가 0을 반환할 수 있으므로 **`rtk proxy wc -m`** 을 쓴다.
+- **게이트**: 출력 자수 ≥ 낭독 대상 본문의 **70% (미달 = hard fail)**. 권장 75\~110%. 130% 초과는 경고(공허한 부연 점검).
+- **긴 논문 압축 금지**: 해설판이 길면 낭독판도 길어지는 것이 정상이다 — **두 시간짜리 낭독판도 정상 출력**이다. "너무 길다"는 이유로 본문을 요약·병합하지 마라. 축약본이 필요하면 그것은 `paper-audio-brief-korean`의 일이지 이 스킬의 일이 아니다.
+- **미달 시**: 소스와 출력의 섹션별 길이를 대조해 어느 섹션이 얇아졌는지 찾고, 그 섹션을 재작성한다. 헤딩이 존재한다 ≠ 본문이 보존됐다.
+
 ## Source Resolution & Generation Lifecycle
 
 ### Output location
@@ -218,6 +227,7 @@ grep -nE '!\[[^]]+\]\(' "<basename>_ko_audio.md"
   허용되는 이미지는 `![](상대경로)` 뿐이며, 경로는 논문 폴더 내부 상대경로여야 한다 (절대경로·`../`·URL 금지). **title 문법 `![](경로 "title")` 도 금지** — title 텍스트가 raw TTS에서 읽힌다.
 - [ ] **항목별 대응**: Source Inventory의 각 표·그림·수식·인라인수식·코드·각주가 출력에서 자연어 문장으로 대응됐는가 (통째 누락 차단). 임베딩된 그림은 **묘사 문장이 이미지 줄 바로 앞 1문단 안에** 있어야 한다 (묘사 없는 그림 단독, 또는 묘사와 이미지가 다른 섹션으로 분리되면 실패)
 - [ ] **섹션 coverage**: 소스의 섹션 헤딩이 모두 출력에 존재 (제거 대상 섹션은 예외 목록으로 기록)
+- [ ] **분량 비율 (침묵 축약 차단)**: 출력 자수(`rtk proxy wc -m`)가 낭독 대상 본문(해설판 − 제거 대상 − raw 부록)의 **70% 이상**인가 (§분량 게이트). 미달이면 섹션별 길이를 소스와 대조해 압축된 섹션을 재작성한다. **섹션 헤딩이 모두 존재해도 이 게이트 미달이면 실패다.**
 
 ### Important
 - [ ] 표본 3개 섹션에서 수식·표·그림·코드가 placeholder가 아닌 **의미 있는 서술**로 변환됐는가
@@ -236,6 +246,7 @@ grep -nE '!\[[^]]+\]\(' "<basename>_ko_audio.md"
 - 입력 파일(소스 해설판) / 출력 파일(`..._ko_audio.md`) 경로
 - Phase 1 발생 여부 (해설판을 새로 생성했는가)
 - 변환된 섹션 수 / 소스 총 섹션 수
+- **출력 자수 / 낭독 대상 본문 자수 / 비율** (≥70% 게이트 통과 여부, §분량 게이트)
 - CRITICAL grep 0건 통과 여부
 - (Batch) 건너뛴 소스 없는 고아 폴더 목록(있으면)
 - 특이사항 (긴 표/코드 처리, OCR 노이즈 등)

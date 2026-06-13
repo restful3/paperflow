@@ -536,7 +536,10 @@ $$\mathcal{F}_{\mathrm{score}} = \cos(\mathbf{e}_s, \mathbf{e}_p) + \mathcal{F}_
 After completing the full rewrite, verify **in this priority order**:
 
 **CRITICAL (must pass — if any fails, go back and fix):**
-- [ ] **Output length >= input length**: The explained file MUST be at least as long as the source file (in lines). If shorter, content was lost — find and fix the gap. Target is 1.5x–2.5x.
+- [ ] **분량 (자수 기준 — 줄 수 아님)**: `wc -m`(문자 수)으로 잰다 (rtk 훅 환경에서는 `rtk proxy wc -m`). 줄 수는 쓰지 않는다 — 불릿·빈 줄 재포맷으로 부풀려지고(게이밍), OCR 한-단어-줄 소스에서는 거짓 위반이 난다. 기준 분량 = **웹 잡동사니를 제거한 소스 본문** 자수.
+  - **한국어 소스** → 출력 자수 ≥ 소스 × **1.2 (hard fail)**, 권장 1.5\~2.5x.
+  - **영어 등 외국어 소스** → 한글 출력 자수 ≥ 소스 × **0.8 (hard fail)**, 권장 1.0\~2.0x. (한글은 같은 내용을 더 적은 글자로 적으므로 1.0x 미만이어도 손실이 아닐 수 있으나, 0.8x 미만은 누락으로 본다.)
+  - 하한 미달이면 무엇이 빠졌는지 섹션별로 대조해 찾는다. **새 주제를 지어내 채우지 말고, 누락·과압축된 문단을 복원한다.**
 - [ ] **Section completeness**: Every section AND subsection heading in the original appears in the output (compare heading counts)
 - [ ] **Paragraph coverage**: Spot-check 3 random sections — does each original paragraph have a corresponding output paragraph?
 
@@ -577,8 +580,21 @@ The following requests immediately trigger this skill:
 ### Single Target Mode
 When the input is specified as a URL/title/file:
 1. Locate the source file path
-2. Process according to this skill's rules
-3. Return the output file path clearly
+2. **Skip-without-asking guard** — before processing, skip (do NOT ask the user) when:
+   - The folder already has `*_ko_explained.md`, OR
+   - `paper_meta.json`의 `doc_type` 가 `"video"` (HBR Premium 등 재생용 mp4 문서 — `*_ko.md` 가 영상 임베드 스텁뿐이라 해설할 본문이 없다), OR
+   - **본문 산문(prose)이 없는 이미지 전용 페이지** — 소스 MD 에서 제목(`#`)·날짜·이탤릭 메타(`*…*`)·이미지 참조(`![](…)`)·수평선을 빼면 설명할 문단이 0줄인 경우. The Economist 주간 인제스트의 고정 필러(예: "The weekly cartoon" 만평 1장, "Economic data, commodities and markets" 데이터 차트 이미지 N장, "The world this week" 류)가 대표적이다. 차트·만평 이미지를 보고 내용을 지어내면 Rule 1(정확성) 위반이며, 특히 경제 데이터 차트는 수치 오독=날조 위험이 크다.
+   Report it as "skipped (video)" / "skipped (already exists)" / "skipped (image-only, no prose)" in the completion report. Do NOT fabricate an explainer from a title-only stub or from images alone.
+3. Process according to this skill's rules
+4. Return the output file path clearly
+
+### Explicit Target List Mode (사용자가 경로 목록을 직접 준 경우)
+When the user provides an **explicit list of source→output paths** (not an auto-scan):
+1. Process each target one at a time, in order.
+2. **Apply the same skip-without-asking guard as Single Target Mode to every item** — even though the user explicitly listed it. An explicit listing does NOT override the video/already-exists/image-only skip: a `doc_type=="video"` folder or an image-only filler page has no body text to explain, so generating one would be fabrication (Rule 1 violation). Skip silently and record it.
+3. **Do NOT re-ask** "이건 영상/이미지뿐이라 본문이 없는데 어떻게 할까요?" for each such item — this annoys the operator who already knows the skill skips video and image-only filler pages. Just skip and move on.
+4. **Path matching**: 한글 폴더명은 NFC/NFD 정규화 차이로 `[ -d ]`·`ls` 가 빗나갈 수 있으니 `find` 로 실제 디스크 경로를 잡는다.
+5. Only use AskUserQuestion for genuine ambiguity (e.g., "the listed folder doesn't exist / looks like a different paper than intended"), never for the routine video/exists skip.
 
 ### Batch Mode (important)
 When the user does **NOT specify a target** and says "논문 해설판 만들어줘":
@@ -608,9 +624,9 @@ Rationale:
 ## Completion Report
 
 On task completion, report concisely:
-- Input file (with line count)
-- Output file (with line count)
-- **Ratio**: output lines / input lines (MUST be >= 1.0, target 1.5-2.5)
+- Input file (with char count, `wc -m`)
+- Output file (with char count)
+- **Ratio (자수 기준)**: output chars / clutter-removed source chars — 한국어 소스 ≥1.2x(권장 1.5\~2.5x), 외국어 소스 ≥0.8x(권장 1.0\~2.0x)
 - Processing mode (auto / section-safe)
 - Number of sections covered / total sections in original
 - Notable issues (missing risk / source quality problems / heavy OCR noise / etc.)
