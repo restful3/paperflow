@@ -261,6 +261,7 @@
 
       <!-- Star rating + View mode tabs -->
       <div x-show="!editMode" class="flex gap-1 overflow-x-auto pb-1 px-1 scrollbar-hide mb-2 max-w-full">
+        {% if viewer_kind == 'paper' %}
         <!-- Star rating (mobile) -->
         <div class="flex items-center gap-0 shrink-0 mr-1" @mouseleave="hoverStar = 0">
           <template x-for="s in [1,2,3,4,5]" :key="s">
@@ -276,6 +277,7 @@
             </button>
           </template>
         </div>
+        {% endif %}
         <template x-if="hasVideo">
           <button @click="switchView('video')"
                   :class="view === 'video'
@@ -369,6 +371,7 @@
         <!-- Language toggle moved to top row for one-tap mobile access -->
         <!-- Easy / 듣기 toggles moved out to the view-tab row (beside MD/PDF) -->
 
+        {% if viewer_kind == 'paper' %}
         <!-- Audio action (KO narration) — same slot, switches by MP3 presence:
              no MP3 → queue synthesis; MP3 exists → enter listen mode. -->
         <button x-show="!editMode && hasMdKoAudio"
@@ -382,6 +385,7 @@
           </svg>
           <span x-text="(hasAudioMp3 || audioReady) ? '오디오 듣기' : '오디오 생성 (큐에 추가)'">오디오 생성 (큐에 추가)</span>
         </button>
+        {% endif %}
 
         <!-- Dark Mode Toggle -->
         <button @click="$store.darkMode.toggle(); mobileMenuOpen = false"
@@ -396,6 +400,7 @@
           <span x-text="$store.darkMode.on ? 'Light' : 'Dark'">Dark</span>
         </button>
 
+        {% if viewer_kind == 'paper' %}
         <!-- Archive (if in outputs) -->
         <template x-if="location === 'outputs'">
           <button @click="doAction('archive'); mobileMenuOpen = false"
@@ -429,6 +434,7 @@
           </svg>
           <span>Delete</span>
         </button>
+        {% endif %}
 
         <!-- Font Size -->
         <button @click="showFontSizeModal(); ensureTopBarVisible(); mobileMenuOpen = false"
@@ -502,6 +508,7 @@
             :class="$store.darkMode.on ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-100 text-gray-600 border-gray-200'">{{ paper_year }}</span>
       {% endif %}
 
+      {% if viewer_kind == 'paper' %}
       <!-- Star rating -->
       <div class="flex items-center gap-0 shrink-0" @mouseleave="hoverStar = 0">
         <template x-for="s in [1,2,3,4,5]" :key="s">
@@ -517,6 +524,7 @@
           </button>
         </template>
       </div>
+      {% endif %}
 
       <!-- View toggle -->
       <div x-show="!editMode" class="flex rounded-lg p-0.5 shrink-0"
@@ -740,6 +748,7 @@
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'"
              style="display: none;">
 
+          {% if viewer_kind == 'paper' %}
           <!-- Audio (KO narration) — same slot, switches by MP3 presence:
                no MP3 → queue synthesis; MP3 exists → enter listen mode.
                Shown whenever the full narration source (_ko_audio.md) exists,
@@ -801,6 +810,7 @@
             </svg>
             <span>Delete</span>
           </button>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -853,6 +863,7 @@
     </div>
 
     <!-- Markdown view (language controlled by EN/KO toggle) -->
+    {% if viewer_kind == 'paper' %}
     <!-- Video player (doc_type == "video"): local mp4 with HTTP Range seeking -->
     <template x-if="view === 'video' && !editMode">
       <div class="flex-1 min-h-0 flex items-center justify-center p-3 sm:p-6"
@@ -871,9 +882,11 @@
         </video>
       </div>
     </template>
+    {% endif %}
 
     <template x-if="view === 'md' && !editMode">
       <div class="flex flex-col flex-1 min-h-0">
+        {% if viewer_kind == 'paper' %}
         <!-- Live TTS player bar (audio mode, generated) -->
         <div x-show="audioMode && !audioUsesBrief && audioReady"
              class="sticky top-0 z-20 flex items-center gap-2 px-3 py-2"
@@ -928,6 +941,7 @@
             ✕ 생성 종료
           </button>
         </div>
+        {% endif %}
 
         <div class="markdown-container px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 flex-1 min-h-0"
              :class="$store.darkMode.on && 'dark'"
@@ -1102,6 +1116,7 @@
     </template>
   </div>
 
+  {% if viewer_kind == 'paper' %}
   <!-- Chatbot Button (bottom-right, mobile-aware) -->
   <div x-data="chatButton()"
        x-show="(hasMdKo || hasMdEn) && !editMode"
@@ -1135,7 +1150,9 @@
       </svg>
     </button>
   </div>
+  {% endif %}
 
+  {% if viewer_kind == 'paper' %}
   <!-- Chatbot Panel (slide-in from right) -->
   <div x-data="chatPanel()"
        x-show="chatPanelOpen"
@@ -1323,6 +1340,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Confirm modal -->
   <div x-cloak x-show="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1744,6 +1762,7 @@ function viewerApp() {
     hoverStar: 0,
 
     async loadRating() {
+      if (viewerKind !== 'paper') return;
       try {
         const resp = await apiFetch('/api/ratings');
         if (resp?.ok) {
@@ -1755,6 +1774,7 @@ function viewerApp() {
     },
 
     async setRating(star) {
+      if (viewerKind !== 'paper') return;
       const newRating = this.rating === star ? 0 : star;
       this.rating = newRating;
       try {
@@ -2303,6 +2323,7 @@ function viewerApp() {
     },
 
     async toggleAudio() {
+      if (viewerKind !== 'paper') return;
       if (!this.hasAudioText) {
         showToast('듣기판이 없습니다', 'warning');
         return;
@@ -2345,6 +2366,7 @@ function viewerApp() {
 
     // ── Live TTS: load / generate / poll ──
     async loadAudio() {
+      if (viewerKind !== 'paper') return;
       const r = await apiFetch('/api/papers/' + name + '/audio/manifest');
       if (!r || !r.ok) { this.audioReady = false; return; }
       this.audioManifest = await r.json();
@@ -2462,6 +2484,7 @@ function viewerApp() {
       }
     },
     async generateAudio() {
+      if (viewerKind !== 'paper') return;
       // 듣기≠합성: 듣기 토글은 합성을 안 한다. 합성은 여기서 명시적으로 '관리형 큐'에 추가한다.
       // (foreground 즉시합성/라이브 스트리밍 제거 — 큐가 단일 GPU로 순차 처리, 완료되면 mp3 재생)
       const resp = await apiFetch('/api/audio/queue', {
@@ -2487,6 +2510,7 @@ function viewerApp() {
       showToast(d.cancelling ? '강제 종료 요청됨 — 잠시 후 중단·부분 파일 삭제' : '오디오 생성 취소됨');
     },
     async pollAudioGen() {
+      if (viewerKind !== 'paper') return;
       // 큐 인지 폴러: 완성되면 재생 mount, 아니면 큐 상태(대기/생성 중)를 반영. detach 시 취소.
       if (this._genPollTimer) { clearTimeout(this._genPollTimer); this._genPollTimer = null; }
       // 듣기 모드가 아니어도(PDF·해설·원문을 보는 중) 폴링은 계속 — 햄버거/⋯에서 화면 무관 큐 추가 지원.
@@ -2530,6 +2554,7 @@ function viewerApp() {
       await this.loadMdForCurrentLang();   // 본문을 읽기용 baseline 으로 복귀
     },
     async pollAudioJob() {
+      if (viewerKind !== 'paper') return;
       this._jobPolling = true; this._jobPollTimer = null;
       if (!this.audioMode) { this._jobPolling = false; this.audioGenerating = false; return; }   // 모드 이탈 시 중단
       let st = null;
@@ -3782,6 +3807,7 @@ function chatButton() {
     chatPanelOpen: false,
 
     init() {
+      if (viewerKind !== 'paper') return;
       window.addEventListener('chat-panel-opened', () => {
         this.chatPanelOpen = true;
       });
@@ -3829,6 +3855,7 @@ function chatPanel() {
     _vvHandler: null,
 
     async init() {
+      if (viewerKind !== 'paper') return;
       window.addEventListener('open-chat-panel', () => {
         this.openPanel();
       });

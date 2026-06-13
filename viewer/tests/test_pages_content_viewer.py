@@ -72,3 +72,49 @@ def test_paper_viewer_uses_apibase_not_hardcoded_content_paths(client, tmp_works
     assert "'/api/papers/' + name + '/md-ko'" not in html
     assert "/api/papers/${name}/progress" not in html
     assert "navigator.sendBeacon('/api/papers/' + name + '/progress'" not in html
+
+
+def _render_viewer_html_with_kind(kind):
+    """Render viewer.html directly via the pages.py Jinja env with a chapter-kind context."""
+    from app.main import create_app
+    create_app()
+    from app.routers import pages as pages_mod
+    templates = pages_mod.templates
+    ctx = {
+        "request": None,
+        "paper_name": "X", "paper_name_encoded": "X",
+        "paper_title": "T", "paper_title_ko": "", "paper_authors": [],
+        "paper_year": None, "paper_venue": None, "paper_doi": None,
+        "paper_url": None, "paper_doc_type": None,
+        "has_pdf": True, "has_md_ko": True, "has_md_en": False,
+        "has_md_ko_explained": False, "has_md_en_explained": False,
+        "has_md_ko_audio": False, "has_md_ko_audio_brief": False,
+        "has_audio_mp3": False, "has_video": False,
+        "video_poster_url": "", "video_duration_hms": None,
+        "video_position": 0, "video_watched": False,
+        "location": "books", "default_view": "md", "server_progress": 0,
+        "api_base": "/api/books/B/chapters/X", "viewer_kind": "book_chapter",
+        "storage_scope": "book_b-ch_X", "storage_scope_raw": "book_b-ch_X",
+        "book_name": "B", "book_title": "Book B", "chapter_title": "Chap X",
+        "chapter_index": 1, "chapters_total": 1, "prev_url": None, "next_url": None,
+    }
+    return templates.get_template("viewer.html").render(**ctx)
+
+
+def test_chapter_kind_render_omits_paper_only_ui(tmp_workspace):
+    html = _render_viewer_html_with_kind("book_chapter")
+    assert 'x-data="chatPanel()"' not in html
+    assert 'x-data="chatButton()"' not in html
+    assert 'const viewerKind = "book_chapter";' in html
+
+
+def test_paper_only_fetch_functions_have_js_guard(tmp_workspace):
+    html = _render_viewer_html_with_kind("book_chapter")
+    assert html.count("viewerKind !== 'paper'") >= 4
+
+
+def test_paper_kind_render_keeps_paper_only_blocks(client, tmp_workspace):
+    _make_paper(tmp_workspace, "P")
+    html = client.get("/viewer/P").text
+    assert 'x-data="chatPanel()"' in html
+    assert 'x-data="chatButton()"' in html
