@@ -189,24 +189,22 @@ async def chapter_viewer_page(book: str, chapter: str, request: Request,
 
     book = unquote(book)
     chapter = unquote(chapter)
-    # NOTE: /books and /books/{book} don't exist until Phase 2c, so error
-    # redirects land on /papers (exists) in 2b. TODO 2c: switch to /books/{book}.
+    book_enc = quote(book, safe="")
     detail = book_svc.get_book(book)
     if not detail:
-        return RedirectResponse("/papers", status_code=302)
+        return RedirectResponse("/books", status_code=302)
     chapters = detail["chapters"]
     idx = next((i for i, c in enumerate(chapters) if c["chapter_id"] == chapter), None)
     if idx is None:
-        return RedirectResponse("/papers", status_code=302)
+        return RedirectResponse(f"/books/{book_enc}", status_code=302)
 
     info = book_svc.get_chapter_info(book, chapter)
     if not info:
-        return RedirectResponse("/papers", status_code=302)
+        return RedirectResponse(f"/books/{book_enc}", status_code=302)
     fmt = info["formats"]
 
     book_id = detail["book_id"]
     ch = chapters[idx]
-    book_enc = quote(book, safe="")
     chap_enc = quote(chapter, safe="")
     has_md_ko = fmt.get("md_ko", False)
     has_md_en = fmt.get("md_en", False)

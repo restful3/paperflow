@@ -60,10 +60,10 @@ def test_chapter_viewer_unknown_redirects(client, tmp_workspace):
     _make_book(tmp_workspace, slug="MyBook")
     r = client.get("/books/MyBook/chapters/99_nope")
     assert r.status_code == 302
-    assert r.headers["location"] == "/papers"
+    assert r.headers["location"] == "/books/MyBook"
     r2 = client.get("/books/Ghost/chapters/01_intro")
     assert r2.status_code == 302
-    assert r2.headers["location"] == "/papers"
+    assert r2.headers["location"] == "/books"
 
 
 def test_chapter_viewer_requires_auth(tmp_workspace, monkeypatch):
