@@ -1639,6 +1639,26 @@ def _normalize_title(title):
     return t
 
 
+def _canonical_source_url(url):
+    """Normalize source URL for duplicate checks.
+
+    Same titles can legitimately appear in link blogs and canonical source pages.
+    Treat them as duplicates only when the canonical source URL also matches, or
+    when source URLs are unavailable.
+    """
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+        parts = urlsplit(str(url).strip())
+        scheme = (parts.scheme or "https").lower()
+        netloc = parts.netloc.lower()
+        path = re.sub(r'/+', '/', parts.path or '/').rstrip('/') or '/'
+        return urlunsplit((scheme, netloc, path, '', ''))
+    except Exception:
+        return str(url).strip().split('#', 1)[0].rstrip('/').lower()
+
+
 def check_duplicate_batch(metadata, current_output_dir):
     """Check if paper with same title already exists in outputs/ or archives/.
 
@@ -1650,6 +1670,9 @@ def check_duplicate_batch(metadata, current_output_dir):
         return []
 
     norm_title = _normalize_title(title)
+    current_url = _canonical_source_url(
+        metadata.get("source_url_original") or metadata.get("paper_url") or metadata.get("url")
+    )
     matches = []
 
     for base_dir, location in [("outputs", "outputs"), ("archives", "archives")]:
@@ -1669,6 +1692,11 @@ def check_duplicate_batch(metadata, current_output_dir):
                     existing_meta = json.load(f)
                 existing_title = existing_meta.get("title", "")
                 if existing_title and _normalize_title(existing_title) == norm_title:
+                    existing_url = _canonical_source_url(
+                        existing_meta.get("source_url_original") or existing_meta.get("paper_url") or existing_meta.get("url")
+                    )
+                    if current_url and existing_url and current_url != existing_url:
+                        continue
                     matches.append({
                         "title": existing_title,
                         "folder": folder,
