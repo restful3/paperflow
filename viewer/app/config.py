@@ -96,6 +96,18 @@ class Settings(BaseSettings):
         return Path(self.BASE_DIR) / "logs"
 
     @property
+    def books_dir(self) -> Path:
+        return Path(self.BASE_DIR) / "books"
+
+    @property
+    def newbooks_dir(self) -> Path:
+        return Path(self.BASE_DIR) / "newbooks"
+
+    @property
+    def book_archives_dir(self) -> Path:
+        return Path(self.BASE_DIR) / "book_archives"
+
+    @property
     def mcp_enabled(self) -> bool:
         """Opt-in: MCP server is mounted only when MCP_API_KEY is set (>= 32 chars)
         AND MCP_PUBLIC_BASE_URL is configured."""

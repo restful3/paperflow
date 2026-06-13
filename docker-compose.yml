@@ -11,6 +11,8 @@ services:
     volumes:
       - ./newones:/app/newones
       - ./outputs:/app/outputs
+      - ./newbooks:/app/newbooks
+      - ./books:/app/books
       - ./logs:/app/logs
       - ./config.json:/app/config.json
       - ./model_cache:/root/.cache
@@ -52,6 +54,8 @@ services:
       - ./archives:/data/archives
       - ./newones:/data/newones
       - ./logs:/data/logs
+      - ./books:/data/books
+      - ./book_archives:/data/book_archives
     env_file:
       - .env
     environment:
@@ -78,6 +82,8 @@ services:
     runtime: nvidia
     volumes:
       - ./outputs:/data/outputs
+      - ./books:/data/books
+      - ./book_archives:/data/book_archives
       - ./model_cache:/root/.cache
     environment:
       - NVIDIA_VISIBLE_DEVICES=all

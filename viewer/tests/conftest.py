@@ -7,8 +7,11 @@ import pytest
 
 @pytest.fixture
 def tmp_workspace(tmp_path, monkeypatch):
-    """Isolated PaperFlow workspace: outputs/, archives/, newones/, logs/."""
-    for sub in ("outputs", "archives", "newones", "newones/.meta", "newones/.mcp_tmp", "logs"):
+    """Isolated PaperFlow workspace: outputs/, archives/, newones/, logs/, books/, newbooks/, book_archives/."""
+    for sub in (
+        "outputs", "archives", "newones", "newones/.meta", "newones/.mcp_tmp", "logs",
+        "books", "newbooks", "book_archives",
+    ):
         (tmp_path / sub).mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setenv("BASE_DIR", str(tmp_path))
