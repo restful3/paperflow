@@ -198,3 +198,31 @@ def test_main_skips_unstable_file(tmp_path, monkeypatch):
 def test_main_rejects_non_pdf(tmp_path, monkeypatch):
     monkeypatch.setattr(bi.sys, "argv", ["book_ingest.py", str(tmp_path / "nope.txt")])
     assert bi.main() == 1
+
+
+def test_ingest_reads_book_json_metadata(tmp_path, monkeypatch):
+    """newbooks/<book>/book.json title/author/year propagate into book_meta."""
+    import json
+    import book_store
+    import main_terminal as mt
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "books").mkdir()
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    (nb / "book.json").write_text(json.dumps(
+        {"title": "Quantitative Trading", "author": "E. Chan", "year": 2021}),
+        encoding="utf-8")
+    pdf = nb / "01_intro.pdf"
+    pdf.write_bytes(b"%PDF fake")
+
+    def fake_process(pdf_path, output_dir, base_name, config, prompt, mode="paper"):
+        import os
+        open(os.path.join(output_dir, base_name + "_ko.md"), "w").write("ko")
+        return True
+    monkeypatch.setattr(mt, "process_pdf_to_output_dir", fake_process)
+
+    bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P")
+    meta = book_store.load_book_meta(tmp_path / "books" / "MyBook")
+    assert meta["title"] == "Quantitative Trading"
+    assert meta["author"] == "E. Chan"
+    assert meta["year"] == 2021

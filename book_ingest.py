@@ -64,6 +64,18 @@ def classify_chapter(meta: dict, chapter_id: str, new_sha: str, new_order):
 import main_terminal as mt   # heavy converter deps — imported at module load of the ingest entry
 
 
+def _load_book_json(newbook_dir) -> dict | None:
+    """Read newbooks/<book>/book.json (title/author/year) if present."""
+    p = Path(newbook_dir) / "book.json"
+    if not p.is_file():
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 def _chapter_title(chapter_dir, chapter_id: str) -> str:
     """Chapter title: extracted paper_meta.json title, else the chapter_id."""
     pm = Path(chapter_dir) / "paper_meta.json"
@@ -88,7 +100,7 @@ def ingest_chapter(chapter_pdf, config=None, prompt=None, replace=False) -> dict
     book_dir = Path("books") / slug
     book_dir.mkdir(parents=True, exist_ok=True)
 
-    book_store.init_book_meta(book_dir, slug)
+    book_store.init_book_meta(book_dir, slug, _load_book_json(chapter_pdf.parent))
     chapter_id = chapter_id_from_pdf(str(chapter_pdf))
     order = chapter_order_from_filename(chapter_pdf.name)
     new_sha = sha256_of(chapter_pdf)
