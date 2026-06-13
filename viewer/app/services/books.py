@@ -113,10 +113,47 @@ def list_books(tab: str = "books") -> list[dict]:
     return cards
 
 
-# ── reading progress (book_progress.json, nested by book_id -> chapter_id) ──
-# NOTE: full implementation lands in a later task. list_books needs the reader
-# now, so a minimal get_all_book_progress is defined here and EXTENDED later.
+# ── reading progress (book_progress.json, nested by book_id -> chapter_id) ───
 
-def get_all_book_progress() -> dict:
-    data = _load_json(settings.books_dir / "book_progress.json")
+_BOOK_PROGRESS_FILE = "book_progress.json"
+
+
+def _book_progress_path() -> Path:
+    return settings.books_dir / _BOOK_PROGRESS_FILE
+
+
+def get_all_book_progress() -> dict[str, dict[str, int]]:
+    data = _load_json(_book_progress_path())
     return data if isinstance(data, dict) else {}
+
+
+def get_book_progress(book_id: str) -> dict[str, int]:
+    return dict(get_all_book_progress().get(book_id, {}))
+
+
+def save_chapter_progress(book_id: str, chapter_id: str, pct: int) -> bool:
+    pct = max(0, min(100, int(pct)))
+    data = get_all_book_progress()
+    data.setdefault(book_id, {})[chapter_id] = pct
+    return _write_progress(data)
+
+
+def delete_book_progress(book_id: str) -> None:
+    data = get_all_book_progress()
+    if book_id in data:
+        del data[book_id]
+        _write_progress(data)
+
+
+def _write_progress(data: dict) -> bool:
+    try:
+        settings.books_dir.mkdir(parents=True, exist_ok=True)
+        path = _book_progress_path()
+        tmp = str(path) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False)
+        import os
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        return False

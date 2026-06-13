@@ -91,3 +91,38 @@ def test_list_books_skips_folder_without_meta(tmp_workspace):
     from app.services import books
     (tmp_workspace / "books" / "NoMeta").mkdir(parents=True)
     assert books.list_books(tab="books") == []
+
+
+def test_book_progress_save_get_roundtrip(tmp_workspace):
+    from app.services import books
+    assert books.save_chapter_progress("book-x-1", "01_intro", 42) is True
+    assert books.get_book_progress("book-x-1") == {"01_intro": 42}
+    # clamp 0..100
+    books.save_chapter_progress("book-x-1", "01_intro", 250)
+    assert books.get_book_progress("book-x-1")["01_intro"] == 100
+    books.save_chapter_progress("book-x-1", "02_more", -5)
+    assert books.get_book_progress("book-x-1")["02_more"] == 0
+
+
+def test_book_progress_nested_no_key_collision(tmp_workspace):
+    from app.services import books
+    books.save_chapter_progress("book-a", "ch::weird", 10)
+    books.save_chapter_progress("book-b", "ch::weird", 20)
+    assert books.get_book_progress("book-a") == {"ch::weird": 10}
+    assert books.get_book_progress("book-b") == {"ch::weird": 20}
+    raw = json.loads((tmp_workspace / "books" / "book_progress.json").read_text(encoding="utf-8"))
+    assert raw == {"book-a": {"ch::weird": 10}, "book-b": {"ch::weird": 20}}
+
+
+def test_delete_book_progress_removes_book(tmp_workspace):
+    from app.services import books
+    books.save_chapter_progress("book-a", "01", 10)
+    books.save_chapter_progress("book-b", "01", 20)
+    books.delete_book_progress("book-a")
+    assert books.get_book_progress("book-a") == {}
+    assert books.get_book_progress("book-b") == {"01": 20}
+
+
+def test_get_book_progress_unknown_returns_empty(tmp_workspace):
+    from app.services import books
+    assert books.get_book_progress("nope") == {}
