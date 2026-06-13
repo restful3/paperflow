@@ -93,6 +93,21 @@ def ingest_chapter(chapter_pdf, config=None, prompt=None, replace=False) -> dict
     order = chapter_order_from_filename(chapter_pdf.name)
     new_sha = sha256_of(chapter_pdf)
 
+    meta = book_store.load_book_meta(book_dir)
+    decision = classify_chapter(meta, chapter_id, new_sha, order)
+    if decision == "skip":
+        return {"status": "skip", "chapter_id": chapter_id}
+    if decision == "order_conflict":
+        book_store.update_chapter_state(
+            book_dir, chapter_id, "error",
+            book_store.detect_chapter_formats(book_dir / chapter_id))
+        return {"status": "order_conflict", "chapter_id": chapter_id}
+    if decision == "needs_review" and not replace:
+        book_store.update_chapter_state(
+            book_dir, chapter_id, "needs_review",
+            book_store.detect_chapter_formats(book_dir / chapter_id))
+        return {"status": "needs_review", "chapter_id": chapter_id}
+
     chapter_dir = book_dir / chapter_id
     chapter_dir.mkdir(parents=True, exist_ok=True)
 

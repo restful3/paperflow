@@ -83,3 +83,80 @@ def test_ingest_chapter_new_happy_path(tmp_path, monkeypatch):
     assert meta["chapters"][0]["order"] == 1
     state = book_store.load_book_state(tmp_path / "books" / "MyBook")
     assert state["chapters"]["01_intro"]["pipeline_status"] == "complete"
+
+
+def _setup_book_with_chapter(tmp_path, monkeypatch, sha="shaA"):
+    """books/MyBook with one ingested chapter 01_a (order 1, given sha)."""
+    import book_store
+    monkeypatch.chdir(tmp_path)
+    bd = tmp_path / "books" / "MyBook"
+    bd.mkdir(parents=True)
+    meta = book_store.init_book_meta(bd, "MyBook")
+    book_store.upsert_chapter_meta(meta, "01_a", 1, "A", "01_a.pdf", sha)
+    book_store.save_book_meta(bd, meta)
+    return bd
+
+
+def test_ingest_skip_identical(tmp_path, monkeypatch):
+    import main_terminal as mt
+    called = []
+    monkeypatch.setattr(mt, "process_pdf_to_output_dir",
+                        lambda *a, **k: called.append(1) or True)
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_a.pdf"
+    pdf.write_bytes(b"data")
+    sha = bi.sha256_of(pdf)
+    _setup_book_with_chapter(tmp_path, monkeypatch, sha=sha)
+    result = bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P")
+    assert result["status"] == "skip"
+    assert called == []                 # converter NOT invoked
+    assert pdf.exists()                 # source untouched on skip
+
+
+def test_ingest_needs_review_on_changed_content(tmp_path, monkeypatch):
+    import book_store
+    import main_terminal as mt
+    called = []
+    monkeypatch.setattr(mt, "process_pdf_to_output_dir",
+                        lambda *a, **k: called.append(1) or True)
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_a.pdf"
+    pdf.write_bytes(b"NEW different content")
+    _setup_book_with_chapter(tmp_path, monkeypatch, sha="OLDsha")
+    result = bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P")
+    assert result["status"] == "needs_review"
+    assert called == []                 # not auto-overwritten
+    state = book_store.load_book_state(tmp_path / "books" / "MyBook")
+    assert state["chapters"]["01_a"]["pipeline_status"] == "needs_review"
+
+
+def test_ingest_order_conflict(tmp_path, monkeypatch):
+    import main_terminal as mt
+    called = []
+    monkeypatch.setattr(mt, "process_pdf_to_output_dir",
+                        lambda *a, **k: called.append(1) or True)
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_different.pdf"        # order 1, but 01_a already holds order 1
+    pdf.write_bytes(b"x")
+    _setup_book_with_chapter(tmp_path, monkeypatch, sha="shaA")
+    result = bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P")
+    assert result["status"] == "order_conflict"
+    assert called == []
+
+
+def test_ingest_replace_overrides_needs_review(tmp_path, monkeypatch):
+    """replace=True 면 내용이 달라도 처리한다."""
+    import main_terminal as mt
+    monkeypatch.setattr(mt, "process_pdf_to_output_dir",
+                        lambda p, o, b, c, pr, mode="paper":
+                        open(os.path.join(o, b + "_ko.md"), "w").write("ko") or True)
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_a.pdf"
+    pdf.write_bytes(b"NEW")
+    _setup_book_with_chapter(tmp_path, monkeypatch, sha="OLDsha")
+    result = bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P", replace=True)
+    assert result["status"] == "complete"
