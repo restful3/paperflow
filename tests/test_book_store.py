@@ -67,3 +67,58 @@ def test_load_book_meta_migrates_old_schema(tmp_path):
                           {"schema_version": 0, "book_id": "book-x", "chapters": []})
     meta = bs.load_book_meta(bd)
     assert meta["schema_version"] == bs.BOOK_META_SCHEMA_VERSION
+
+
+def test_detect_chapter_formats(tmp_path):
+    d = tmp_path / "01_intro"
+    d.mkdir()
+    (d / "01_intro.md").write_text("en")
+    (d / "01_intro_ko.md").write_text("ko")
+    (d / "01_intro_ko_explained.md").write_text("ex")
+    fmts = bs.detect_chapter_formats(d)
+    assert fmts == {"en": True, "ko": True, "ko_explained": True,
+                    "ko_audio": False, "ko_audio_brief": False}
+
+
+def test_update_chapter_state_no_lost_update(tmp_path):
+    """기존 챕터 A 가 있을 때 B 를 갱신해도 A 가 보존된다(read-modify-write)."""
+    bd = tmp_path / "MyBook"
+    bd.mkdir()
+    bs.update_chapter_state(bd, "01_a", "complete", {"en": True, "ko": True})
+    bs.update_chapter_state(bd, "02_b", "converted", {"en": True, "ko": False})
+    state = bs.load_book_state(bd)
+    assert set(state["chapters"]) == {"01_a", "02_b"}
+    assert state["chapters"]["01_a"]["pipeline_status"] == "complete"
+    assert state["aggregate"] == {"chapters_total": 2, "chapters_complete": 1}
+
+
+def test_update_chapter_state_concurrent_threads(tmp_path):
+    """동시 스레드 갱신에도 lost update 없음(per-book lock)."""
+    import threading
+    bd = tmp_path / "MyBook"
+    bd.mkdir()
+
+    def worker(cid):
+        bs.update_chapter_state(bd, cid, "complete", {"en": True, "ko": True})
+
+    threads = [threading.Thread(target=worker, args=(f"ch{i:02d}",)) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    state = bs.load_book_state(bd)
+    assert len(state["chapters"]) == 8
+
+
+def test_rebuild_book_state_from_disk(tmp_path):
+    bd = tmp_path / "MyBook"
+    meta = bs.init_book_meta(bd, "MyBook")
+    bs.upsert_chapter_meta(meta, "01_a", 1, "A", "01_a.pdf", "sha")
+    bs.save_book_meta(bd, meta)
+    cd = bd / "01_a"
+    cd.mkdir()
+    (cd / "01_a.md").write_text("en")
+    (cd / "01_a_ko.md").write_text("ko")
+    state = bs.rebuild_book_state(bd)
+    assert state["chapters"]["01_a"]["pipeline_status"] == "complete"
+    assert state["chapters"]["01_a"]["formats"]["ko"] is True

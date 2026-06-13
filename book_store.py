@@ -119,3 +119,86 @@ def upsert_chapter_meta(meta: dict, chapter_id, order, title, source_pdf, source
     meta["chapters"].sort(key=lambda c: (c["order"] if c["order"] is not None else 10**9,
                                          c["chapter_id"]))
     return meta
+
+
+def detect_chapter_formats(chapter_dir) -> dict:
+    """Scan a chapter dir for which output formats exist (mirrors viewer suffix rules)."""
+    d = Path(chapter_dir)
+    names = [f.name for f in d.iterdir() if f.is_file()] if d.is_dir() else []
+
+    def has(suffix, exclude=()):
+        return any(n.endswith(suffix) and not any(n.endswith(e) for e in exclude)
+                   for n in names)
+
+    return {
+        "en": has(".md", exclude=("_ko.md", "_explained.md",
+                                  "_ko_audio.md", "_ko_audio_brief.md")),
+        "ko": has("_ko.md", exclude=("_ko_explained.md",
+                                     "_ko_audio.md", "_ko_audio_brief.md")),
+        "ko_explained": has("_ko_explained.md"),
+        "ko_audio": has("_ko_audio.md", exclude=("_ko_audio_brief.md",)),
+        "ko_audio_brief": has("_ko_audio_brief.md"),
+    }
+
+
+def _aggregate(state: dict) -> dict:
+    chs = state.get("chapters", {})
+    return {
+        "chapters_total": len(chs),
+        "chapters_complete": sum(1 for c in chs.values()
+                                 if c.get("pipeline_status") == "complete"),
+    }
+
+
+def _migrate_book_state(state: dict) -> dict:
+    return state
+
+
+def load_book_state(book_dir):
+    p = Path(book_dir) / "book_state.json"
+    if not p.is_file():
+        return None
+    with open(p, encoding="utf-8") as f:
+        state = json.load(f)
+    if state.get("schema_version", 0) < BOOK_STATE_SCHEMA_VERSION:
+        state = _migrate_book_state(state)
+        state["schema_version"] = BOOK_STATE_SCHEMA_VERSION
+        _atomic_write_json(p, state)
+    return state
+
+
+def save_book_state(book_dir, state: dict) -> None:
+    state["schema_version"] = BOOK_STATE_SCHEMA_VERSION
+    state["aggregate"] = _aggregate(state)
+    _atomic_write_json(Path(book_dir) / "book_state.json", state)
+
+
+def update_chapter_state(book_dir, chapter_id, pipeline_status, formats,
+                         updated_at=None) -> dict:
+    """Read-modify-write one chapter's state entry under the per-book lock."""
+    book_dir = Path(book_dir)
+    with book_lock(book_dir):
+        state = load_book_state(book_dir) or {
+            "schema_version": BOOK_STATE_SCHEMA_VERSION, "chapters": {}}
+        state.setdefault("chapters", {})[chapter_id] = {
+            "pipeline_status": pipeline_status,
+            "formats": formats,
+            "updated_at": updated_at,
+        }
+        save_book_state(book_dir, state)
+    return state
+
+
+def rebuild_book_state(book_dir, meta=None) -> dict:
+    """Regenerate book_state.json from disk (chapter dirs). Does NOT touch book_meta."""
+    book_dir = Path(book_dir)
+    meta = meta or load_book_meta(book_dir) or {"chapters": []}
+    chapters = {}
+    for ch in meta.get("chapters", []):
+        cid = ch["chapter_id"]
+        fmts = detect_chapter_formats(book_dir / cid)
+        status = "complete" if fmts["ko"] else ("converted" if fmts["en"] else "pending")
+        chapters[cid] = {"pipeline_status": status, "formats": fmts}
+    state = {"schema_version": BOOK_STATE_SCHEMA_VERSION, "chapters": chapters}
+    save_book_state(book_dir, state)
+    return state
