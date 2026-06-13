@@ -160,3 +160,41 @@ def test_ingest_replace_overrides_needs_review(tmp_path, monkeypatch):
     _setup_book_with_chapter(tmp_path, monkeypatch, sha="OLDsha")
     result = bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P", replace=True)
     assert result["status"] == "complete"
+
+
+def test_main_dispatches_to_ingest_when_stable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_a.pdf"
+    pdf.write_bytes(b"x")
+    monkeypatch.setattr(bi, "is_size_stable", lambda p, settle=2.0: True)
+    monkeypatch.setattr(bi.mt, "load_config", lambda: {"processing_pipeline": {}})
+    monkeypatch.setattr(bi.mt, "load_prompt", lambda: "P")
+    captured = {}
+    monkeypatch.setattr(bi, "ingest_chapter",
+                        lambda p, config=None, prompt=None: captured.update(p=str(p)) or {"status": "complete", "chapter_id": "01_a"})
+    monkeypatch.setattr(bi.sys, "argv", ["book_ingest.py", str(pdf)])
+    rc = bi.main()
+    assert rc == 0
+    assert captured["p"] == str(pdf)
+
+
+def test_main_skips_unstable_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_a.pdf"
+    pdf.write_bytes(b"x")
+    monkeypatch.setattr(bi, "is_size_stable", lambda p, settle=2.0: False)
+    called = []
+    monkeypatch.setattr(bi, "ingest_chapter", lambda *a, **k: called.append(1))
+    monkeypatch.setattr(bi.sys, "argv", ["book_ingest.py", str(pdf)])
+    rc = bi.main()
+    assert rc == 2                 # not-ready signal for watcher to retry
+    assert called == []
+
+
+def test_main_rejects_non_pdf(tmp_path, monkeypatch):
+    monkeypatch.setattr(bi.sys, "argv", ["book_ingest.py", str(tmp_path / "nope.txt")])
+    assert bi.main() == 1

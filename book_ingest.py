@@ -127,3 +127,30 @@ def ingest_chapter(chapter_pdf, config=None, prompt=None, replace=False) -> dict
     status = "complete" if fmts["ko"] else ("converted" if fmts["en"] else "error")
     book_store.update_chapter_state(book_dir, chapter_id, status, fmts)
     return {"status": status, "chapter_id": chapter_id}
+
+
+def main():
+    target = os.getenv("PAPERFLOW_TARGET_CHAPTER_PDF", "").strip()
+    if not target and len(sys.argv) > 1:
+        target = sys.argv[1].strip()
+    if not target:
+        print("usage: book_ingest.py <newbooks/<Book>/NN_chapter.pdf>")
+        return 1
+    p = Path(target)
+    if not p.is_file() or p.suffix.lower() != ".pdf":
+        print(f"not a pdf file: {target}")
+        return 1
+    settle = float(os.getenv("BOOK_SETTLE_SECONDS", "2"))
+    if not is_size_stable(p, settle=settle):
+        print(f"not size-stable yet (still copying?), will retry: {p.name}")
+        return 2
+    config = mt.load_config()
+    prompt = mt.load_prompt()
+    result = ingest_chapter(p, config=config, prompt=prompt)
+    print(f"ingest result: {result}")
+    ok = result.get("status") in ("complete", "converted", "skip")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
