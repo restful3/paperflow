@@ -3,6 +3,10 @@
 {% block title %}{{ paper_title or paper_name }} - PaperFlow{% endblock %}
 
 {% block head %}
+{% if viewer_kind == 'book_chapter' %}
+{% if prev_url %}<link rel="prev" href="{{ prev_url }}">{% endif %}
+{% if next_url %}<link rel="next" href="{{ next_url }}">{% endif %}
+{% endif %}
 <!-- Marked.js for markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 <!-- Syntax highlighting for fenced code blocks -->

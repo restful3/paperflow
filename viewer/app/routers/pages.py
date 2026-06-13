@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from ..dependencies import get_current_user_page
 from ..services import mcp_jobs
 from ..services import papers as paper_svc
+from ..services import books as book_svc
 
 router = APIRouter(tags=["pages"])
 
@@ -149,4 +150,73 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "viewer_kind": "paper",
         "storage_scope": paper_name_encoded,
         "storage_scope_raw": name,
+        # book chapter fields not applicable to paper viewer:
+        "book_name": None, "book_title": None,
+        "chapter_title": None, "chapter_index": None, "chapters_total": None,
+        "prev_url": None, "next_url": None,
     })
+
+
+@router.get("/books/{book}/chapters/{chapter}", response_class=HTMLResponse)
+async def chapter_viewer_page(book: str, chapter: str, request: Request,
+                              user: str | None = Depends(get_current_user_page)):
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    book = unquote(book)
+    chapter = unquote(chapter)
+    # NOTE: /books and /books/{book} don't exist until Phase 2c, so error
+    # redirects land on /papers (exists) in 2b. TODO 2c: switch to /books/{book}.
+    detail = book_svc.get_book(book)
+    if not detail:
+        return RedirectResponse("/papers", status_code=302)
+    chapters = detail["chapters"]
+    idx = next((i for i, c in enumerate(chapters) if c["chapter_id"] == chapter), None)
+    if idx is None:
+        return RedirectResponse("/papers", status_code=302)
+
+    info = book_svc.get_chapter_info(book, chapter)
+    if not info:
+        return RedirectResponse("/papers", status_code=302)
+    fmt = info["formats"]
+
+    book_id = detail["book_id"]
+    ch = chapters[idx]
+    book_enc = quote(book, safe="")
+    chap_enc = quote(chapter, safe="")
+    has_md_ko = fmt.get("md_ko", False)
+    has_md_en = fmt.get("md_en", False)
+    has_pdf = fmt.get("pdf", False)
+    default_view = "md" if (has_md_ko or has_md_en) else ("pdf" if has_pdf else "md")
+
+    def _chap_url(i):
+        if i < 0 or i >= len(chapters):
+            return None
+        return f"/books/{book_enc}/chapters/{quote(chapters[i]['chapter_id'], safe='')}"
+
+    scope = f"book_{book_id}-ch_{chapter}"
+    context = {
+        "request": request,
+        "paper_name": chapter, "paper_name_encoded": chap_enc,
+        "paper_title": ch.get("title") or chapter, "paper_title_ko": "",
+        "paper_authors": [], "paper_year": None, "paper_venue": None,
+        "paper_doi": None, "paper_url": None, "paper_doc_type": None,
+        "has_pdf": has_pdf, "has_md_ko": has_md_ko, "has_md_en": has_md_en,
+        "has_md_ko_explained": fmt.get("md_ko_explained", False),
+        "has_md_en_explained": fmt.get("md_en_explained", False),
+        "has_md_ko_audio": fmt.get("md_ko_audio", False),
+        "has_md_ko_audio_brief": fmt.get("md_ko_audio_brief", False),
+        "has_audio_mp3": fmt.get("audio_mp3", False),
+        "has_video": False, "video_poster_url": "", "video_duration_hms": None,
+        "video_position": 0, "video_watched": False,
+        "location": detail["location"], "default_view": default_view,
+        "server_progress": ch.get("progress", 0),
+        "api_base": f"/api/books/{book_enc}/chapters/{chap_enc}",
+        "viewer_kind": "book_chapter",
+        "storage_scope": scope, "storage_scope_raw": scope,
+        "book_name": book, "book_title": detail.get("title") or book,
+        "chapter_title": ch.get("title") or chapter,
+        "chapter_index": idx + 1, "chapters_total": len(chapters),
+        "prev_url": _chap_url(idx - 1), "next_url": _chap_url(idx + 1),
+    }
+    return templates.TemplateResponse(request=request, name="viewer.html", context=context)
