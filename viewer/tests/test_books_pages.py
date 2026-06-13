@@ -62,3 +62,26 @@ def test_books_page_redirects_anon_to_login(client_anon):
     resp = client_anon.get("/books")
     assert resp.status_code == 302
     assert resp.headers["location"] == "/login"
+
+
+def test_book_detail_page_renders(client, tmp_workspace):
+    _make_book(tmp_workspace, slug="MyBook")
+    resp = client.get("/books/MyBook")
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'bookApp()' in body
+    assert '/api/books/' in body
+    assert 'href="/books"' in body   # breadcrumb back-link
+
+
+def test_book_detail_unknown_redirects_to_books(client, tmp_workspace):
+    resp = client.get("/books/does-not-exist-xyz")
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/books"
+
+
+def test_book_detail_redirects_anon_to_login(client_anon, tmp_workspace):
+    _make_book(tmp_workspace, slug="MyBook")
+    resp = client_anon.get("/books/MyBook")
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/login"

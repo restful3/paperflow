@@ -164,6 +164,23 @@ async def books_page(request: Request, user: str | None = Depends(get_current_us
     return templates.TemplateResponse(request=request, name="books.html", context={"username": user})
 
 
+@router.get("/books/{book}", response_class=HTMLResponse)
+async def book_detail_page(book: str, request: Request,
+                           user: str | None = Depends(get_current_user_page)):
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    book = unquote(book)
+    detail = book_svc.get_book(book)
+    if not detail:
+        return RedirectResponse("/books", status_code=302)
+    return templates.TemplateResponse(request=request, name="book.html", context={
+        "username": user,
+        "book_name": book,
+        "book_name_encoded": quote(book, safe=""),
+        "book_title": detail.get("title") or book,
+    })
+
+
 @router.get("/books/{book}/chapters/{chapter}", response_class=HTMLResponse)
 async def chapter_viewer_page(book: str, chapter: str, request: Request,
                               user: str | None = Depends(get_current_user_page)):
