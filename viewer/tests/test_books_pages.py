@@ -94,3 +94,12 @@ def test_papers_page_has_books_nav_link(client):
     # Nav links must be reachable on mobile too — the Papers/Books pills live in an
     # always-visible flex container (regression guard: must NOT be `hidden sm:flex`).
     assert '<div class="flex items-center gap-1 text-sm">' in resp.text
+
+
+def test_books_page_has_card_and_list_view(client):
+    resp = client.get("/books")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "pf-books-view" in body          # view-mode persistence key
+    assert "viewMode === 'card'" in body    # card grid is gated on card mode
+    assert "viewMode === 'list'" in body    # list view block exists

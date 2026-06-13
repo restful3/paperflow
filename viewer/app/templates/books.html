@@ -72,6 +72,29 @@
           <option value="progress">Progress</option>
           <option value="chapters">Chapters</option>
         </select>
+        <!-- View mode toggle -->
+        <div class="flex items-center space-x-1 rounded-lg p-1 transition-colors"
+             :class="$store.darkMode.on ? 'bg-gray-800' : 'bg-gray-100'">
+          <button @click="viewMode = 'card'; localStorage.setItem('pf-books-view', 'card')"
+                  class="p-1.5 rounded-md transition" title="Card view"
+                  :class="viewMode === 'card'
+                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                    : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
+          <button @click="viewMode = 'list'; localStorage.setItem('pf-books-view', 'list')"
+                  class="p-1.5 rounded-md transition" title="List view"
+                  :class="viewMode === 'list'
+                    ? ($store.darkMode.on ? 'bg-gray-700 text-indigo-400' : 'bg-white text-indigo-600 shadow-sm')
+                    : ($store.darkMode.on ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600')">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -82,7 +105,7 @@
          x-text="tab === 'archived' ? '보관된 책이 없습니다.' : '책이 없습니다. newbooks/ 에 챕터 PDF를 넣으면 처리됩니다.'"></div>
 
     <!-- Card grid -->
-    <div x-show="!loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div x-show="!loading && viewMode === 'card'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <template x-for="b in filteredBooks" :key="b.name">
         <a :href="bookUrl(b)"
            class="group relative rounded-xl border overflow-hidden transition shadow-sm hover:shadow-md"
@@ -136,6 +159,70 @@
         </a>
       </template>
     </div>
+
+    <!-- List view -->
+    <div x-show="!loading && viewMode === 'list'" x-cloak
+         class="rounded-xl border overflow-hidden divide-y"
+         :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 divide-gray-700' : 'bg-white border-gray-200 divide-gray-100'">
+      <template x-for="b in filteredBooks" :key="b.name">
+        <a :href="bookUrl(b)" class="group flex items-center gap-3 px-3 sm:px-4 py-3 transition-colors"
+           :class="$store.darkMode.on ? 'hover:bg-gray-700/40' : 'hover:bg-gray-50'">
+          <!-- thumbnail -->
+          <div class="w-9 h-12 shrink-0 rounded overflow-hidden flex items-center justify-center"
+               :class="$store.darkMode.on ? 'bg-gray-700/40' : 'bg-gray-100'">
+            <template x-if="b.cover_url">
+              <img :src="b.cover_url" :alt="b.title" class="w-full h-full object-cover" loading="lazy">
+            </template>
+            <template x-if="!b.cover_url">
+              <svg class="w-5 h-5 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+              </svg>
+            </template>
+          </div>
+          <!-- title + author -->
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold truncate" :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'" x-text="b.title"></div>
+            <div class="text-xs truncate" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+                 x-text="[b.author, b.year].filter(Boolean).join(' · ')"></div>
+          </div>
+          <!-- progress -->
+          <div class="hidden sm:flex flex-col items-end gap-1 w-40 shrink-0">
+            <div class="h-1.5 w-full rounded-full overflow-hidden" :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
+              <div class="h-full bg-indigo-500 rounded-full" :style="`width: ${b.progress_pct}%`"></div>
+            </div>
+            <span class="text-[11px]" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+                  x-text="`${b.chapters_translated}/${b.chapters_total} ch · ${b.progress_pct}%`"></span>
+          </div>
+          <span class="sm:hidden text-[11px] shrink-0" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+                x-text="`${b.progress_pct}%`"></span>
+          <!-- actions -->
+          <div class="flex gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+            <template x-if="tab === 'books'">
+              <button @click.prevent.stop="archive(b)" title="보관"
+                      class="p-1.5 rounded-md transition" :class="$store.darkMode.on ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-200'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                </svg>
+              </button>
+            </template>
+            <template x-if="tab === 'archived'">
+              <button @click.prevent.stop="restore(b)" title="복원"
+                      class="p-1.5 rounded-md transition" :class="$store.darkMode.on ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-200'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v6h6M3 13a9 9 0 103-7.7L3 7"/>
+                </svg>
+              </button>
+            </template>
+            <button @click.prevent.stop="remove(b)" title="삭제"
+                    class="p-1.5 rounded-md transition" :class="$store.darkMode.on ? 'text-gray-400 hover:bg-red-900/50 hover:text-red-300' : 'text-gray-500 hover:bg-red-100 hover:text-red-600'">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </div>
+        </a>
+      </template>
+    </div>
   </main>
 </div>
 
@@ -147,6 +234,7 @@ function booksApp() {
     loading: true,
     filterText: '',
     sortBy: localStorage.getItem('pf-books-sort') || 'title',
+    viewMode: localStorage.getItem('pf-books-view') || 'card',
 
     async init() {
       await this.load();
