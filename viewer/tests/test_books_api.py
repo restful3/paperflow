@@ -121,3 +121,13 @@ def test_books_require_auth(tmp_workspace, monkeypatch):
     from app.main import create_app
     c = TestClient(create_app())  # no auth override
     assert c.get("/api/books").status_code == 401
+
+
+def test_book_api_does_not_leak_into_papers_list(client, tmp_workspace):
+    """A book on disk must never appear in the papers list (separate roots)."""
+    _make_book(tmp_workspace, slug="BookX", chapters=(("01_intro", "Intro"),))
+    r = client.get("/api/papers?tab=unread")
+    assert r.status_code == 200
+    assert r.json() == []
+    r2 = client.get("/api/papers?tab=archived")
+    assert r2.json() == []
