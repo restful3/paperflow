@@ -618,6 +618,11 @@ def _publication_label(meta: dict) -> str | None:
     return None
 
 
+# Public, doc_kind-agnostic alias. Book chapter dirs reuse this unchanged.
+def paper_info_from_dir(paper_dir: Path, location: str) -> dict:
+    return _paper_info(paper_dir, location)
+
+
 def _paper_info(paper_dir: Path, location: str) -> dict:
     """Build info dict for a single paper directory."""
     files: dict[str, bool] = {
@@ -1012,14 +1017,18 @@ def _safe_child_dir(base: Path, item: Path) -> bool:
 _resolve_paper_dir = safe_paper_dir
 
 
-def get_pdf_path(name: str) -> Path | None:
-    paper_dir = _resolve_paper_dir(name)
-    if not paper_dir:
-        return None
+def get_pdf_path_in_dir(paper_dir: Path) -> Path | None:
     for f in paper_dir.iterdir():
         if f.name.endswith(".pdf"):
             return f
     return None
+
+
+def get_pdf_path(name: str) -> Path | None:
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    return get_pdf_path_in_dir(paper_dir)
 
 
 def get_video_path(name: str) -> Path | None:
@@ -1046,18 +1055,14 @@ def get_video_path(name: str) -> Path | None:
     return None
 
 
-def get_md_ko_path(name: str) -> Path | None:
-    """Get Korean markdown file path with deterministic priority.
+def get_md_ko_path_in_dir(paper_dir: Path) -> Path | None:
+    """Korean markdown within a known dir (doc_kind-agnostic).
 
     Priority:
-    1) <folder_name>_ko.md exact match
-    2) Other *_ko.md files excluding backup/explained variants (newest first)
+    1) <dir>_ko.md exact match
+    2) Other *_ko.md files excluding backup/explained/audio variants (newest first)
     """
-    paper_dir = _resolve_paper_dir(name)
-    if not paper_dir:
-        return None
-
-    exact = paper_dir / f"{name}_ko.md"
+    exact = paper_dir / f"{paper_dir.name}_ko.md"
     if exact.is_file():
         return exact
 
@@ -1070,7 +1075,6 @@ def get_md_ko_path(name: str) -> Path | None:
             continue
         if fn.endswith("_ko_explained.md"):
             continue
-        # (defensive/consistency — the _ko.md prefilter above already excludes these)
         if fn.endswith("_ko_audio.md"):
             continue
         if fn.endswith("_ko_audio_brief.md"):
@@ -1086,11 +1090,15 @@ def get_md_ko_path(name: str) -> Path | None:
     return cands[0]
 
 
-def get_md_en_path(name: str) -> Path | None:
-    """Get English markdown file path."""
+def get_md_ko_path(name: str) -> Path | None:
+    """Get Korean markdown file path with deterministic priority."""
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
+    return get_md_ko_path_in_dir(paper_dir)
+
+
+def get_md_en_path_in_dir(paper_dir: Path) -> Path | None:
     for f in paper_dir.iterdir():
         if (
             f.name.endswith(".md")
@@ -1103,13 +1111,32 @@ def get_md_en_path(name: str) -> Path | None:
     return None
 
 
+def get_md_en_path(name: str) -> Path | None:
+    """Get English markdown file path."""
+    paper_dir = _resolve_paper_dir(name)
+    if not paper_dir:
+        return None
+    return get_md_en_path_in_dir(paper_dir)
+
+
+def get_md_ko_audio_path_in_dir(paper_dir: Path) -> Path | None:
+    for f in paper_dir.iterdir():
+        if f.name.endswith("_ko_audio.md"):
+            return f
+    return None
+
+
 def get_md_ko_audio_path(name: str) -> Path | None:
     """Get Korean audio (listen-optimized) markdown file path."""
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
+    return get_md_ko_audio_path_in_dir(paper_dir)
+
+
+def get_md_ko_audio_brief_path_in_dir(paper_dir: Path) -> Path | None:
     for f in paper_dir.iterdir():
-        if f.name.endswith("_ko_audio.md"):
+        if f.name.endswith("_ko_audio_brief.md"):
             return f
     return None
 
@@ -1119,8 +1146,12 @@ def get_md_ko_audio_brief_path(name: str) -> Path | None:
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
+    return get_md_ko_audio_brief_path_in_dir(paper_dir)
+
+
+def get_md_ko_explained_path_in_dir(paper_dir: Path) -> Path | None:
     for f in paper_dir.iterdir():
-        if f.name.endswith("_ko_audio_brief.md"):
+        if f.name.endswith("_ko_explained.md"):
             return f
     return None
 
@@ -1130,8 +1161,12 @@ def get_md_ko_explained_path(name: str) -> Path | None:
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
+    return get_md_ko_explained_path_in_dir(paper_dir)
+
+
+def get_md_en_explained_path_in_dir(paper_dir: Path) -> Path | None:
     for f in paper_dir.iterdir():
-        if f.name.endswith("_ko_explained.md"):
+        if f.name.endswith("_explained.md") and not f.name.endswith("_ko_explained.md"):
             return f
     return None
 
@@ -1141,10 +1176,7 @@ def get_md_en_explained_path(name: str) -> Path | None:
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
-    for f in paper_dir.iterdir():
-        if f.name.endswith("_explained.md") and not f.name.endswith("_ko_explained.md"):
-            return f
-    return None
+    return get_md_en_explained_path_in_dir(paper_dir)
 
 
 def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
@@ -1211,15 +1243,19 @@ def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
     return True, f"Saved. Backup: {backup_path.name}"
 
 
+def get_asset_path_in_dir(paper_dir: Path, filename: str) -> Path | None:
+    asset = paper_dir / filename
+    if asset.is_file() and paper_dir in asset.resolve().parents:
+        return asset
+    return None
+
+
 def get_asset_path(name: str, filename: str) -> Path | None:
     """Get path to an asset (image) in a paper directory."""
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return None
-    asset = paper_dir / filename
-    if asset.is_file() and paper_dir in asset.resolve().parents:
-        return asset
-    return None
+    return get_asset_path_in_dir(paper_dir, filename)
 
 
 def archive_paper(name: str) -> tuple[bool, str]:
