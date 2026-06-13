@@ -59,3 +59,56 @@ def classify_chapter(meta: dict, chapter_id: str, new_sha: str, new_order):
         if ch["chapter_id"] == chapter_id:
             return "skip" if ch.get("source_sha256") == new_sha else "needs_review"
     return "new"
+
+
+import main_terminal as mt   # heavy converter deps — imported at module load of the ingest entry
+
+
+def _chapter_title(chapter_dir, chapter_id: str) -> str:
+    """Chapter title: extracted paper_meta.json title, else the chapter_id."""
+    pm = Path(chapter_dir) / "paper_meta.json"
+    if pm.is_file():
+        try:
+            with open(pm, encoding="utf-8") as f:
+                return json.load(f).get("title") or chapter_id
+        except Exception:
+            pass
+    return chapter_id
+
+
+def ingest_chapter(chapter_pdf, config=None, prompt=None, replace=False) -> dict:
+    """Ingest one chapter PDF into books/<slug>/<chapter_id>/.
+
+    Returns {"status": ..., "chapter_id": ...}. status ∈
+    {complete, converted, error, skip, needs_review, order_conflict}.
+    (dedup branching is wired in Task 6; this base path always processes.)
+    """
+    chapter_pdf = Path(chapter_pdf)
+    slug = mt.sanitize_folder_name(chapter_pdf.parent.name) or chapter_pdf.parent.name
+    book_dir = Path("books") / slug
+    book_dir.mkdir(parents=True, exist_ok=True)
+
+    book_store.init_book_meta(book_dir, slug)
+    chapter_id = chapter_id_from_pdf(str(chapter_pdf))
+    order = chapter_order_from_filename(chapter_pdf.name)
+    new_sha = sha256_of(chapter_pdf)
+
+    chapter_dir = book_dir / chapter_id
+    chapter_dir.mkdir(parents=True, exist_ok=True)
+
+    mt.process_pdf_to_output_dir(str(chapter_pdf), str(chapter_dir), chapter_id,
+                                 config, prompt, mode="book_chapter")
+
+    # durable meta upsert (under lock)
+    with book_store.book_lock(book_dir):
+        meta = book_store.load_book_meta(book_dir)
+        title = _chapter_title(chapter_dir, chapter_id)
+        book_store.upsert_chapter_meta(meta, chapter_id, order, title,
+                                       chapter_pdf.name, new_sha)
+        book_store.save_book_meta(book_dir, meta)
+
+    # cache state (own lock — do NOT nest inside the meta lock above)
+    fmts = book_store.detect_chapter_formats(chapter_dir)
+    status = "complete" if fmts["ko"] else ("converted" if fmts["en"] else "error")
+    book_store.update_chapter_state(book_dir, chapter_id, status, fmts)
+    return {"status": status, "chapter_id": chapter_id}

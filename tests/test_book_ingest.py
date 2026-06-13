@@ -41,3 +41,45 @@ def test_classify_chapter():
     assert bi.classify_chapter(meta, "01_a", "shaA", 1) == "skip"          # same id+sha
     assert bi.classify_chapter(meta, "01_a", "shaDIFF", 1) == "needs_review"
     assert bi.classify_chapter(meta, "03_c", "shaC", 1) == "order_conflict"  # order 1 taken by 01_a
+
+
+def test_ingest_chapter_new_happy_path(tmp_path, monkeypatch):
+    """신규 챕터: 챕터 폴더·book_meta(book_id+chapter)·book_state(complete) 산출."""
+    import json
+    import book_store
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "books").mkdir()
+    nb = tmp_path / "newbooks" / "MyBook"
+    nb.mkdir(parents=True)
+    pdf = nb / "01_intro.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+
+    def fake_process(pdf_path, output_dir, base_name, config, prompt, mode="paper"):
+        assert mode == "book_chapter"
+        with open(os.path.join(output_dir, base_name + ".md"), "w") as f:
+            f.write("# Intro\n")
+        with open(os.path.join(output_dir, base_name + "_ko.md"), "w") as f:
+            f.write("# 서론\n")
+        with open(os.path.join(output_dir, "paper_meta.json"), "w") as f:
+            json.dump({"title": "Introduction"}, f)
+        import shutil
+        shutil.move(pdf_path, os.path.join(output_dir, os.path.basename(pdf_path)))
+        return True
+
+    import main_terminal as mt
+    monkeypatch.setattr(mt, "process_pdf_to_output_dir", fake_process)
+
+    result = bi.ingest_chapter(pdf, config={"processing_pipeline": {}}, prompt="P")
+
+    assert result["status"] == "complete"
+    cdir = tmp_path / "books" / "MyBook" / "01_intro"
+    assert (cdir / "01_intro_ko.md").is_file()
+    assert (cdir / "01_intro.pdf").is_file()              # pdf moved in
+    meta = book_store.load_book_meta(tmp_path / "books" / "MyBook")
+    assert meta["book_id"].startswith("book-")
+    assert len(meta["chapters"]) == 1
+    assert meta["chapters"][0]["chapter_id"] == "01_intro"
+    assert meta["chapters"][0]["title"] == "Introduction"   # from paper_meta.json
+    assert meta["chapters"][0]["order"] == 1
+    state = book_store.load_book_state(tmp_path / "books" / "MyBook")
+    assert state["chapters"]["01_intro"]["pipeline_status"] == "complete"
