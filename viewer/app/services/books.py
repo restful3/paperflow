@@ -1,0 +1,122 @@
+"""Books service — viewer-side read/list/progress/lifecycle for the Books tab.
+
+The viewer is a separate deployable and cannot import repo-root book_store.py,
+so book_meta.json (durable) and book_state.json (cache) are read with the tiny
+loaders below. Chapter formats/content reuse papers.py *_in_dir resolvers.
+The viewer never writes book_state.json (the converter owns rebuilds); it only
+writes book_progress.json and moves folders for archive/restore.
+"""
+import datetime as _dt
+import json as _json
+import shutil
+from pathlib import Path
+from urllib.parse import quote
+
+from ..config import settings
+from . import papers as paper_svc
+
+
+# ── meta / state readers ───────────────────────────────────────────────────
+
+def _load_json(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return None
+
+
+def load_book_meta(book_dir: Path) -> dict | None:
+    return _load_json(book_dir / "book_meta.json")
+
+
+def load_book_state(book_dir: Path) -> dict | None:
+    return _load_json(book_dir / "book_state.json")
+
+
+def _book_location(book_dir: Path) -> str:
+    """books | book_archives, by resolved parent identity."""
+    try:
+        if book_dir.parent.resolve() == settings.book_archives_dir.resolve():
+            return "book_archives"
+    except (OSError, RuntimeError):
+        pass
+    return "books"
+
+
+def _derive_chapter_status(formats: dict) -> str:
+    """Fallback pipeline status when book_state.json has no entry for a chapter.
+
+    Mirrors the converter's rebuild rule: ko -> complete, en only -> converted,
+    otherwise pending.
+    """
+    if formats.get("md_ko"):
+        return "complete"
+    if formats.get("md_en"):
+        return "converted"
+    return "pending"
+
+
+# ── listing ────────────────────────────────────────────────────────────────
+
+def list_books(tab: str = "books") -> list[dict]:
+    """Book cards for the browse list. Cheap: 2 JSON reads + progress per book,
+    no per-chapter disk walk."""
+    if tab == "archived":
+        base = settings.book_archives_dir
+        location = "book_archives"
+    else:
+        base = settings.books_dir
+        location = "books"
+
+    if not base.exists():
+        return []
+
+    all_progress = get_all_book_progress()
+    cards: list[dict] = []
+    for item in sorted(base.iterdir(), key=lambda p: p.name):
+        if item.name.startswith(".") or not item.is_dir():
+            continue
+        if not paper_svc._is_within(base, item):
+            continue
+        meta = load_book_meta(item)
+        if not meta:
+            continue  # not a real book folder
+        book_id = meta.get("book_id") or item.name
+        chapters = meta.get("chapters", [])
+        chapters_total = len(chapters)
+        state = load_book_state(item) or {}
+        chapters_translated = (state.get("aggregate") or {}).get("chapters_complete", 0)
+        prog = all_progress.get(book_id, {})
+        progress_pct = (
+            round(sum(int(v) for v in prog.values()) / (chapters_total * 100) * 100)
+            if chapters_total else 0
+        )
+        cover_url = None
+        cover_rel = meta.get("cover")
+        if cover_rel and (item / cover_rel).is_file():
+            cover_url = f"/api/books/{quote(item.name, safe='')}/cover"
+        cards.append({
+            "name": item.name,
+            "book_id": book_id,
+            "title": meta.get("title") or item.name,
+            "author": meta.get("author"),
+            "year": meta.get("year"),
+            "cover_url": cover_url,
+            "chapters_total": chapters_total,
+            "chapters_translated": chapters_translated,
+            "progress_pct": progress_pct,
+            "location": location,
+        })
+    return cards
+
+
+# ── reading progress (book_progress.json, nested by book_id -> chapter_id) ──
+# NOTE: full implementation lands in a later task. list_books needs the reader
+# now, so a minimal get_all_book_progress is defined here and EXTENDED later.
+
+def get_all_book_progress() -> dict:
+    data = _load_json(settings.books_dir / "book_progress.json")
+    return data if isinstance(data, dict) else {}
