@@ -6,7 +6,7 @@ services:
         PDF_CONVERTER: ${PDF_CONVERTER:-marker}
     image: paperflow-converter:latest
     container_name: paperflow_converter
-    command: ./run_batch_watch.sh
+    command: ./run_all_watch.sh
     runtime: nvidia
     volumes:
       - ./newones:/app/newones
@@ -53,6 +53,7 @@ services:
       - ./outputs:/data/outputs
       - ./archives:/data/archives
       - ./newones:/data/newones
+      - ./newbooks:/data/newbooks
       - ./logs:/data/logs
       - ./books:/data/books
       - ./book_archives:/data/book_archives
