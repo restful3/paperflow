@@ -3277,11 +3277,15 @@ def _parse_cover_choice(raw, n_candidates):
         return None
 
 
-def process_single_pdf(pdf_path, config, prompt):
-    """Process single PDF file with configurable pipeline"""
+def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, mode="paper"):
+    """Process one PDF into a caller-supplied output_dir.
+
+    mode="paper" (default) preserves the original paper pipeline exactly.
+    mode="book_chapter" skips paper-only stages (web search, smart-rename,
+    global duplicate check, cover selection) — wired in a later task.
+    """
     try:
         pdf_name = os.path.basename(pdf_path)
-        base_name = pdf_name.replace('.pdf', '').strip()  # Remove trailing/leading whitespace
 
         print_header(f"Processing: {pdf_name}")
         print_info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -3306,7 +3310,6 @@ def process_single_pdf(pdf_path, config, prompt):
         current_stage = 0
 
         # Create output directory
-        output_dir = os.path.join("outputs", base_name)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             print_success(f"Created output directory: {output_dir}")
@@ -3603,6 +3606,19 @@ def process_single_pdf(pdf_path, config, prompt):
         print_error(traceback.format_exc())
         write_processing_status(pdf_name, "error", 0, 0, "Error", error=str(e))
         return False
+
+
+def process_single_pdf(pdf_path, config, prompt):
+    """Paper entry point: compute outputs/<base_name> and process in paper mode.
+
+    Thin wrapper preserved for backward compatibility — behavior is identical
+    to the pre-refactor process_single_pdf.
+    """
+    pdf_name = os.path.basename(pdf_path)
+    base_name = pdf_name.replace('.pdf', '').strip()
+    output_dir = os.path.join("outputs", base_name)
+    return process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, mode="paper")
+
 
 def _check_translation_api_health(config):
     """Preflight check for translation API/model when Korean translation is enabled."""
