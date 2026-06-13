@@ -85,3 +85,9 @@ def test_book_detail_redirects_anon_to_login(client_anon, tmp_workspace):
     resp = client_anon.get("/books/MyBook")
     assert resp.status_code == 302
     assert resp.headers["location"] == "/login"
+
+
+def test_papers_page_has_books_nav_link(client):
+    resp = client.get("/papers")
+    assert resp.status_code == 200
+    assert 'href="/books"' in resp.text
