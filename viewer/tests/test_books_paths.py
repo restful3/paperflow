@@ -71,3 +71,57 @@ def test_paper_info_from_dir_alias(tmp_workspace):
     assert info["name"] == "paper"
     assert info["location"] == "outputs"
     assert info["formats"]["md_en"] is True
+
+
+def test_safe_book_dir_resolves_books_and_archives(tmp_workspace):
+    from app.services import papers
+    (tmp_workspace / "books" / "MyBook").mkdir(parents=True)
+    (tmp_workspace / "book_archives" / "OldBook").mkdir(parents=True)
+    assert papers.safe_book_dir("MyBook") == tmp_workspace / "books" / "MyBook"
+    assert papers.safe_book_dir("OldBook") == tmp_workspace / "book_archives" / "OldBook"
+    assert papers.safe_book_dir("Nope") is None
+
+
+def test_safe_book_dir_rejects_traversal_and_slash(tmp_workspace):
+    from app.services import papers
+    assert papers.safe_book_dir("../outputs") is None
+    assert papers.safe_book_dir("a/b") is None
+    assert papers.safe_book_dir("..") is None
+
+
+def test_safe_book_dir_rejects_symlink_escape(tmp_workspace):
+    from app.services import papers
+    outside = tmp_workspace / "secret"
+    outside.mkdir()
+    link = tmp_workspace / "books" / "evil"
+    link.symlink_to(outside, target_is_directory=True)
+    assert papers.safe_book_dir("evil") is None
+
+
+def test_safe_book_chapter_dir(tmp_workspace):
+    from app.services import papers
+    ch = tmp_workspace / "books" / "MyBook" / "01_intro"
+    ch.mkdir(parents=True)
+    assert papers.safe_book_chapter_dir("MyBook", "01_intro") == ch
+    assert papers.safe_book_chapter_dir("MyBook", "nope") is None
+    assert papers.safe_book_chapter_dir("MyBook", "../..") is None
+    assert papers.safe_book_chapter_dir("MyBook", "a/b") is None
+    assert papers.safe_book_chapter_dir("Nope", "01_intro") is None
+
+
+def test_safe_book_chapter_dir_in_archives(tmp_workspace):
+    from app.services import papers
+    ch = tmp_workspace / "book_archives" / "OldBook" / "02_ch"
+    ch.mkdir(parents=True)
+    assert papers.safe_book_chapter_dir("OldBook", "02_ch") == ch
+
+
+def test_safe_book_chapter_dir_rejects_symlink_escape(tmp_workspace):
+    from app.services import papers
+    book = tmp_workspace / "books" / "MyBook"
+    book.mkdir(parents=True)
+    outside = tmp_workspace / "secret_ch"
+    outside.mkdir()
+    # a chapter that is a symlink pointing outside the book dir must be rejected
+    (book / "evil_chapter").symlink_to(outside, target_is_directory=True)
+    assert papers.safe_book_chapter_dir("MyBook", "evil_chapter") is None

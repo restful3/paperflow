@@ -997,6 +997,44 @@ def safe_paper_dir_at_location(name: str, location: str | None) -> Path | None:
     return d
 
 
+def safe_book_dir(book: str) -> Path | None:
+    """Resolve a book directory under books/ or book_archives/, rejecting traversal.
+
+    Book/chapter names are single directory components (no smart-rename), so the
+    same single-component guard used for papers applies. book_archives/ is a
+    top-level root (NOT under archives/), so paper listing never sees books.
+    """
+    if not _is_safe_paper_name(book):
+        return None
+    for base in [settings.books_dir, settings.book_archives_dir]:
+        d = base / book
+        if not d.is_dir():
+            continue
+        if not _is_within(base, d):
+            continue
+        return d
+    return None
+
+
+def safe_book_chapter_dir(book: str, chapter: str) -> Path | None:
+    """Resolve books/<book>/<chapter> (or book_archives/<book>/<chapter>).
+
+    Validates both path components and rejects symlink/.. escapes at the
+    chapter level (book level handled by safe_book_dir).
+    """
+    if not _is_safe_paper_name(book) or not _is_safe_paper_name(chapter):
+        return None
+    book_dir = safe_book_dir(book)
+    if not book_dir:
+        return None
+    d = book_dir / chapter
+    if not d.is_dir():
+        return None
+    if not _is_within(book_dir, d):
+        return None
+    return d
+
+
 def _safe_child_dir(base: Path, item: Path) -> bool:
     """Accept only non-hidden directories that resolve under their base.
 
