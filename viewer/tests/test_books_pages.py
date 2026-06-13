@@ -91,3 +91,6 @@ def test_papers_page_has_books_nav_link(client):
     resp = client.get("/papers")
     assert resp.status_code == 200
     assert 'href="/books"' in resp.text
+    # Nav links must be reachable on mobile too — the Papers/Books pills live in an
+    # always-visible flex container (regression guard: must NOT be `hidden sm:flex`).
+    assert '<div class="flex items-center gap-1 text-sm">' in resp.text
