@@ -495,10 +495,29 @@
         </svg>
       </a>
 
+      {% if viewer_kind == 'book_chapter' %}
+      <!-- Chapter breadcrumb + counter + prev/next nav -->
+      <div class="flex-1 flex items-center gap-2 text-sm min-w-0"
+           :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-700'">
+        <a href="/books" class="opacity-70 hover:opacity-100 shrink-0 transition-opacity">Books</a>
+        <span class="opacity-40">/</span>
+        <a href="/books/{{ book_name|urlencode }}" class="opacity-70 hover:opacity-100 truncate transition-opacity">{{ book_title|e }}</a>
+        <span class="opacity-40">/</span>
+        <span class="font-medium truncate">{{ chapter_title|e }}</span>
+        <span class="opacity-60 shrink-0">{{ chapter_index }} / {{ chapters_total }}</span>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        {% if prev_url %}<a href="{{ prev_url }}" class="px-2 py-1 rounded text-sm transition"
+           :class="$store.darkMode.on ? 'hover:bg-stone-700' : 'hover:bg-stone-200'">← 이전</a>{% endif %}
+        {% if next_url %}<a href="{{ next_url }}" class="px-2 py-1 rounded text-sm transition"
+           :class="$store.darkMode.on ? 'hover:bg-stone-700' : 'hover:bg-stone-200'">다음 →</a>{% endif %}
+      </div>
+      {% else %}
       <!-- Title -->
       <h1 class="flex-1 text-sm font-semibold truncate min-w-0"
           :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'"
           x-text="$store.lang.ko && '{{ paper_title_ko|default("", true)|e }}' ? '{{ paper_title_ko|default("", true)|e }}' : '{{ paper_title|default(paper_name, true)|e }}'">{{ paper_title or paper_name }}</h1>
+      {% endif %}
 
       {% if paper_doc_type and paper_doc_type != 'other' %}
       <!-- Doc type badge -->

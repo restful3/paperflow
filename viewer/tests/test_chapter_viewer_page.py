@@ -80,3 +80,19 @@ def test_chapter_viewer_requires_auth(tmp_workspace, monkeypatch):
     r = c.get("/books/MyBook/chapters/01_intro")
     assert r.status_code == 302
     assert r.headers["location"] == "/login"
+
+
+def test_chapter_viewer_shows_breadcrumb_and_counter(client, tmp_workspace):
+    _make_book(tmp_workspace, slug="MyBook")
+    html = client.get("/books/MyBook/chapters/01_intro").text
+    assert "My Book" in html       # book title in breadcrumb
+    assert "Intro" in html         # chapter title
+    assert "1 / 2" in html         # counter chapter_index / chapters_total
+
+
+def test_chapter_first_has_no_prev_last_has_no_next(client, tmp_workspace):
+    _make_book(tmp_workspace, slug="MyBook")
+    first = client.get("/books/MyBook/chapters/01_intro").text
+    last = client.get("/books/MyBook/chapters/02_more").text
+    assert "/books/MyBook/chapters/02_more" in first   # next link on first
+    assert "/books/MyBook/chapters/01_intro" in last   # prev link on last
