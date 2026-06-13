@@ -8,12 +8,16 @@ writes book_progress.json and moves folders for archive/restore.
 """
 import json as _json
 import os
+import re as _re
 import shutil
+import unicodedata as _unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
 from ..config import settings
 from . import papers as paper_svc
+
+_OS_FORBIDDEN = _re.compile(r'[/\\:*?"<>|]')
 
 
 # ── meta / state readers ───────────────────────────────────────────────────
@@ -270,6 +274,73 @@ def _write_progress(data: dict) -> bool:
         return True
     except Exception:
         return False
+
+
+# ── upload ────────────────────────────────────────────────────────────────
+
+def _slugify_book_title(title: str, max_length: int = 80) -> str | None:
+    """Filesystem-safe book slug. Mirrors the converter's sanitize_folder_name
+    so newbooks/<slug> survives the converter's re-sanitization unchanged."""
+    name = _unicodedata.normalize("NFKD", title or "")
+    name = _OS_FORBIDDEN.sub("", name)
+    name = _re.sub(r"[\n\r\t]", " ", name)
+    name = _re.sub(r"\s+", " ", name).strip()
+    name = name.strip(".")
+    if len(name) > max_length:
+        truncated = name[:max_length]
+        sp = truncated.rfind(" ")
+        if sp > max_length * 0.6:
+            truncated = truncated[:sp]
+        name = truncated.rstrip()
+    return name or None
+
+
+def _unique_book_slug(slug: str) -> str:
+    """Append -2, -3, … if slug collides with an existing book folder in
+    newbooks/, books/, or book_archives/."""
+    roots = [settings.newbooks_dir, settings.books_dir, settings.book_archives_dir]
+
+    def taken(s: str) -> bool:
+        return any((r / s).exists() for r in roots)
+
+    if not taken(slug):
+        return slug
+    i = 2
+    while taken(f"{slug}-{i}"):
+        i += 1
+    return f"{slug}-{i}"
+
+
+def save_book_upload(title, author, year, files) -> tuple[bool, str, str | None]:
+    """Write an uploaded book to newbooks/<slug>/ for the converter watch.
+
+    files: list of (original_filename, bytes) in chapter order.
+    Writes NN_<sanitized-stem>.pdf (NN from 01) + book.json {title, author?, year?}.
+    Returns (ok, message, slug).
+    """
+    base = _slugify_book_title(title)
+    if not base:
+        return False, "Invalid or empty book title.", None
+    if not files:
+        return False, "At least one chapter PDF is required.", None
+    slug = _unique_book_slug(base)
+    book_dir = settings.newbooks_dir / slug
+    if not paper_svc._is_within(settings.newbooks_dir, book_dir):
+        return False, "Invalid book title.", None
+    book_dir.mkdir(parents=True, exist_ok=True)
+    for i, (orig, data) in enumerate(files, 1):
+        safe = paper_svc._safe_filename(orig or "") or "chapter.pdf"
+        stem = safe[:-4] if safe.lower().endswith(".pdf") else safe
+        stem = _OS_FORBIDDEN.sub("", stem).strip().strip(".") or "chapter"
+        (book_dir / f"{i:02d}_{stem}.pdf").write_bytes(data)
+    meta = {"title": title.strip()}
+    if author and author.strip():
+        meta["author"] = author.strip()
+    if year is not None:
+        meta["year"] = int(year)
+    (book_dir / "book.json").write_text(
+        _json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    return True, f"'{slug}' uploaded ({len(files)} chapters).", slug
 
 
 # ── lifecycle (archive / restore / delete) ─────────────────────────────────
