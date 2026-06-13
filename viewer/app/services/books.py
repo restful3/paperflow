@@ -91,7 +91,7 @@ def list_books(tab: str = "books") -> list[dict]:
         chapters_translated = (state.get("aggregate") or {}).get("chapters_complete", 0)
         prog = all_progress.get(book_id, {})
         progress_pct = (
-            round(sum(int(v) for v in prog.values()) / (chapters_total * 100) * 100)
+            min(100, round(sum(int(v) for v in prog.values()) / (chapters_total * 100) * 100))
             if chapters_total else 0
         )
         cover_url = None

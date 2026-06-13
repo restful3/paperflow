@@ -280,3 +280,14 @@ def test_delete_archived_book(tmp_workspace):
     ok, _ = books.delete_book("BookO2")
     assert ok is True
     assert not (tmp_workspace / "book_archives" / "BookO2").exists()
+
+
+def test_list_books_progress_pct_clamped_when_stale_chapters(tmp_workspace):
+    from app.services import books
+    # meta has 1 chapter, but progress store holds 2 stale entries at 100 each
+    _bd, bid = _make_book(tmp_workspace, slug="BookStale", chapters=(("01_intro", "Intro"),))
+    books.save_chapter_progress(bid, "01_intro", 100)
+    books.save_chapter_progress(bid, "02_removed", 100)  # chapter no longer in meta
+    cards = books.list_books(tab="books")
+    assert len(cards) == 1
+    assert cards[0]["progress_pct"] == 100  # clamped, not 200
