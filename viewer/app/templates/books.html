@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}PaperFlow - Books{% endblock %}
+
+{% block body %}
+<div x-data="booksApp()" x-init="init()" class="min-h-full flex flex-col transition-colors">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-40 shadow-lg transition-colors"
+       :class="$store.darkMode.on ? 'bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500'">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-14">
+        <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-2">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+            <span class="text-white font-bold text-lg">PaperFlow</span>
+          </div>
+          <div class="flex items-center gap-1 text-sm">
+            <a href="/papers" class="px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition">Papers</a>
+            <a href="/books" class="px-2.5 py-1 rounded-md bg-white/15 text-white font-semibold transition">Books</a>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3">
+          <span class="text-white/80 text-sm hidden sm:inline" x-text="'Hello, {{ username }}'"></span>
+          <button @click="$store.lang.toggle()"
+                  class="text-white/80 hover:text-white transition text-xs font-semibold px-1.5 py-0.5 rounded border border-white/30 hover:border-white/60"
+                  x-text="$store.lang.ko ? 'KO' : 'EN'"></button>
+          <button @click="$store.darkMode.toggle()" class="text-white/80 hover:text-white transition text-sm"
+                  :title="$store.darkMode.on ? 'Light mode' : 'Dark mode'">
+            <svg x-show="!$store.darkMode.on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            <svg x-show="$store.darkMode.on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex-1">
+    <!-- Tabs + controls -->
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
+      <div class="flex gap-1" role="tablist">
+        <button @click="switchTab('books')" role="tab" :aria-selected="tab === 'books'"
+                class="px-4 py-1.5 text-sm rounded-lg border transition-colors"
+                :class="tab === 'books'
+                  ? ($store.darkMode.on ? 'bg-gray-800 border-gray-600 text-indigo-400 font-semibold' : 'bg-white border-gray-200 text-indigo-700 font-semibold shadow-sm')
+                  : ($store.darkMode.on ? 'border-transparent text-gray-500 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700')">
+          Books <span class="ml-1 text-[10px] opacity-70" x-text="tab === 'books' ? books.length : ''"></span>
+        </button>
+        <button @click="switchTab('archived')" role="tab" :aria-selected="tab === 'archived'"
+                class="px-4 py-1.5 text-sm rounded-lg border transition-colors"
+                :class="tab === 'archived'
+                  ? ($store.darkMode.on ? 'bg-gray-800 border-gray-600 text-indigo-400 font-semibold' : 'bg-white border-gray-200 text-indigo-700 font-semibold shadow-sm')
+                  : ($store.darkMode.on ? 'border-transparent text-gray-500 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700')">
+          Archived
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="text" x-model="filterText" placeholder="Filter by title / author…"
+               class="text-sm rounded-lg border px-3 py-1.5 outline-none transition w-48 sm:w-56"
+               :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-700'">
+        <select x-model="sortBy" @change="localStorage.setItem('pf-books-sort', sortBy)"
+                class="text-sm rounded-lg border px-2 py-1.5 outline-none transition cursor-pointer"
+                :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'">
+          <option value="title">Title</option>
+          <option value="progress">Progress</option>
+          <option value="chapters">Chapters</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Loading / empty -->
+    <div x-show="loading" class="text-center py-20 text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'">Loading…</div>
+    <div x-show="!loading && filteredBooks.length === 0" x-cloak
+         class="text-center py-20 text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'"
+         x-text="tab === 'archived' ? '보관된 책이 없습니다.' : '책이 없습니다. newbooks/ 에 챕터 PDF를 넣으면 처리됩니다.'"></div>
+
+    <!-- Card grid -->
+    <div x-show="!loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <template x-for="b in filteredBooks" :key="b.name">
+        <a :href="bookUrl(b)"
+           class="group relative rounded-xl border overflow-hidden transition shadow-sm hover:shadow-md"
+           :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-gray-600' : 'bg-white border-gray-200 hover:border-indigo-300'">
+          <div class="aspect-[3/4] w-full overflow-hidden flex items-center justify-center"
+               :class="$store.darkMode.on ? 'bg-gray-700/40' : 'bg-gray-100'">
+            <template x-if="b.cover_url">
+              <img :src="b.cover_url" :alt="b.title" class="w-full h-full object-cover" loading="lazy">
+            </template>
+            <template x-if="!b.cover_url">
+              <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+              </svg>
+            </template>
+          </div>
+          <div class="p-3">
+            <h3 class="text-sm font-semibold leading-snug line-clamp-2" :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'" x-text="b.title"></h3>
+            <p class="mt-0.5 text-xs truncate" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
+               x-text="[b.author, b.year].filter(Boolean).join(' · ')"></p>
+            <div class="mt-2 h-1.5 w-full rounded-full overflow-hidden" :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'">
+              <div class="h-full bg-indigo-500 rounded-full transition-all" :style="`width: ${b.progress_pct}%`"></div>
+            </div>
+            <div class="mt-1.5 flex items-center justify-between text-[11px]" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'">
+              <span x-text="`${b.chapters_translated}/${b.chapters_total} ch · ${b.progress_pct}%`"></span>
+            </div>
+          </div>
+          <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <template x-if="tab === 'books'">
+              <button @click.prevent.stop="archive(b)" title="보관"
+                      class="p-1.5 rounded-md bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                </svg>
+              </button>
+            </template>
+            <template x-if="tab === 'archived'">
+              <button @click.prevent.stop="restore(b)" title="복원"
+                      class="p-1.5 rounded-md bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v6h6M3 13a9 9 0 103-7.7L3 7"/>
+                </svg>
+              </button>
+            </template>
+            <button @click.prevent.stop="remove(b)" title="삭제"
+                    class="p-1.5 rounded-md bg-black/40 text-white hover:bg-red-600 backdrop-blur-sm">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+            </button>
+          </div>
+        </a>
+      </template>
+    </div>
+  </main>
+</div>
+
+<script>
+function booksApp() {
+  return {
+    tab: 'books',
+    books: [],
+    loading: true,
+    filterText: '',
+    sortBy: localStorage.getItem('pf-books-sort') || 'title',
+
+    async init() {
+      await this.load();
+    },
+
+    async load() {
+      this.loading = true;
+      try {
+        const r = await apiFetch(`/api/books?tab=${this.tab}`);
+        if (r && r.ok) this.books = await r.json();
+        else this.books = [];
+      } catch (e) {
+        this.books = [];
+        showToast('Failed to load books', 'error');
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    switchTab(t) {
+      if (this.tab === t) return;
+      this.tab = t;
+      this.load();
+    },
+
+    get filteredBooks() {
+      const q = this.filterText.trim().toLowerCase();
+      let list = this.books;
+      if (q) {
+        list = list.filter(b =>
+          (b.title || '').toLowerCase().includes(q) ||
+          (b.author || '').toLowerCase().includes(q));
+      }
+      const by = this.sortBy;
+      return [...list].sort((a, b) => {
+        if (by === 'progress') return (b.progress_pct || 0) - (a.progress_pct || 0);
+        if (by === 'chapters') return (b.chapters_total || 0) - (a.chapters_total || 0);
+        return (a.title || '').localeCompare(b.title || '');
+      });
+    },
+
+    bookUrl(b) {
+      return `/books/${encodeURIComponent(b.name)}`;
+    },
+
+    async archive(b) {
+      if (!confirm(`"${b.title}" 을(를) 보관할까요?`)) return;
+      const r = await apiFetch(`/api/books/${encodeURIComponent(b.name)}/archive`, { method: 'POST' });
+      if (r && r.ok) { showToast('보관되었습니다'); this.load(); }
+      else if (r) { const d = await r.json().catch(() => ({})); showToast(d.detail || '보관 실패', 'error'); }
+    },
+
+    async restore(b) {
+      const r = await apiFetch(`/api/books/${encodeURIComponent(b.name)}/restore`, { method: 'POST' });
+      if (r && r.ok) { showToast('복원되었습니다'); this.load(); }
+      else if (r) { const d = await r.json().catch(() => ({})); showToast(d.detail || '복원 실패', 'error'); }
+    },
+
+    async remove(b) {
+      if (!confirm(`"${b.title}" 을(를) 영구 삭제할까요? 되돌릴 수 없습니다.`)) return;
+      const r = await apiFetch(`/api/books/${encodeURIComponent(b.name)}`, { method: 'DELETE' });
+      if (r && r.ok) { showToast('삭제되었습니다'); this.load(); }
+      else if (r) { const d = await r.json().catch(() => ({})); showToast(d.detail || '삭제 실패', 'error'); }
+    },
+  };
+}
+</script>
+{% endblock %}

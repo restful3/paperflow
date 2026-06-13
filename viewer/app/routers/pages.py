@@ -157,6 +157,13 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     })
 
 
+@router.get("/books", response_class=HTMLResponse)
+async def books_page(request: Request, user: str | None = Depends(get_current_user_page)):
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse(request=request, name="books.html", context={"username": user})
+
+
 @router.get("/books/{book}/chapters/{chapter}", response_class=HTMLResponse)
 async def chapter_viewer_page(book: str, chapter: str, request: Request,
                               user: str | None = Depends(get_current_user_page)):
