@@ -103,3 +103,12 @@ def test_books_page_has_card_and_list_view(client):
     assert "pf-books-view" in body          # view-mode persistence key
     assert "viewMode === 'card'" in body    # card grid is gated on card mode
     assert "viewMode === 'list'" in body    # list view block exists
+
+
+def test_books_page_has_upload_modal(client):
+    resp = client.get("/books")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "submitUpload" in body          # upload method present
+    assert "/api/books/upload" in body     # posts to the upload endpoint
+    assert "새 책" in body                  # New Book trigger label

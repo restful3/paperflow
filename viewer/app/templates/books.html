@@ -95,6 +95,10 @@
             </svg>
           </button>
         </div>
+        <button @click="openUpload()"
+                class="text-sm font-medium px-3 py-1.5 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition shrink-0">
+          + 새 책
+        </button>
       </div>
     </div>
 
@@ -223,6 +227,66 @@
         </a>
       </template>
     </div>
+
+    <!-- New Book upload modal -->
+    <div x-show="showUpload" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="showUpload = false">
+      <div class="absolute inset-0 bg-black/50" @click="showUpload = false"></div>
+      <div class="relative w-full max-w-lg rounded-xl shadow-xl border max-h-[90vh] overflow-y-auto"
+           :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'">
+        <div class="px-5 py-4 border-b" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+          <h2 class="text-base font-semibold" :class="$store.darkMode.on ? 'text-gray-100' : 'text-gray-900'">새 책 업로드</h2>
+        </div>
+        <div class="px-5 py-4 space-y-3">
+          <div>
+            <label class="block text-xs font-medium mb-1" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">제목 <span class="text-red-500">*</span></label>
+            <input type="text" x-model="upTitle" placeholder="예: Quantitative Trading (2nd ed.)"
+                   class="w-full text-sm rounded-lg border px-3 py-2 outline-none transition"
+                   :class="$store.darkMode.on ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white border-gray-300 text-gray-900'">
+          </div>
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="block text-xs font-medium mb-1" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">저자</label>
+              <input type="text" x-model="upAuthor"
+                     class="w-full text-sm rounded-lg border px-3 py-2 outline-none transition"
+                     :class="$store.darkMode.on ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white border-gray-300 text-gray-900'">
+            </div>
+            <div class="w-28">
+              <label class="block text-xs font-medium mb-1" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">연도</label>
+              <input type="number" x-model="upYear" placeholder="2021"
+                     class="w-full text-sm rounded-lg border px-3 py-2 outline-none transition"
+                     :class="$store.darkMode.on ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white border-gray-300 text-gray-900'">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1" :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-600'">챕터 PDF <span class="text-red-500">*</span> <span class="opacity-60">(여러 개 선택, 순서 조정 가능)</span></label>
+            <input type="file" accept="application/pdf,.pdf" multiple
+                   @change="onFilesSelected($event)"
+                   class="w-full text-sm" :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-700'">
+          </div>
+          <ol x-show="upFiles.length" class="space-y-1">
+            <template x-for="(f, i) in upFiles" :key="f._key">
+              <li class="flex items-center gap-2 text-sm rounded-lg border px-2 py-1.5"
+                  :class="$store.darkMode.on ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'">
+                <span class="w-6 text-center text-xs font-mono opacity-60" x-text="String(i + 1).padStart(2, '0')"></span>
+                <span class="flex-1 truncate" :class="$store.darkMode.on ? 'text-gray-200' : 'text-gray-800'" x-text="f.name"></span>
+                <button @click="moveFile(i, -1)" :disabled="i === 0" class="px-1 disabled:opacity-30 hover:text-indigo-500" title="위로">▲</button>
+                <button @click="moveFile(i, 1)" :disabled="i === upFiles.length - 1" class="px-1 disabled:opacity-30 hover:text-indigo-500" title="아래로">▼</button>
+                <button @click="removeFile(i)" class="px-1 hover:text-red-500" title="제거">✕</button>
+              </li>
+            </template>
+          </ol>
+        </div>
+        <div class="px-5 py-4 border-t flex justify-end gap-2" :class="$store.darkMode.on ? 'border-gray-700' : 'border-gray-200'">
+          <button @click="showUpload = false" :disabled="uploading"
+                  class="text-sm px-3 py-1.5 rounded-lg transition" :class="$store.darkMode.on ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'">취소</button>
+          <button @click="submitUpload()" :disabled="uploading || !upTitle.trim() || !upFiles.length"
+                  class="text-sm px-4 py-1.5 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition disabled:opacity-50"
+                  x-text="uploading ? '업로드 중…' : '업로드'"></button>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -235,6 +299,13 @@ function booksApp() {
     filterText: '',
     sortBy: localStorage.getItem('pf-books-sort') || 'title',
     viewMode: localStorage.getItem('pf-books-view') || 'card',
+    showUpload: false,
+    upTitle: '',
+    upAuthor: '',
+    upYear: '',
+    upFiles: [],
+    _fileKey: 0,
+    uploading: false,
 
     async init() {
       await this.load();
@@ -298,6 +369,62 @@ function booksApp() {
       const r = await apiFetch(`/api/books/${encodeURIComponent(b.name)}`, { method: 'DELETE' });
       if (r && r.ok) { showToast('삭제되었습니다'); this.load(); }
       else if (r) { const d = await r.json().catch(() => ({})); showToast(d.detail || '삭제 실패', 'error'); }
+    },
+
+    openUpload() {
+      this.upTitle = ''; this.upAuthor = ''; this.upYear = '';
+      this.upFiles = []; this.uploading = false;
+      this.showUpload = true;
+    },
+
+    onFilesSelected(e) {
+      const picked = Array.from(e.target.files || [])
+        .filter(f => f.name.toLowerCase().endsWith('.pdf'))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      this.upFiles = picked.map(f => { f._key = this._fileKey++; return f; });
+      e.target.value = '';   // allow re-selecting the same files
+    },
+
+    moveFile(i, dir) {
+      const j = i + dir;
+      if (j < 0 || j >= this.upFiles.length) return;
+      const arr = this.upFiles;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      this.upFiles = [...arr];
+    },
+
+    removeFile(i) {
+      this.upFiles.splice(i, 1);
+      this.upFiles = [...this.upFiles];
+    },
+
+    async submitUpload() {
+      if (!this.upTitle.trim() || !this.upFiles.length) return;
+      this.uploading = true;
+      const fd = new FormData();
+      fd.append('title', this.upTitle.trim());
+      fd.append('author', this.upAuthor.trim());
+      fd.append('year', this.upYear ? String(this.upYear).trim() : '');
+      this.upFiles.forEach(f => fd.append('files', f, f.name));   // order preserved
+      try {
+        const resp = await fetch('/api/books/upload', {
+          method: 'POST', credentials: 'same-origin', body: fd,
+        });
+        if (resp.status === 401) { window.location.href = '/login'; return; }
+        if (resp.ok) {
+          const d = await resp.json();
+          showToast(d.message || '업로드되었습니다');
+          this.showUpload = false;
+          this.load();
+        } else {
+          const d = await resp.json().catch(() => ({}));
+          showToast(d.detail || '업로드 실패', 'error');
+        }
+      } catch (e) {
+        showToast('업로드 실패', 'error');
+      } finally {
+        this.uploading = false;
+      }
     },
   };
 }
