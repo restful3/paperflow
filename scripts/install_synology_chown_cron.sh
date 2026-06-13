@@ -2,7 +2,10 @@
 # Synology Drive ↔ Docker 권한 충돌 방지용 root 크론 설치.
 #
 # 배경: converter/tts 컨테이너는 /root/.cache(CUDA 모델 캐시) 때문에 root 로 실행되고,
-# 그 결과 ./outputs ./logs ./newones ./archives 에 root 소유 파일/폴더를 만든다.
+# 그 결과 ./outputs ./logs ./newones ./archives ./books ./newbooks ./book_archives 에
+# root 소유 파일/폴더를 만든다. (특히 newbooks 는 Books 업로드 시 viewer(uid 1000)가
+# 써야 하므로 root 소유면 업로드가 500 으로 실패한다.) 아래 chown -R 은 workspace 루트를
+# 통째로 처리하므로 이 디렉터리들을 모두 포함한다.
 # Synology Drive 데몬은 사용자 restful3 로 돌기 때문에 root 소유 디렉터리로
 # 파일을 rename/다운로드하지 못해 "(-3) System error" 무한 재시도(동기화 정체)가 난다.
 # 이 크론이 10분마다 소유권을 restful3 로 되돌려 동기화가 막히지 않게 한다.
