@@ -106,11 +106,13 @@ def test_chapter_kind_render_omits_paper_only_ui(tmp_workspace):
     assert 'x-data="chatPanel()"' not in html
     assert 'x-data="chatButton()"' not in html
     assert 'const viewerKind = "book_chapter";' in html
+    # Desktop ⋯ menu Download must NOT be gated — chapters can download too
+    assert '다운받기' in html
 
 
 def test_paper_only_fetch_functions_have_js_guard(tmp_workspace):
     html = _render_viewer_html_with_kind("book_chapter")
-    assert html.count("viewerKind !== 'paper'") >= 4
+    assert html.count("viewerKind !== 'paper'") >= 8
 
 
 def test_paper_kind_render_keeps_paper_only_blocks(client, tmp_workspace):

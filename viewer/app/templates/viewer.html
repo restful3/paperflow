@@ -786,8 +786,9 @@
               <span>Restore</span>
             </button>
           </template>
+          {% endif %}
 
-          <!-- Download (현재 보고 있는 문서를 받음; 실제 파일명은 title 툴팁) -->
+          <!-- Download (현재 보고 있는 문서를 받음; 실제 파일명은 title 툴팁) — available for all viewer kinds -->
           <a :href="downloadUrl" :download="downloadFilename" :title="downloadFilename"
              @click="moreMenuOpen = false"
              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition"
@@ -798,6 +799,7 @@
             <span>다운받기</span>
           </a>
 
+          {% if viewer_kind == 'paper' %}
           <!-- separator before destructive action -->
           <div class="my-1 h-px" :class="$store.darkMode.on ? 'bg-gray-700' : 'bg-gray-200'"></div>
 
@@ -2500,6 +2502,7 @@ function viewerApp() {
       this.pollAudioGen();
     },
     async cancelAudio() {
+      if (viewerKind !== 'paper') return;
       // 진행 중/대기 중 합성 강제 종료 + 부분 파일 삭제. name 은 URL-encoded → path 파라미터로 OK.
       if (!confirm('진행 중인 오디오 생성을 강제 종료할까요? (생성 중이던 부분 파일은 삭제됩니다)')) return;
       const resp = await apiFetch('/api/audio/queue/' + name, { method: 'DELETE' });
@@ -2543,6 +2546,7 @@ function viewerApp() {
       this._genPollTimer = setTimeout(() => this.pollAudioGen(), 2500);
     },
     async deleteAudio() {
+      if (viewerKind !== 'paper') return;
       if (!confirm('생성된 오디오를 삭제할까요? 다시 들으려면 재생성해야 합니다.')) return;
       const r = await apiFetch('/api/papers/' + name + '/audio', { method: 'DELETE' });
       if (!r || !r.ok) { showToast('오디오 삭제 실패', 'error'); return; }
@@ -2898,6 +2902,7 @@ function viewerApp() {
       return (m && m.audio && m.audio.version) || (m && m.source && m.source.sha256) || '';
     },
     async saveListening() {
+      if (viewerKind !== 'paper') return;
       if (!this.audioManifest || !this.$refs.audioEl) return;
       const a = this.$refs.audioEl;
       const dur = (this.audioManifest.audio && this.audioManifest.audio.duration_sec) || 1;
@@ -2913,6 +2918,7 @@ function viewerApp() {
       });
     },
     async restoreListening() {
+      if (viewerKind !== 'paper') return;
       const r = await apiFetch('/api/papers/' + name + '/audio/position');
       if (!r || !r.ok) return;
       const p = await r.json();
