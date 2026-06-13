@@ -1509,6 +1509,10 @@
 function viewerApp() {
   const name = '{{ paper_name_encoded }}';
   const paperNameRaw = decodeURIComponent(name);   // URL-decoded 폴더명: JSON 바디/이름 비교용(safe_paper_dir 는 정확매칭이라 raw 필요)
+  const apiBase = {{ api_base|tojson }};
+  const viewerKind = {{ viewer_kind|tojson }};
+  const storageScope = {{ storage_scope|tojson }};
+  const storageScopeRaw = {{ storage_scope_raw|tojson }};
 
   return {
     // Image lightbox (pan/zoom)
@@ -1561,7 +1565,7 @@ function viewerApp() {
     location: '{{ location }}',
     appViewportHeight: null,
     _appVvHandler: null,
-    pdfUrl: '/api/papers/' + name + '/pdf',
+    pdfUrl: apiBase + '/pdf',
     videoUrl: '/api/papers/' + name + '/video',
     videoPoster: '{{ video_poster_url }}',   // full assets URL built server-side ('' if none)
     videoPosition: {{ video_position | default(0) }},   // server resume position (sec)
@@ -1580,8 +1584,8 @@ function viewerApp() {
     get mobilePdfStyle() {
       return '';
     },
-    mdKoUrl: '/api/papers/' + name + '/md-ko',
-    mdEnUrl: '/api/papers/' + name + '/md-en',
+    mdKoUrl: apiBase + '/md-ko',
+    mdEnUrl: apiBase + '/md-en',
     mdKoContent: '',
     mdEnContent: '',
     mdKoExplainedContent: '',
@@ -1652,10 +1656,10 @@ function viewerApp() {
 
     get downloadUrl() {
       if (this.view === 'pdf') return this.pdfUrl;
-      if (this.audioMode && this.hasAudioText) return '/api/papers/' + name + '/' + this.activeAudioApiType;
+      if (this.audioMode && this.hasAudioText) return apiBase + '/' + this.activeAudioApiType;
       if (this.explainedMode) {
-        if (this.$store.lang.ko && this.hasMdKoExplained) return '/api/papers/' + name + '/md-ko-explained';
-        if (!this.$store.lang.ko && this.hasMdEnExplained) return '/api/papers/' + name + '/md-en-explained';
+        if (this.$store.lang.ko && this.hasMdKoExplained) return apiBase + '/md-ko-explained';
+        if (!this.$store.lang.ko && this.hasMdEnExplained) return apiBase + '/md-en-explained';
       }
       if (this.$store.lang.ko && this.hasMdKo) return this.mdKoUrl;
       if (!this.$store.lang.ko && this.hasMdEn) return this.mdEnUrl;
@@ -1909,7 +1913,7 @@ function viewerApp() {
         localStorage.setItem(this._progressKey(), beforeProgress.toString());
         this.refreshProgressStats();
         if (!this.explainedMode) {
-          apiFetch(`/api/papers/${name}/progress`, {
+          apiFetch(`${apiBase}/progress`, {
             method: 'POST',
             body: JSON.stringify({ progress: beforeProgress })
           }).catch(() => {});
@@ -1937,7 +1941,7 @@ function viewerApp() {
           localStorage.setItem(this._progressKey(), afterProgress.toString());
           this.refreshProgressStats();
           if (!this.explainedMode) {
-            apiFetch(`/api/papers/${name}/progress`, {
+            apiFetch(`${apiBase}/progress`, {
               method: 'POST',
               body: JSON.stringify({ progress: afterProgress })
             }).catch(() => {});
@@ -1973,8 +1977,7 @@ function viewerApp() {
             const scrollable = container.scrollHeight - container.clientHeight;
             if (scrollable > 0) {
               const progress = Math.round((container.scrollTop / scrollable) * 100);
-              navigator.sendBeacon(
-                `/api/papers/${name}/progress`,
+              navigator.sendBeacon(apiBase + '/progress',
                 new Blob([JSON.stringify({ progress })], { type: 'application/json' })
               );
             }
@@ -2926,10 +2929,10 @@ function viewerApp() {
       const urlMap = {
         'md-ko': this.mdKoUrl,
         'md-en': this.mdEnUrl,
-        'md-ko-explained': '/api/papers/' + name + '/md-ko-explained',
-        'md-en-explained': '/api/papers/' + name + '/md-en-explained',
-        'md-ko-audio': '/api/papers/' + name + '/md-ko-audio',
-        'md-ko-audio-brief': '/api/papers/' + name + '/md-ko-audio-brief',
+        'md-ko-explained': apiBase + '/md-ko-explained',
+        'md-en-explained': apiBase + '/md-en-explained',
+        'md-ko-audio': apiBase + '/md-ko-audio',
+        'md-ko-audio-brief': apiBase + '/md-ko-audio-brief',
       };
       const url = urlMap[type] || this.mdEnUrl;
       try {
@@ -2952,7 +2955,7 @@ function viewerApp() {
 
           // Rewrite relative image paths to API asset URLs
           text = text.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (match, alt, src) => {
-            return `![${alt}](/api/papers/${name}/assets/${encodeURIComponent(src)})`;
+            return `![${alt}](${apiBase}/assets/${encodeURIComponent(src)})`;
           });
 
           // Clean up citation/section links pointing to non-existent page anchors
@@ -3021,16 +3024,14 @@ function viewerApp() {
     _scrollSaveKey(viewType) {
       const lang = this.$store.lang.ko ? 'ko' : 'en';
       const variant = this.explainedMode ? '-easy' : '';
-      return `pf-scroll-${name}-${viewType}-${lang}${variant}`;
+      return `pf-scroll-${storageScope}-${viewType}-${lang}${variant}`;
     },
     _progressKey() {
-      const paperName = decodeURIComponent(name);
-      return this.explainedMode ? `pf-progress-easy-${paperName}` : `pf-progress-${paperName}`;
+      return this.explainedMode ? `pf-progress-easy-${storageScopeRaw}` : `pf-progress-${storageScopeRaw}`;
     },
     refreshProgressStats() {
-      const paperName = decodeURIComponent(name);
-      const orig = parseInt(localStorage.getItem(`pf-progress-${paperName}`) || '0');
-      const easy = parseInt(localStorage.getItem(`pf-progress-easy-${paperName}`) || '0');
+      const orig = parseInt(localStorage.getItem(`pf-progress-${storageScopeRaw}`) || '0');
+      const easy = parseInt(localStorage.getItem(`pf-progress-easy-${storageScopeRaw}`) || '0');
       this.originalProgress = Number.isFinite(orig) ? Math.max(0, Math.min(100, orig)) : 0;
       this.easyProgress = Number.isFinite(easy) ? Math.max(0, Math.min(100, easy)) : 0;
     },
@@ -3055,7 +3056,7 @@ function viewerApp() {
         if (!this.explainedMode) {
           clearTimeout(this._serverProgressTimer);
           this._serverProgressTimer = setTimeout(() => {
-            apiFetch(`/api/papers/${name}/progress`, {
+            apiFetch(`${apiBase}/progress`, {
               method: 'POST',
               body: JSON.stringify({ progress })
             });
@@ -3427,7 +3428,7 @@ function viewerApp() {
       text = text.replace(/^---\s*\n[\s\S]*?\n---\s*\n/, '');
       text = text.replace(/```\n([\s\S]*?<sup>[\s\S]*?)\n```/g, (m, c) => c);
       text = text.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (m, alt, src) => {
-        return `![${alt}](/api/papers/${name}/assets/${encodeURIComponent(src)})`;
+        return `![${alt}](${apiBase}/assets/${encodeURIComponent(src)})`;
       });
       text = text.replace(/\[((?:[^\]\\]|\\.)*)\]\(#page-[^)]+\)/g, (m, inner) => {
         return inner.replace(/\\([()\[\]])/g, '$1');
@@ -3445,7 +3446,7 @@ function viewerApp() {
       this.editSaving = true;
       const savedType = this.editType; // capture before exitEditMode resets it
       try {
-        const resp = await apiFetch(`/api/papers/${name}/markdown/${savedType}`, {
+        const resp = await apiFetch(`${apiBase}/markdown/${savedType}`, {
           method: 'PUT',
           body: JSON.stringify({ content: this.editContent })
         });
