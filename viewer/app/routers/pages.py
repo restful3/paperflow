@@ -115,9 +115,11 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
     video_position = vp.get("position", 0) or 0
     video_watched = bool(vp.get("watched", False))
 
+    paper_name_encoded = quote(name, safe="")
+
     return templates.TemplateResponse(request=request, name="viewer.html", context={
         "paper_name": name,
-        "paper_name_encoded": quote(name, safe=""),
+        "paper_name_encoded": paper_name_encoded,
         "paper_title": paper_title,
         "paper_title_ko": paper_title_ko,
         "paper_authors": paper_authors,
@@ -142,4 +144,9 @@ async def viewer_page(paper_name: str, request: Request, user: str | None = Depe
         "location": location,
         "default_view": default_view,
         "server_progress": server_progress,
+        # content-viewer parameterization (paper defaults — Phase 2b):
+        "api_base": f"/api/papers/{paper_name_encoded}",
+        "viewer_kind": "paper",
+        "storage_scope": paper_name_encoded,
+        "storage_scope_raw": name,
     })
