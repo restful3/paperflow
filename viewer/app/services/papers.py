@@ -1228,7 +1228,15 @@ def save_markdown(name: str, md_type: str, content: str) -> tuple[bool, str]:
     paper_dir = _resolve_paper_dir(name)
     if not paper_dir:
         return False, f"Paper '{name}' not found."
+    return save_markdown_in_dir(paper_dir, md_type, content)
 
+
+def save_markdown_in_dir(paper_dir: Path, md_type: str, content: str) -> tuple[bool, str]:
+    """Save edited markdown into a known dir (doc_kind-agnostic).
+
+    Finds the ko/en target (excluding explained/audio variants), writes a
+    timestamped .bak backup, overwrites, and invalidates the RAG chunk cache.
+    """
     # Find the target file
     target = None
     if md_type == "ko":
