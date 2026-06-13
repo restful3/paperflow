@@ -6,8 +6,8 @@ loaders below. Chapter formats/content reuse papers.py *_in_dir resolvers.
 The viewer never writes book_state.json (the converter owns rebuilds); it only
 writes book_progress.json and moves folders for archive/restore.
 """
-import datetime as _dt
 import json as _json
+import os
 import shutil
 from pathlib import Path
 from urllib.parse import quote
@@ -266,8 +266,50 @@ def _write_progress(data: dict) -> bool:
         tmp = str(path) + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             _json.dump(data, f, ensure_ascii=False)
-        import os
         os.replace(tmp, path)
         return True
     except Exception:
         return False
+
+
+# ── lifecycle (archive / restore / delete) ─────────────────────────────────
+
+def archive_book(book: str) -> tuple[bool, str]:
+    if not paper_svc._is_safe_paper_name(book):
+        return False, "Invalid book name."
+    src = settings.books_dir / book
+    if not src.is_dir() or not paper_svc._is_within(settings.books_dir, src):
+        return False, f"Book '{book}' not found in books."
+    dest = settings.book_archives_dir / book
+    if dest.exists():
+        return False, f"'{book}' already exists in book_archives."
+    settings.book_archives_dir.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dest))
+    return True, f"'{book}' archived."
+
+
+def restore_book(book: str) -> tuple[bool, str]:
+    if not paper_svc._is_safe_paper_name(book):
+        return False, "Invalid book name."
+    src = settings.book_archives_dir / book
+    if not src.is_dir() or not paper_svc._is_within(settings.book_archives_dir, src):
+        return False, f"Book '{book}' not found in book_archives."
+    dest = settings.books_dir / book
+    if dest.exists():
+        return False, f"'{book}' already exists in books."
+    settings.books_dir.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dest))
+    return True, f"'{book}' restored."
+
+
+def delete_book(book: str) -> tuple[bool, str]:
+    book_dir = paper_svc.safe_book_dir(book)
+    if not book_dir:
+        return False, f"Book '{book}' not found."
+    meta = load_book_meta(book_dir)
+    book_id = (meta or {}).get("book_id")
+    size_mb = paper_svc._dir_size_mb(book_dir)
+    shutil.rmtree(str(book_dir))
+    if book_id:
+        delete_book_progress(book_id)
+    return True, f"'{book}' deleted ({size_mb:.1f} MB freed)."

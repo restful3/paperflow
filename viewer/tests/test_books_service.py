@@ -230,3 +230,53 @@ def test_get_book_cover_path(tmp_workspace):
     assert p is not None and p.name == "cover.jpg"
     _make_book(tmp_workspace, slug="BookJ", chapters=(("01_intro", "Intro"),), cover=False)
     assert books.get_book_cover_path("BookJ") is None
+
+
+def test_archive_then_restore_book(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookL2", chapters=(("01_intro", "Intro"),))
+    ok, _ = books.archive_book("BookL2")
+    assert ok is True
+    assert not (tmp_workspace / "books" / "BookL2").exists()
+    assert (tmp_workspace / "book_archives" / "BookL2").is_dir()
+    assert books.list_books(tab="books") == []
+    assert len(books.list_books(tab="archived")) == 1
+
+    ok, _ = books.restore_book("BookL2")
+    assert ok is True
+    assert (tmp_workspace / "books" / "BookL2").is_dir()
+    assert not (tmp_workspace / "book_archives" / "BookL2").exists()
+
+
+def test_archive_missing_book_fails(tmp_workspace):
+    from app.services import books
+    ok, msg = books.archive_book("Ghost")
+    assert ok is False
+    assert "not found" in msg.lower()
+
+
+def test_archive_conflict_when_dest_exists(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookM2", chapters=(("01_intro", "Intro"),))
+    _make_book(tmp_workspace, slug="BookM2", chapters=(("01_intro", "Intro"),), archived=True)
+    ok, msg = books.archive_book("BookM2")
+    assert ok is False
+    assert "already exists" in msg.lower()
+
+
+def test_delete_book_removes_dir_and_progress(tmp_workspace):
+    from app.services import books
+    _bd, bid = _make_book(tmp_workspace, slug="BookN2", chapters=(("01_intro", "Intro"),))
+    books.save_chapter_progress(bid, "01_intro", 50)
+    ok, _ = books.delete_book("BookN2")
+    assert ok is True
+    assert not (tmp_workspace / "books" / "BookN2").exists()
+    assert books.get_book_progress(bid) == {}
+
+
+def test_delete_archived_book(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookO2", chapters=(("01_intro", "Intro"),), archived=True)
+    ok, _ = books.delete_book("BookO2")
+    assert ok is True
+    assert not (tmp_workspace / "book_archives" / "BookO2").exists()
