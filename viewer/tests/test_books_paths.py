@@ -125,3 +125,19 @@ def test_safe_book_chapter_dir_rejects_symlink_escape(tmp_workspace):
     # a chapter that is a symlink pointing outside the book dir must be rejected
     (book / "evil_chapter").symlink_to(outside, target_is_directory=True)
     assert papers.safe_book_chapter_dir("MyBook", "evil_chapter") is None
+
+
+def test_list_papers_never_includes_books(tmp_workspace):
+    """books/ 와 book_archives/ 의 폴더는 논문 목록(unread/archived)에 절대 안 나온다."""
+    from app.services import papers
+    (tmp_workspace / "books" / "MyBook" / "01_intro").mkdir(parents=True)
+    (tmp_workspace / "book_archives" / "OldBook" / "01_intro").mkdir(parents=True)
+    # 대조군: 실제 논문 1개
+    (tmp_workspace / "outputs" / "RealPaper").mkdir(parents=True)
+
+    unread = [p["name"] for p in papers.list_papers("unread")]
+    archived = [p["name"] for p in papers.list_papers("archived")]
+
+    assert "RealPaper" in unread
+    assert "MyBook" not in unread and "MyBook" not in archived
+    assert "OldBook" not in unread and "OldBook" not in archived
