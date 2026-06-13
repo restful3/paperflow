@@ -48,3 +48,50 @@ def test_save_book_upload_omits_blank_author_year(ws):
     ok, msg, slug = book_svc.save_book_upload("T", "", None, [("a.pdf", b"x")])
     meta = json.loads((ws / "newbooks" / slug / "book.json").read_text(encoding="utf-8"))
     assert meta == {"title": "T"}
+
+
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture
+def client(ws, monkeypatch):
+    import app.main as _main
+    monkeypatch.setattr(_main.settings, "JWT_SECRET_KEY", _cfg.settings.JWT_SECRET_KEY)
+    monkeypatch.setattr(_main.settings, "BASE_DIR", _cfg.settings.BASE_DIR)
+    from app.main import create_app
+    from app.dependencies import get_current_user_api
+    app = create_app()
+    app.dependency_overrides[get_current_user_api] = lambda: "tester"
+    return TestClient(app)
+
+
+def test_upload_endpoint_creates_book(client, ws):
+    resp = client.post("/api/books/upload",
+                       data={"title": "My Book", "author": "A", "year": "2020"},
+                       files=[("files", ("01.pdf", b"%PDF-1", "application/pdf")),
+                              ("files", ("02.pdf", b"%PDF-2", "application/pdf"))])
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True and body["chapters"] == 2 and body["slug"] == "My Book"
+    assert (ws / "newbooks" / "My Book" / "01_01.pdf").is_file()
+
+
+def test_upload_endpoint_rejects_non_pdf(client):
+    resp = client.post("/api/books/upload",
+                       data={"title": "X"},
+                       files=[("files", ("a.txt", b"nope", "text/plain"))])
+    assert resp.status_code == 400
+
+
+def test_upload_endpoint_requires_title(client):
+    resp = client.post("/api/books/upload",
+                       data={"title": "  "},
+                       files=[("files", ("a.pdf", b"%PDF", "application/pdf"))])
+    assert resp.status_code == 400
+
+
+def test_upload_endpoint_rejects_bad_year(client):
+    resp = client.post("/api/books/upload",
+                       data={"title": "X", "year": "notayear"},
+                       files=[("files", ("a.pdf", b"%PDF", "application/pdf"))])
+    assert resp.status_code == 400

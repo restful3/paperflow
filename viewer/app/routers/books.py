@@ -1,6 +1,6 @@
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -19,6 +19,7 @@ _MD_KINDS = {
 }
 _IMG_MEDIA = {"jpeg": "image/jpeg", "jpg": "image/jpeg", "png": "image/png",
               "gif": "image/gif", "svg": "image/svg+xml", "webp": "image/webp"}
+_MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 MB per chapter (mirrors papers upload)
 
 
 class MarkdownUpdateRequest(BaseModel):
@@ -28,6 +29,38 @@ class MarkdownUpdateRequest(BaseModel):
 @router.get("")
 async def list_books(tab: str = "books", _user: str = Depends(get_current_user_api)):
     return book_svc.list_books(tab=tab)
+
+
+@router.post("/upload")
+async def upload_book(
+    title: str = Form(...),
+    author: str = Form(""),
+    year: str = Form(""),
+    files: list[UploadFile] = File(...),
+    _user: str = Depends(get_current_user_api),
+):
+    if not title.strip():
+        raise HTTPException(status_code=400, detail="Book title is required")
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one chapter PDF is required")
+    payload: list[tuple[str, bytes]] = []
+    for f in files:
+        if not f.filename or not f.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"Only PDF files are accepted: {f.filename}")
+        data = await f.read()
+        if len(data) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=400, detail=f"File too large (max 200 MB): {f.filename}")
+        payload.append((f.filename, data))
+    yr = None
+    if year.strip():
+        try:
+            yr = int(year.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Year must be a number")
+    ok, msg, slug = book_svc.save_book_upload(title, author, yr, payload)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"ok": True, "message": msg, "slug": slug, "chapters": len(payload)}
 
 
 @router.get("/{book}/info")
