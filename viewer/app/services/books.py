@@ -169,6 +169,64 @@ def get_book(book: str) -> dict | None:
     }
 
 
+# ── chapter content (delegate to papers *_in_dir) ──────────────────────────
+
+_CONTENT_RESOLVERS = {
+    "pdf": paper_svc.get_pdf_path_in_dir,
+    "md_ko": paper_svc.get_md_ko_path_in_dir,
+    "md_en": paper_svc.get_md_en_path_in_dir,
+    "md_ko_explained": paper_svc.get_md_ko_explained_path_in_dir,
+    "md_en_explained": paper_svc.get_md_en_explained_path_in_dir,
+    "md_ko_audio": paper_svc.get_md_ko_audio_path_in_dir,
+    "md_ko_audio_brief": paper_svc.get_md_ko_audio_brief_path_in_dir,
+}
+
+
+def get_chapter_content_path(book: str, chapter: str, kind: str) -> Path | None:
+    resolver = _CONTENT_RESOLVERS.get(kind)
+    if resolver is None:
+        return None
+    cdir = paper_svc.safe_book_chapter_dir(book, chapter)
+    if not cdir:
+        return None
+    return resolver(cdir)
+
+
+def get_chapter_asset_path(book: str, chapter: str, filename: str) -> Path | None:
+    cdir = paper_svc.safe_book_chapter_dir(book, chapter)
+    if not cdir:
+        return None
+    return paper_svc.get_asset_path_in_dir(cdir, filename)
+
+
+def get_chapter_info(book: str, chapter: str) -> dict | None:
+    cdir = paper_svc.safe_book_chapter_dir(book, chapter)
+    if not cdir:
+        return None
+    info = paper_svc.paper_info_from_dir(cdir, _book_location(cdir.parent))
+    info["book"] = book
+    info["chapter_id"] = chapter
+    return info
+
+
+def save_chapter_markdown(book: str, chapter: str, md_type: str, content: str) -> tuple[bool, str]:
+    cdir = paper_svc.safe_book_chapter_dir(book, chapter)
+    if not cdir:
+        return False, f"Chapter '{book}/{chapter}' not found."
+    return paper_svc.save_markdown_in_dir(cdir, md_type, content)
+
+
+def get_book_cover_path(book: str) -> Path | None:
+    book_dir = paper_svc.safe_book_dir(book)
+    if not book_dir:
+        return None
+    meta = load_book_meta(book_dir)
+    rel = (meta or {}).get("cover")
+    if not rel:
+        return None
+    return paper_svc.get_asset_path_in_dir(book_dir, rel)
+
+
 # ── reading progress (book_progress.json, nested by book_id -> chapter_id) ───
 
 _BOOK_PROGRESS_FILE = "book_progress.json"

@@ -167,3 +167,66 @@ def test_get_book_uses_state_status_when_present(tmp_workspace):
 def test_get_book_unknown_returns_none(tmp_workspace):
     from app.services import books
     assert books.get_book("Nope") is None
+
+
+def test_chapter_content_path_resolves_ko_and_en(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookD", chapters=(("01_intro", "Intro"),))
+    ko = books.get_chapter_content_path("BookD", "01_intro", "md_ko")
+    en = books.get_chapter_content_path("BookD", "01_intro", "md_en")
+    assert ko is not None and ko.name == "01_intro_ko.md"
+    assert en is not None and en.name == "01_intro.md"
+    assert books.get_chapter_content_path("BookD", "01_intro", "pdf") is None  # no pdf written
+
+
+def test_chapter_content_path_rejects_unknown_kind(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookE", chapters=(("01_intro", "Intro"),))
+    assert books.get_chapter_content_path("BookE", "01_intro", "bogus") is None
+
+
+def test_chapter_content_path_traversal_blocked(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookF", chapters=(("01_intro", "Intro"),))
+    assert books.get_chapter_content_path("BookF", "../01_intro", "md_ko") is None
+    assert books.get_chapter_content_path("../BookF", "01_intro", "md_ko") is None
+
+
+def test_chapter_asset_path_resolves(tmp_workspace):
+    from app.services import books
+    bd, _ = _make_book(tmp_workspace, slug="BookG", chapters=(("01_intro", "Intro"),))
+    imgdir = bd / "01_intro" / "images"
+    imgdir.mkdir()
+    (imgdir / "fig1.jpg").write_bytes(b"\xff\xd8\xff")
+    p = books.get_chapter_asset_path("BookG", "01_intro", "images/fig1.jpg")
+    assert p is not None and p.name == "fig1.jpg"
+    assert books.get_chapter_asset_path("BookG", "01_intro", "../../book_meta.json") is None
+
+
+def test_save_chapter_markdown_writes_and_backs_up(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookH", chapters=(("01_intro", "Intro"),))
+    ok, msg = books.save_chapter_markdown("BookH", "01_intro", "ko", "# 새 본문")
+    assert ok is True
+    p = books.get_chapter_content_path("BookH", "01_intro", "md_ko")
+    assert p.read_text(encoding="utf-8") == "# 새 본문"
+
+
+def test_get_chapter_info_returns_formats(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookK2", chapters=(("01_intro", "Intro"),))
+    info = books.get_chapter_info("BookK2", "01_intro")
+    assert info is not None
+    assert info["formats"]["md_ko"] is True
+    assert info["book"] == "BookK2"
+    assert info["chapter_id"] == "01_intro"
+    assert books.get_chapter_info("BookK2", "nope") is None
+
+
+def test_get_book_cover_path(tmp_workspace):
+    from app.services import books
+    _make_book(tmp_workspace, slug="BookI", chapters=(("01_intro", "Intro"),), cover=True)
+    p = books.get_book_cover_path("BookI")
+    assert p is not None and p.name == "cover.jpg"
+    _make_book(tmp_workspace, slug="BookJ", chapters=(("01_intro", "Intro"),), cover=False)
+    assert books.get_book_cover_path("BookJ") is None
