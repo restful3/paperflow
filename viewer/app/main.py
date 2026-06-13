@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routers import api, pages
+from .routers import api, pages, books
 
 
 class _TokenRedactFilter(logging.Filter):
@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
 
     # Routers (always)
     application.include_router(api.router)
+    application.include_router(books.router)
     application.include_router(pages.router)
 
     # MCP (opt-in: only when MCP_API_KEY is set + base URL configured)
