@@ -3282,7 +3282,7 @@ def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, m
 
     mode="paper" (default) preserves the original paper pipeline exactly.
     mode="book_chapter" skips paper-only stages (web search, smart-rename,
-    global duplicate check, cover selection) — wired in a later task.
+    global duplicate check, cover selection).
     """
     try:
         pdf_name = os.path.basename(pdf_path)
@@ -3307,6 +3307,12 @@ def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, m
 
         # Initialize processing status tracking
         total_stages = _count_active_stages(pipeline)
+        if mode != "paper":
+            # book_chapter mode skips duplicate-check and cover stages (see gating below)
+            if pipeline.get("check_duplicate", True) and pipeline.get("extract_metadata", False):
+                total_stages -= 1
+            if pipeline.get("select_cover", True) and pipeline.get("extract_metadata", False):
+                total_stages -= 1
         current_stage = 0
 
         # Create output directory
@@ -3441,12 +3447,12 @@ def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, m
                     results["metadata"] = "success"
 
                     # Enrich metadata with web search (venue, DOI, year, URL)
-                    if pipeline.get("enrich_with_web_search", True):
+                    if pipeline.get("enrich_with_web_search", True) and mode == "paper":
                         metadata = enrich_metadata_with_web_search(metadata, output_dir, config)
 
                     # Smart rename if enabled
                     meta_config = config.get("metadata_extraction", {})
-                    if meta_config.get("smart_rename", True) and metadata.get("title"):
+                    if meta_config.get("smart_rename", True) and metadata.get("title") and mode == "paper":
                         max_len = meta_config.get("max_folder_name_length", 80)
                         new_name = sanitize_folder_name(metadata["title"], max_len)
                         if new_name and new_name != base_name:
@@ -3489,7 +3495,7 @@ def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, m
                         print_warning(f"Korean source rename failed: {e}")
 
         # Step 1.7: Duplicate check (optional, requires metadata)
-        if pipeline.get("check_duplicate", True) and metadata:
+        if pipeline.get("check_duplicate", True) and metadata and mode == "paper":
             current_stage += 1
             write_processing_status(pdf_name, "checking_duplicate", current_stage, total_stages, "Checking for Duplicates")
             print_info("Step 1.7: Checking for duplicate papers...")
@@ -3510,7 +3516,7 @@ def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, m
                 results["duplicate_check"] = "error"
 
         # Step 1.8: Cover image selection (optional, vision)
-        if pipeline.get("select_cover", True) and metadata:
+        if pipeline.get("select_cover", True) and metadata and mode == "paper":
             current_stage += 1
             write_processing_status(pdf_name, "selecting_cover", current_stage, total_stages, "Selecting Cover Image")
             print_info("Step 1.8: Selecting cover image with vision AI...")
