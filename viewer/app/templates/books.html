@@ -105,7 +105,7 @@
          x-text="tab === 'archived' ? '보관된 책이 없습니다.' : '책이 없습니다. newbooks/ 에 챕터 PDF를 넣으면 처리됩니다.'"></div>
 
     <!-- Card grid -->
-    <div x-show="!loading && viewMode === 'card'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div x-show="!loading && viewMode === 'card'" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
       <template x-for="b in filteredBooks" :key="b.name">
         <a :href="bookUrl(b)"
            class="group relative rounded-xl border overflow-hidden transition shadow-sm hover:shadow-md"
