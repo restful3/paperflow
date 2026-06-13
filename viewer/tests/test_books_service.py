@@ -126,3 +126,44 @@ def test_delete_book_progress_removes_book(tmp_workspace):
 def test_get_book_progress_unknown_returns_empty(tmp_workspace):
     from app.services import books
     assert books.get_book_progress("nope") == {}
+
+
+def test_get_book_lists_chapters_with_status_and_progress(tmp_workspace):
+    from app.services import books
+    _bd, bid = _make_book(
+        tmp_workspace, slug="BookB",
+        chapters=(("01_intro", "Intro"), ("02_more", "More")),
+    )
+    books.save_chapter_progress(bid, "01_intro", 100)
+
+    detail = books.get_book("BookB")
+    assert detail is not None
+    assert detail["book_id"] == bid
+    assert detail["title"] == "BookB"
+    assert detail["location"] == "books"
+    assert len(detail["chapters"]) == 2
+    ch1 = detail["chapters"][0]
+    assert ch1["chapter_id"] == "01_intro"
+    assert ch1["order"] == 1
+    assert ch1["title"] == "Intro"
+    assert ch1["status"] == "complete"        # has _ko.md
+    assert ch1["formats"]["md_ko"] is True
+    assert ch1["progress"] == 100
+    assert detail["chapters"][1]["progress"] == 0
+    assert detail["aggregate"]["chapters_total"] == 2
+    assert detail["aggregate"]["progress_pct"] == 50  # (100+0)/200
+
+
+def test_get_book_uses_state_status_when_present(tmp_workspace):
+    from app.services import books
+    state = {"schema_version": 1, "chapters": {
+        "01_intro": {"pipeline_status": "needs_review", "formats": {}}}}
+    _make_book(tmp_workspace, slug="BookC", chapters=(("01_intro", "Intro"),),
+               ko=False, state=state)
+    detail = books.get_book("BookC")
+    assert detail["chapters"][0]["status"] == "needs_review"
+
+
+def test_get_book_unknown_returns_none(tmp_workspace):
+    from app.services import books
+    assert books.get_book("Nope") is None

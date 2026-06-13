@@ -113,6 +113,62 @@ def list_books(tab: str = "books") -> list[dict]:
     return cards
 
 
+def get_book(book: str) -> dict | None:
+    """Book detail: durable meta + per-chapter status/formats/progress + aggregate.
+
+    Status priority: book_state.json entry -> derived from disk formats.
+    """
+    book_dir = paper_svc.safe_book_dir(book)
+    if not book_dir:
+        return None
+    meta = load_book_meta(book_dir)
+    if not meta:
+        return None
+    location = _book_location(book_dir)
+    book_id = meta.get("book_id") or book_dir.name
+    state = load_book_state(book_dir) or {}
+    state_chapters = state.get("chapters") or {}
+    prog = get_book_progress(book_id)
+
+    chapters: list[dict] = []
+    progress_sum = 0
+    for ch in meta.get("chapters", []):
+        cid = ch.get("chapter_id")
+        cdir = book_dir / cid if cid else None
+        formats = {}
+        if cdir and cdir.is_dir() and paper_svc._is_within(book_dir, cdir):
+            formats = paper_svc.paper_info_from_dir(cdir, location)["formats"]
+        st = state_chapters.get(cid) or {}
+        status = st.get("pipeline_status") or _derive_chapter_status(formats)
+        cprog = int(prog.get(cid, 0))
+        progress_sum += cprog
+        chapters.append({
+            "chapter_id": cid,
+            "order": ch.get("order"),
+            "title": ch.get("title") or cid,
+            "status": status,
+            "formats": formats,
+            "progress": cprog,
+        })
+
+    total = len(chapters)
+    return {
+        "name": book_dir.name,
+        "book_id": book_id,
+        "title": meta.get("title") or book_dir.name,
+        "author": meta.get("author"),
+        "year": meta.get("year"),
+        "cover_url": (f"/api/books/{quote(book_dir.name, safe='')}/cover"
+                      if meta.get("cover") and (book_dir / meta["cover"]).is_file() else None),
+        "location": location,
+        "chapters": chapters,
+        "aggregate": {
+            "chapters_total": total,
+            "progress_pct": round(progress_sum / (total * 100) * 100) if total else 0,
+        },
+    }
+
+
 # ── reading progress (book_progress.json, nested by book_id -> chapter_id) ───
 
 _BOOK_PROGRESS_FILE = "book_progress.json"
