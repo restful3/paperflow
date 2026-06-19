@@ -13,7 +13,7 @@ Use this skill when:
 - User asks to rewrite a paper with analogies, plain language, or accessible explanation
 - User uses phrases like "쉽게 풀어써줘", "해설판 만들어줘", "논문 쉽게 설명해줘", "알기 쉽게 다시 써줘"
 
-**This is NOT a translation skill.** The paper-translator-korean skill produces academic Korean. This skill produces **conversational, enriched Korean with analogies and explanations** — the output should be RICHER than the input (1.5-2.5x longer).
+**This is NOT a translation skill.** The paper-translator-korean skill produces academic Korean. This skill produces **conversational, enriched Korean with analogies and explanations** — the output should be **richer in explanation** than the input: it covers every point of the original AND adds plain-language explanation, context, and intuition. "Richer" means *more explanation*, NOT *more words for their own sake* — see Rule 0. Restating the same content in different words is duplication, not enrichment.
 
 **Input language handling:**
 - If input is already Korean: skip translation, go directly to rewriting
@@ -99,40 +99,69 @@ When the source is a **web-scraped document** (file name starts with `web-`, or 
 
 ## Core Rewriting Principles — 9 Rules
 
-### Rule 0: NO Condensation — Expand, Never Shrink (축약 절대 금지 — 확장 필수)
+### 독자 수준 가정 (Reader calibration) — 모든 규칙에 우선 적용
 
-**THIS IS THE SUPREME RULE. It overrides all other considerations.**
+해설판의 독자는 **이공계 학부 이상의 소양을 갖춘 성인** (공학·경제의 기본 개념에 익숙) 이라고 가정한다. "전문지식이 전혀 없는 일반인" 이 아니다.
 
-This skill produces a **해설판 (annotated commentary)**, NOT a summary. The output must be a **full rewrite of the entire original** with added explanations — never a condensed version.
+- **자명한 기초는 풀어 설명하지 않는다.** 백분율·평균·그래프 축·GDP·금리·표준편차·p-값·기울기(gradient) 같은 학부 교양 수준 개념은 그대로 쓴다. 정의를 덧붙이거나 비유로 풀면 오히려 거슬린다.
+- **확장(Rule 0)의 예산은 "진짜 어려운 부분" 에 쓴다.** 분량은 쉬운 내용을 부풀려서가 아니라, 핵심 아이디어·수식·방법의 직관을 깊게 설명해서 확보한다. 기초 개념 패딩으로 길이를 채우지 않는다.
+- **같은 설명을 반복하지 않는다.** 한 개념·용어·맥락을 한 번 풀어 설명했으면, 뒤에서 다시 나올 때는 짧게 가리키기만 한다 ("앞서 설명한 X"). 섹션마다 같은 배경을 다시 깔거나 같은 비유를 매번 처음부터 다시 설명하지 않는다.
+- **그러나 친절함은 유지한다 (과교정 주의 — 중요).** 소양 독자라고 무뚝뚝·압축적으로 쓰라는 뜻이 절대 아니다. 어조는 따뜻하게, 설명은 부드럽게 흐르게 하고, "왜 이게 중요한가" 의 맥락을 적절히 깔아준다. **그 분야 비전문가일 수 있는 개념(특정 세제·생소한 제도·논문 고유 기법·고유명사)은 한 번은 친절히 풀어준다.** 걷어내는 대상은 오직 (1) 학부 교양 수준의 자명한 기초, (2) 매체·출처 부연, (3) 같은 설명의 반복, (4) 기계적 비유 마커 — **친절한 설명 그 자체가 아니다.** 짧고 메마른 출력은 이 스킬의 실패다. 군더더기는 빼되, 읽는 사람이 끝까지 편하게 따라오도록 쓴다.
+
+### Rule 0: Completeness, Never Omit — Not Length Padding (누락 절대 금지 — 단, 분량 채우기 아님)
+
+**Completeness, accuracy, and non-duplication are CO-EQUAL hard rules. When they conflict with any length target, length loses.**
+
+This skill produces a **해설판 (annotated commentary)**, NOT a summary. The output must cover the **entire original** — every point, in order — with added plain-language explanation. The supreme goal is **covering every point of the original exactly once and fully explained**, NOT making the text long.
 
 **Hard constraints:**
-- The output MUST be **longer** than the input. Target: **1.5x–2.5x** the input length (measured in characters or lines)
-- If the output is shorter than the input, **something is wrong** — go back and find what was skipped
-- Every paragraph in the original MUST have a corresponding paragraph (or more) in the output
-- Every subsection in the original MUST appear in the output — do NOT merge or skip subsections
+- **Cover everything**: every section, subsection, paragraph, claim, number, causal link, and exception/caveat of the original appears in the output at least once. Nothing is dropped or compressed away.
+- **Say it once**: do NOT state the same point twice. Restating content you already wrote — even in different words — is **duplication, a failure as serious as omission**. See the explicit ban below.
+- **Length is a diagnostic, not a target.** A faithful, fully-explained 해설판 of a plain English article is often **0.8–1.6x** the source; denser/more-technical papers run longer. If the output is *shorter than the source body*, check for skipped content — but do NOT pad to hit a number.
+- Every subsection in the original MUST appear — do NOT merge away or skip subsections (you MAY merge two very short adjacent paragraphs into one, as long as both their unique facts survive).
 - "한눈에 보기", "핵심 요약", "방법 요약" style summary headings are **FORBIDDEN** as replacements for original section structure. They may only appear as **additions** alongside the full content.
 
-> **단, 광고·배너·구독유도·쿠키 동의·사이트 네비게이션 등 본문이 아닌 웹 잡동사니는 "원문"에 포함되지 않는다** (Pre-processing의 *Web Source De-cluttering* 참조). 이런 요소를 제거하는 것은 축약이 아니며, 길이 비교(1.5\~2.5x)도 **잡동사니를 제거한 본문**을 기준으로 한다. 즉 "축약 금지"는 저자의 실제 글 내용에만 적용된다.
+> **단, 광고·배너·구독유도·쿠키 동의·사이트 네비게이션 등 본문이 아닌 웹 잡동사니는 "원문"에 포함되지 않는다** (Pre-processing의 *Web Source De-cluttering* 참조). 이런 요소를 제거하는 것은 누락이 아니다. coverage·길이 비교도 **잡동사니를 제거한 본문**을 기준으로 한다.
+
+**🚫 The duplication ban (이번 결함의 직접 원인 — 반드시 지킨다):**
+```
+Do NOT write a faithful-translation paragraph followed by a separate
+paragraph that re-says the same content in colloquial words.
+The explanation must be INTEGRATED into a SINGLE pass.
+
+WRONG (중복):  [원문을 충실히 옮긴 문단]  →  [같은 내용을 쉬운 말로 다시 푼 문단]
+RIGHT (통합):  [원문 내용 + 풀이 + 맥락을 한 번에 녹인 한 문단]
+
+- Expansion is valid ONLY when it adds NEW explanation, context, intuition,
+  interpretation, or a glossed term — content not already stated.
+- If a source paragraph is already plain (a simple claim, a raw statistic),
+  the right output is ONE clear sentence/paragraph, NOT a translated copy
+  plus a restated twin. There is nothing to "expand" — do not invent a twin.
+```
 
 **Paragraph-level mapping rule (문단 대응 원칙):**
 ```
 Original paragraph → Explained paragraph(s)
-- 1 original paragraph = 1 or more explained paragraphs (NEVER 0)
-- Each explained paragraph should be ≥ the original in length
-- If a paragraph is purely technical, add a plain-language explanation BEFORE or AFTER it
-- If a paragraph contains data/numbers, add interpretation
+- Every original paragraph's content appears in the output (NEVER dropped)
+- 1 original paragraph usually maps to 1 integrated output paragraph;
+  use 2+ ONLY when there is genuinely new explanation/intuition to add
+- Do NOT force each output paragraph to be ≥ the original's length
+- If a paragraph is purely technical, weave a plain-language explanation
+  INTO the rewrite (not a separate before/after restatement paragraph)
+- If a paragraph contains data/numbers, add interpretation in the same pass
 ```
 
-**What "축약" (condensation) looks like — AVOID these patterns:**
+**What to AVOID:**
+- **Paraphrased duplication** — saying the same point twice in different words (THIS audit's defect)
 - Replacing 5 paragraphs of methodology with a 3-bullet summary
 - Skipping subsections because they seem "repetitive" or "minor"
 - Writing "이 부분에서는 X를 다룹니다" instead of actually rewriting X
-- Using the heading structure of a summary (한눈에 보기/핵심 기여/방법 요약) instead of the original paper's heading structure
+- Using the heading structure of a summary instead of the original's structure
 
 **What "해설" (commentary) looks like — DO these patterns:**
 - Keep the original's structure (section → subsection → paragraph) intact
-- For each paragraph: rewrite in easy Korean + add explanation/context/analogy as needed
-- The result reads like a "professor's annotated version" of the full paper, not a cliff notes
+- For each paragraph: rewrite in easy Korean **with** explanation/context/analogy woven in — one integrated pass, no translate-then-restate
+- The result reads like a "professor's annotated version" of the full paper, not a cliff notes, and not the same point said twice
 
 ### Rule 1: Accuracy First (정확성 우선)
 Enrichment must never distort the original.
@@ -158,28 +187,19 @@ Transform academic passive voice into conversational, engaging Korean.
 - Add personal opinions not in the original paper
 - Use excessive memes, slang, or translationese (번역투)
 
-### Rule 3: Analogies and Metaphors (비유/은유)
-Use analogies for core concepts only — not every paragraph needs one.
+### Rule 3: Analogies and Metaphors (비유/은유) — 절제해서, 자연스럽게
 
-**How to create good analogies:**
-- Choose everyday objects/situations everyone knows (kitchen, office, library, school)
-- The analogy should capture the KEY PROPERTY of the concept
-- Extend the analogy to explain relationships between concepts
-- Maintain analogy consistency throughout the entire paper
-- Limit to **3-5 core analogies** per paper — do NOT force analogies on every paragraph
+비유는 **정말로 직관이 안 잡히는 핵심 개념에만** 쓴다. 소양 있는 독자(위 "독자 수준 가정" 참조)에게는 비유 없이 정확한 설명이 더 빠를 때가 많다 — **비유가 없어도 된다.**
 
-**Analogy introduction markers:**
-- "**비유로 설명하면 이렇습니다:**"
-- "마치 ...와 같습니다"
-- "...라고 상상해 보세요"
-- "이것은 마치 ... 하는 것과 비슷합니다"
+**개수:** 한 편당 **0\~3개** 의 핵심 비유면 충분하다. 문단마다 비유를 넣지 않는다. 기본값은 "비유할 거리가 마땅치 않으면 넣지 않는다."
 
-**CRITICAL: Design an analogy system before writing.**
-Before starting any section rewriting, identify 3-5 core concepts in the paper and assign consistent metaphors. For example, if the paper discusses a hierarchical memory system:
-- Short-term memory = desk (책상 위)
-- Mid-term memory = drawer cabinet (서랍장)
-- Long-term memory = safe/vault (금고)
-Use these SAME analogies every time these concepts appear.
+**좋은 비유 만들기:**
+- 개념의 KEY PROPERTY를 포착한다
+- 한번 세운 비유는 그 개념이 다시 나올 때 일관되게 이어간다 (새 비유를 난발하지 않는다)
+
+**기계적 마커 금지 (중요).** "**비유로 설명하면 이렇습니다:**" 같은 **정형 도입 문구를 매번 붙이지 않는다.** 이 패턴이 반복되면 글이 기계적으로 읽히고 듣기판에서 특히 거슬린다. 비유는 별도 머리표 없이 문장 안에 자연스럽게 녹인다 (예: "…인데, 이는 X 와 같은 원리다"). 도입 표현이 필요하면 매번 다르게 쓰고, 한 해설판 안에서 같은 도입구를 반복하지 않는다.
+
+**비유 시스템 설계(쓸 때만).** 비유를 쓰기로 했다면 핵심 개념 몇 개에 일관된 비유를 미리 배정해 끝까지 같은 비유로 이어간다. 예: 계층적 메모리 → 단기=책상 위, 중기=서랍장, 장기=금고. 같은 개념에는 늘 같은 비유를 쓴다.
 
 ### Rule 4: Progressive Disclosure (점진적 공개)
 Structure each section with a clear narrative arc.
@@ -253,7 +273,7 @@ Transform dense academic paragraphs into scannable, readable content.
 - **White space**: Liberal use of blank lines between concept groups
 
 ### Rule 8: Content Enrichment (내용 보강)
-The output must be RICHER than the input. Never omit or summarize.
+The output must be richer in **explanation** than the input. Never omit or summarize — but never pad with restatement either (Rule 0 duplication ban).
 
 **Add:**
 - "Why this matters" introductions where the original jumps straight into details
@@ -269,11 +289,11 @@ The output must be RICHER than the input. Never omit or summarize.
 
 > 여기서 "original"은 **저자의 실제 글 내용**을 뜻한다. 광고·배너·구독유도·쿠키 동의·소셜 위젯·사이트 네비게이션 등 웹 잡동사니는 original 이 아니므로 이 규칙의 보호 대상이 아니다 — 반드시 제거한다 (Pre-processing의 *Web Source De-cluttering* 참조).
 
-**Priority: under-writing is FAR worse than over-writing.**
-- A section that is too long can be trimmed later; a section that was summarized has lost information forever
-- When in doubt, write MORE rather than less
-- Avoid empty repetition (saying the same thing twice in different words), but do NOT cut content to avoid being "verbose"
-- Every paragraph of the original deserves its own full treatment in the output
+**Priority: omission and duplication are BOTH failures — avoid both.**
+- A summarized section has lost information forever; a duplicated section has padded with restatement (the defect this audit found). Neither is acceptable.
+- When in doubt, add *new explanation* (context, intuition, a glossed term) — NOT more words restating what you already said.
+- **Empty repetition — saying the same thing twice in different words — is forbidden** (Rule 0 duplication ban). Do not pad to look thorough. But equally, do NOT cut genuine content to look concise.
+- Every paragraph of the original must be *covered* — its claims/numbers/caveats present once, fully explained. "Covered" ≠ "copied then restated."
 
 ## Step-by-Step Rewriting Process
 
@@ -282,8 +302,8 @@ The output must be RICHER than the input. Never omit or summarize.
 ### Step 1: Analyze the Paper
 - Read the entire input file
 - Detect the source language
-- **Count total lines and note the file size** — the output must exceed this
-- Identify all sections and subsections — **list them with approximate line counts**
+- **Note the source body size** (clutter-removed) as a *coverage* reference, not a length quota to beat
+- Identify all sections and subsections — **list them so none is dropped**
 - Map key concepts and their relationships
 - Classify each section:
   - Content sections (intro, methods, experiments, etc.) → full rewrite
@@ -291,12 +311,12 @@ The output must be RICHER than the input. Never omit or summarize.
   - Acknowledgements → keep content in original language (translate header only)
   - Appendix → classify as content vs raw data (see Step 7)
 
-### Step 2: Design the Analogy System
-Before writing anything, choose 3-5 core analogies:
-- Identify the paper's main architectural/conceptual elements
-- Assign consistent everyday metaphors to each
-- Plan how these metaphors relate to each other
-- These will be used consistently throughout the entire document
+### Step 2: Design the Analogy System (only if needed)
+Before writing, decide whether analogies are even warranted (Rule 3: **0–3 per paper**, default none if the concept needs no analogy):
+- Identify any genuinely hard-to-intuit concepts (often 0–3)
+- Assign a consistent everyday metaphor to each such concept
+- Reuse the SAME metaphor when that concept reappears (do not invent new ones)
+- Do NOT force an analogy onto every concept or every paragraph
 
 ### Step 3: Write the Title and Introduction Banner
 - Transform the title: `# 원제목 — 쉬운 해설판`
@@ -305,7 +325,8 @@ Before writing anything, choose 3-5 core analogies:
   > 이 글은 "논문 제목" 논문의 전체 내용을 빠짐없이 담되, 전문 용어와 개념을
   > 일상적인 비유와 풀어쓴 설명으로 재구성한 해설판입니다.
   ```
-- Add author context: briefly explain who the authors are and where they work (institution context)
+- 출처·저자 소개는 **최소화하고 많아야 1회** 만 한다 (배너나 첫 문단). 논문이면 저자·소속을 한 줄로 짧게 언급하는 정도면 충분하다.
+- **매체·출처가 무엇인지 설명하지 않는다 (중요).** "The Economist 는 영국의 시사주간지로…", "이 매체는 …" 같은 매체 소개·출처 부연을 넣지 않는다. 소양 있는 독자는 매체를 안다. 출처를 밝힐 필요가 있으면 이름만 한 번 적고 (예: "이코노미스트 기사") 곧장 내용으로 들어간다. 특히 이코노미스트 주간호처럼 여러 기사를 잇따라 해설할 때 매 기사마다 매체 설명을 반복하면 듣기판에서 매우 거슬린다.
 - **도입부 상투구 자제**: 출처·저자·글의 성격을 소개할 때 **"학술 논문이라기보다는 ~에 가깝습니다"** 류의 정형 대비 문구를 쓰지 않는다 (여러 해설판에서 똑같이 반복되어 거슬리고, 듣기판으로도 그대로 옮겨진다). 글의 성격을 밝힐 필요가 있으면 "논문이 아니라 ~"로 대비시키지 말고, 그것이 무엇인지(블로그·에세이·기술 보고서 등)만 한 번 자연스럽게 언급하거나 곧장 내용으로 들어간다. 저자 소개도 매번 같은 틀로 시작하지 않는다.
 
 ### Step 4: Rewrite Each Section (with per-section verification)
@@ -313,16 +334,16 @@ For each section in the original paper:
 1. **Count the original section's paragraphs and approximate length** (mental note)
 2. Transform the heading with Korean subtitle: `## N장. 제목 — 부제`
 3. Add "why this matters" opening if the original lacks one
-4. **Rewrite EVERY paragraph** of the original section:
-   - If input is non-Korean: translate AND explain simultaneously (not translate-then-explain)
-   - If input is Korean: rewrite into conversational tone
-   - Each original paragraph → one or more output paragraphs (NEVER skip a paragraph)
+4. **Rewrite EVERY paragraph** of the original section, in ONE integrated pass:
+   - If input is non-Korean: translate AND explain **simultaneously, in the same sentence/paragraph** — NEVER write a faithful-translation paragraph and then a separate paragraph re-explaining it (Rule 0 duplication ban; this is exactly the defect to avoid)
+   - If input is Korean: rewrite into conversational tone, once
+   - Each original paragraph → ONE integrated output paragraph by default (use 2+ only when there is genuinely new explanation to add, never to restate). NEVER drop a paragraph's content.
 5. Insert analogies for abstract concepts (using the system from Step 2)
 6. Explain formulas in plain language (Rule 5 pattern)
 7. Break long paragraphs into shorter ones with bullet points
 8. Add concrete examples or scenarios where helpful
 9. Bold key terms and takeaways
-10. **Self-check before saving**: Is this section's output at least as long as the original section? If not, go back and find what was missed or under-explained.
+10. **Self-check before saving** (coverage, not length): Is every original claim/number/caveat in this section present in the output exactly once? (a) If something is *missing* → restore it. (b) If any two adjacent paragraphs say the **same thing in different words** → merge them, keeping only the unique details (Rule 0 duplication ban). Do NOT add length by restating.
 11. **Save progressively** after completing each section
 
 ### Step 5: Rewrite Experimental Results
@@ -442,7 +463,7 @@ The analogies should be domain-adaptive. The LLM should freely choose the best a
   - Statistical models → survey/voting analogies
   - Economic models → household budget management
 
-**Universal principle**: Map to the Korean reader's everyday experience. Choose analogies from daily life that require no specialized knowledge.
+**Universal principle**: 비유를 쓸 때는 일상 경험에 매핑하되, **소양 있는 독자 기준** 으로 자명한 기초까지 비유로 풀지 않는다 (Rule 3·"독자 수준 가정" 참조). 비유는 어려운 개념의 직관을 돕는 보조 수단일 뿐, 모든 도메인 개념에 의무적으로 다는 장치가 아니다. 위 도메인별 목록은 "비유가 정말 필요할 때 고를 후보" 이지, 매 개념에 비유를 달라는 뜻이 아니다.
 
 ## Examples
 
@@ -505,7 +526,7 @@ $$\mathcal{F}_{\mathrm{score}} = \cos(\mathbf{e}_s, \mathbf{e}_p) + \mathcal{F}_
    겹치는 건 2개이고 전체는 4개이므로 유사도는 2/4 = 0.5입니다.
 ```
 
-### Example 3: Analogy Introduction
+### Example 3: Analogy Integration (정형 마커 없이 문장에 녹이기)
 
 **Before:**
 ```markdown
@@ -516,13 +537,9 @@ $$\mathcal{F}_{\mathrm{score}} = \cos(\mathbf{e}_s, \mathbf{e}_p) + \mathcal{F}_
 ```markdown
 #### 단기 기억 (Short-Term Memory, STM)
 
-단기 기억은 **지금 진행 중인 대화의 내용**을 실시간으로 저장합니다.
-
-**비유로 설명하면 이렇습니다:**
-
-여러분이 친구와 카페에서 대화를 나누는데, 대화 내용을 작은 메모장에만 기록할 수
-있다고 상상해 보세요. 메모장이 꽉 차면 맨 앞에 적은 내용을 지우고 새 내용을
-적어야 합니다. 이 메모장이 바로 단기 기억입니다.
+단기 기억은 **지금 진행 중인 대화의 내용**을 실시간으로 저장합니다. 용량이 정해진
+작은 메모장과 같아서, 꽉 차면 맨 앞에 적은 내용을 지우고 새 내용을 적습니다.
+(비유를 "비유로 설명하면 이렇습니다:" 같은 머리표 없이 한 문장에 녹였다.)
 
 저장 단위는 "대화 페이지(dialogue page)"입니다. 각 대화 페이지는 세 가지로
 구성됩니다:
@@ -536,18 +553,21 @@ $$\mathcal{F}_{\mathrm{score}} = \cos(\mathbf{e}_s, \mathbf{e}_p) + \mathcal{F}_
 After completing the full rewrite, verify **in this priority order**:
 
 **CRITICAL (must pass — if any fails, go back and fix):**
-- [ ] **분량 (자수 기준 — 줄 수 아님)**: `wc -m`(문자 수)으로 잰다 (rtk 훅 환경에서는 `rtk proxy wc -m`). 줄 수는 쓰지 않는다 — 불릿·빈 줄 재포맷으로 부풀려지고(게이밍), OCR 한-단어-줄 소스에서는 거짓 위반이 난다. 기준 분량 = **웹 잡동사니를 제거한 소스 본문** 자수.
-  - **한국어 소스** → 출력 자수 ≥ 소스 × **1.2 (hard fail)**, 권장 1.5\~2.5x.
-  - **영어 등 외국어 소스** → 한글 출력 자수 ≥ 소스 × **0.8 (hard fail)**, 권장 1.0\~2.0x. (한글은 같은 내용을 더 적은 글자로 적으므로 1.0x 미만이어도 손실이 아닐 수 있으나, 0.8x 미만은 누락으로 본다.)
-  - 하한 미달이면 무엇이 빠졌는지 섹션별로 대조해 찾는다. **새 주제를 지어내 채우지 말고, 누락·과압축된 문단을 복원한다.**
+- [ ] **Content coverage (PRIMARY — not a length quota)**: every original section, subsection, paragraph, **claim, number, causal link, and exception/caveat** appears in the output **at least once**. This is the real bar — verify it section by section, not by character count.
+- [ ] **No paraphrased duplication (이번 결함의 핵심 게이트)**: read consecutive paragraphs — **no adjacent pair states the same claim with only different wording.** In particular there is NO "[충실 번역 문단] → [같은 내용 재설명 문단]" pair anywhere. If found, merge into one integrated paragraph, preserving unique details. (Spot-check at least 3 sections.)
+- [ ] **분량은 보조 지표일 뿐 (자수 기준, `wc -m`; rtk 훅 환경 `rtk proxy wc -m`)**: 줄 수로 재지 않는다. 기준 = **웹 잡동사니 제거한 소스 본문** 자수.
+  - **목표가 아니라 진단 신호다.** 외국어 소스 → 한글 출력이 **0.6x 미만이면** 누락을 의심해 섹션별 coverage를 대조한다(그 이상이면 비율로 트집잡지 않는다). 한국어 소스 → 하한 없음, coverage만 본다.
+  - 0.6x 미만이어도 **새 주제를 지어내거나 재서술로 채우지 않는다** — 누락·과압축된 문단만 복원한다. 분량을 늘리려 같은 말을 반복하면 그게 바로 이 결함이다.
 - [ ] **Section completeness**: Every section AND subsection heading in the original appears in the output (compare heading counts)
-- [ ] **Paragraph coverage**: Spot-check 3 random sections — does each original paragraph have a corresponding output paragraph?
 
 **Important (should pass):**
 - [ ] **No web clutter (web-sourced inputs)**: 출력에 광고·스폰서 블록("Sponsored by…", "Try X"), 구독/뉴스레터 유도("Subscribe", "Sponsor me", "구독"), 쿠키 동의, 소셜/공유 위젯, "Recent/Related articles"·태그 줄, 연도 아카이브 목록 등 **본문이 아닌 웹 잡동사니가 남아있지 않다** (Web Source De-cluttering 참조)
 - [ ] **Formula preservation**: All mathematical expressions from the original are preserved
 - [ ] **Accuracy**: No claims, data, or conclusions added that are not in the original
 - [ ] **Analogy consistency**: Same concept uses the same metaphor throughout
+- [ ] **비유 절제**: 정형 도입구("비유로 설명하면 이렇습니다:")를 반복하지 않았고, 비유는 0\~3개 핵심에만, 자명한 기초를 비유로 풀지 않았다
+- [ ] **중복 없음**: 같은 개념·맥락·비유를 여러 곳에서 처음부터 다시 설명하지 않았다 (두 번째부터는 짧게 참조)
+- [ ] **출처 절제**: 매체/출처가 무엇인지 설명하지 않았고, 출처 언급은 많아야 1회다
 - [ ] **Glossary completeness**: All technical terms defined inline appear in the glossary
 - [ ] **Natural Korean flow**: No awkward phrasing or translationese
 - [ ] **Image references**: All `![](images/...)` paths preserved from original
@@ -626,10 +646,11 @@ Rationale:
 On task completion, report concisely:
 - Input file (with char count, `wc -m`)
 - Output file (with char count)
-- **Ratio (자수 기준)**: output chars / clutter-removed source chars — 한국어 소스 ≥1.2x(권장 1.5\~2.5x), 외국어 소스 ≥0.8x(권장 1.0\~2.0x)
+- **Ratio (자수 기준, 진단용 — 목표 아님)**: output chars / clutter-removed source chars. 외국어 소스 < 0.6x 이면 coverage 재확인 신호. 한국어 소스는 하한 없음.
 - Processing mode (auto / section-safe)
 - Number of sections covered / total sections in original
+- **Duplication self-check result**: 연속 문단 패러프레이즈 중복 0건 확인 여부
 - Notable issues (missing risk / source quality problems / heavy OCR noise / etc.)
 - (Batch mode only) Sourceless/orphan folders skipped during the scan, if any — so the operator can clean them up
 
-**If ratio < 1.0**, explicitly note which sections or content were not covered and why.
+**If a section's output is conspicuously short**, verify by coverage (claims/numbers/caveats present?), NOT by padding — and never by restating.
