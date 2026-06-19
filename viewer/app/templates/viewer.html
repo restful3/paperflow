@@ -1145,7 +1145,7 @@
   <!-- Chatbot Button (bottom-right, mobile-aware) -->
   <div x-data="chatButton()"
        x-show="(hasMdKo || hasMdEn) && !editMode"
-       class="fixed z-40 transition-all duration-300"
+       class="fixed z-50 transition-all duration-300"
        :class="[
          isCompactChat()
            ? (topBarVisible ? 'bottom-5 right-5' : 'bottom-20 right-5 opacity-0 pointer-events-none')
@@ -1549,11 +1549,15 @@
 </div>
 
 <script>
+// Top-level (script scope) so sibling components — chatButton()/chatPanel() —
+// can read it too, not just viewerApp(). Phase 2b A3 added `viewerKind` guards
+// to those siblings, but the const lived inside viewerApp() → ReferenceError
+// broke chat init. Keep it shared here.
+const viewerKind = {{ viewer_kind|tojson }};
 function viewerApp() {
   const name = '{{ paper_name_encoded }}';
   const paperNameRaw = decodeURIComponent(name);   // URL-decoded 폴더명: JSON 바디/이름 비교용(safe_paper_dir 는 정확매칭이라 raw 필요)
   const apiBase = {{ api_base|tojson }};
-  const viewerKind = {{ viewer_kind|tojson }};
   const storageScope = {{ storage_scope|tojson }};
   const storageScopeRaw = {{ storage_scope_raw|tojson }};
 
@@ -3871,8 +3875,6 @@ function chatPanel() {
   // Use non-encoded paper name and encode it once in JS
   // This prevents double-encoding when fetch automatically encodes the URL
   const paperName = encodeURIComponent('{{ paper_name }}');
-  console.log('DEBUG paperName:', paperName);
-  console.log('DEBUG decoded once:', decodeURIComponent(paperName));
 
   return {
     chatPanelOpen: false,
