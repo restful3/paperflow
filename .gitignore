@@ -98,3 +98,8 @@ translations/
 sample_pdf/
 
 CLAUDE.md
+
+# Session handoff notes — local-only. May contain infra notes / API key
+# prefixes; keep out of the public repo to avoid leaking session material.
+HANDOFF.md
+HANDOFF*.md
