@@ -17,8 +17,11 @@ def test_brief_wiring_is_actually_connected():
     html = TPL.read_text(encoding="utf-8")
     # load branch gates on hasAudioText (not bare hasMdKoAudio)
     assert "this.audioMode && this.hasAudioText" in html
-    # mp3 player + generate regions gated to full-only (player, generating, 미생성, mobile btn)
-    assert html.count("!audioUsesBrief") >= 4
+    # mp3 player + generating regions gated to full-only (brief has no separate audio).
+    # Assert the actual gated conditions rather than a brittle count — the 미생성
+    # banner + mobile btn regions were intentionally removed (e07fc76, 35b9644).
+    assert "audioMode && !audioUsesBrief && audioReady" in html
+    assert "audioMode && !audioUsesBrief && !audioReady && audioGenerating" in html
     # 전체 switch shown only when BOTH brief and full exist
     assert "hasMdKoAudioBrief && hasMdKoAudio" in html
     # first-view auto-default + per-paper restore widened to hasAudioText
