@@ -1746,7 +1746,7 @@ function viewerApp() {
       { label: 'Very Large', value: 1.5 },
     ],
 
-    contentWidth: localStorage.getItem('pf-content-width') || '900px',
+    contentWidth: '900px',  // per-view value resolved in init() via loadContentWidthForView()
     contentWidthLevels: [
       { label: 'Narrow', value: '720px', short: 'S' },
       { label: 'Default', value: '900px', short: 'M' },
@@ -2001,6 +2001,7 @@ function viewerApp() {
 
       // Apply initial font scale and content width
       this.applyFontScale();
+      this.loadContentWidthForView();  // resolve width for the initial view
       this.applyContentWidth();
 
       // Cross-tab sync for font scale and content width
@@ -2009,8 +2010,8 @@ function viewerApp() {
           this.fontScale = parseFloat(e.newValue || '1');
           this.applyFontScale();
         }
-        if (e.key === 'pf-content-width') {
-          this.contentWidth = e.newValue || '900px';
+        if (e.key && e.key.startsWith('pf-content-width')) {
+          this.loadContentWidthForView();  // reload current view's scoped width
           this.applyContentWidth();
         }
       });
@@ -2159,6 +2160,7 @@ function viewerApp() {
       this.saveScrollPosition(this.view);
 
       this.view = v;
+      this.loadContentWidthForView();  // md/split keep independent widths
 
       // Mobile top bar policy by view:
       // - md/split: allow normal auto behavior
@@ -3343,9 +3345,25 @@ function viewerApp() {
       });
     },
 
+    // ── Per-view content width ("폭 독립화") ──────────────────────────
+    // md/split each remember their own width; pdf/video have no
+    // .markdown-container so they share the md key (width is inert there).
+    contentWidthKey() {
+      return this.view === 'split' ? 'pf-content-width-split' : 'pf-content-width-md';
+    },
+    defaultContentWidth() {
+      return this.view === 'split' ? '100%' : '900px';
+    },
+    loadContentWidthForView() {
+      this.contentWidth =
+        localStorage.getItem(this.contentWidthKey())
+        || localStorage.getItem('pf-content-width')  // migration from legacy global key
+        || this.defaultContentWidth();
+    },
+
     setContentWidth(width) {
       this.contentWidth = width;
-      localStorage.setItem('pf-content-width', width);
+      localStorage.setItem(this.contentWidthKey(), width);
       this.applyContentWidth();
     },
 
