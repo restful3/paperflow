@@ -194,13 +194,12 @@ def test_processing_endpoint(client, ws):
     assert data and data[0]["slug"] == "A" and data[0]["title"] == "Book A"
 
 
-def test_processing_endpoint_requires_auth(ws):
-    # build an app WITHOUT the auth override
-    import app.main as _main
+def test_processing_endpoint_requires_auth(ws, monkeypatch):
+    # build an app WITHOUT the auth override (mirrors client_anon in test_books_pages)
     from app import config as _cfg
-    import pytest  # noqa
-    _main_settings = _main.settings
-    _main_settings.JWT_SECRET_KEY  # touch
+    import app.main as _main
+    monkeypatch.setattr(_main.settings, "JWT_SECRET_KEY", _cfg.settings.JWT_SECRET_KEY)
+    monkeypatch.setattr(_main.settings, "BASE_DIR", _cfg.settings.BASE_DIR)
     from app.main import create_app
     from fastapi.testclient import TestClient
     c = TestClient(create_app())
