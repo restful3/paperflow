@@ -95,3 +95,47 @@ def test_upload_endpoint_rejects_bad_year(client):
                        data={"title": "X", "year": "notayear"},
                        files=[("files", ("a.pdf", b"%PDF", "application/pdf"))])
     assert resp.status_code == 400
+
+
+def _put(p, text="x"):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+
+def test_list_book_processing_inflight_only(ws):
+    import json
+    # Book A: 2 chapters in newbooks, book_state says ch1 complete, ch2 missing -> in-flight
+    _put(ws / "newbooks" / "A" / "01_intro.pdf")
+    _put(ws / "newbooks" / "A" / "02_more.pdf")
+    (ws / "newbooks" / "A" / "book.json").write_text(json.dumps({"title": "Book A"}), encoding="utf-8")
+    (ws / "books" / "A").mkdir(parents=True)
+    (ws / "books" / "A" / "book_state.json").write_text(json.dumps(
+        {"schema_version": 1, "chapters": {"01_intro": {"pipeline_status": "complete"}}}), encoding="utf-8")
+    # Book B: all chapters complete -> excluded
+    _put(ws / "newbooks" / "B" / "01_x.pdf")
+    (ws / "newbooks" / "B" / "book.json").write_text(json.dumps({"title": "Book B"}), encoding="utf-8")
+    (ws / "books" / "B").mkdir(parents=True)
+    (ws / "books" / "B" / "book_state.json").write_text(json.dumps(
+        {"schema_version": 1, "chapters": {"01_x": {"pipeline_status": "complete"}}}), encoding="utf-8")
+
+    out = book_svc.list_book_processing()
+    slugs = {b["slug"] for b in out}
+    assert slugs == {"A"}                      # B excluded (all complete)
+    a = next(b for b in out if b["slug"] == "A")
+    assert a["title"] == "Book A"
+    statuses = {c["chapter_id"]: c["status"] for c in a["chapters"]}
+    assert statuses == {"01_intro": "complete", "02_more": "queued"}
+    assert a["pending"] == 1
+
+
+def test_list_book_processing_no_state_all_queued(ws):
+    import json
+    _put(ws / "newbooks" / "C" / "01_a.pdf")
+    (ws / "newbooks" / "C" / "book.json").write_text(json.dumps({"title": "C"}), encoding="utf-8")
+    out = book_svc.list_book_processing()
+    assert len(out) == 1
+    assert out[0]["chapters"][0]["status"] == "queued"   # no books/<slug> yet
+
+
+def test_list_book_processing_empty(ws):
+    assert book_svc.list_book_processing() == []

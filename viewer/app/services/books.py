@@ -173,6 +173,65 @@ def get_book(book: str) -> dict | None:
     }
 
 
+def list_book_processing() -> list[dict]:
+    """In-flight books for the Upload-tab processing panel.
+
+    Chapter PDFs persist in newbooks/ (sha-skip prevents reprocessing), so a book
+    is "done" per book_state, not per newbooks contents. Returns only books with at
+    least one non-complete chapter. Status per chapter: book_state pipeline_status
+    if present (complete/converted/translating/error/needs_review); else 'processing'
+    if it matches the shared converting file; else 'queued'.
+    """
+    base = settings.newbooks_dir
+    if not base.exists():
+        return []
+    status = _load_json(settings.logs_dir / "processing_status.json")
+    current = status.get("current_file") if isinstance(status, dict) else None
+
+    out: list[dict] = []
+    for item in sorted(base.iterdir(), key=lambda p: p.name):
+        if item.name.startswith(".") or not item.is_dir():
+            continue
+        if not paper_svc._is_within(base, item):
+            continue
+        pdfs = sorted(item.glob("*.pdf"), key=lambda p: p.name)
+        if not pdfs:
+            continue
+        meta = _load_json(item / "book.json") or {}
+        title = meta.get("title") or item.name
+        bdir = settings.books_dir / item.name
+        st = load_book_state(bdir) if bdir.is_dir() else None
+        state_chapters = (st or {}).get("chapters") or {}
+
+        chapters = []
+        all_complete = True
+        for pdf in pdfs:
+            cid = pdf.stem
+            ps = (state_chapters.get(cid) or {}).get("pipeline_status")
+            if ps == "complete":
+                st_label = "complete"
+            elif ps in ("converted", "translating", "error", "needs_review"):
+                st_label = ps
+                all_complete = False
+            elif current and cid in str(current):   # best-effort shared-status hint
+                st_label = "processing"
+                all_complete = False
+            else:
+                st_label = "queued"
+                all_complete = False
+            chapters.append({"chapter_id": cid, "status": st_label})
+
+        if all_complete:
+            continue
+        out.append({
+            "slug": item.name,
+            "title": title,
+            "chapters": chapters,
+            "pending": sum(1 for c in chapters if c["status"] in ("queued", "processing")),
+        })
+    return out
+
+
 # ── chapter content (delegate to papers *_in_dir) ──────────────────────────
 
 _CONTENT_RESOLVERS = {
