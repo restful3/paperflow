@@ -139,3 +139,46 @@ def test_list_book_processing_no_state_all_queued(ws):
 
 def test_list_book_processing_empty(ws):
     assert book_svc.list_book_processing() == []
+
+
+def test_list_book_processing_processing_status_stem_match_only(ws):
+    """Regression: ensure 'processing' is marked only by exact stem match, not substring.
+
+    Demonstrates the bug: if we have chapters with stems that are substrings of each other,
+    the OLD substring match would wrongly mark both as processing.
+    E.g., chapters '01' and '01_intro': current_file '/path/01_intro.pdf' would match both
+    ('01' in '01_intro.pdf' is True). The NEW stem match only marks '01_intro' as processing.
+    """
+    import json
+    # Create a book with two chapters: 01.pdf and 02_01_intro.pdf
+    # (This is a pathological case, but demonstrates substring false positive)
+    _put(ws / "newbooks" / "TestBook" / "01.pdf")
+    _put(ws / "newbooks" / "TestBook" / "02_01_intro.pdf")
+    (ws / "newbooks" / "TestBook" / "book.json").write_text(
+        json.dumps({"title": "Test Book"}), encoding="utf-8")
+
+    # Create corresponding books/ dir with book_state (empty chapters state = no state_chapters entries)
+    (ws / "books" / "TestBook").mkdir(parents=True)
+    (ws / "books" / "TestBook" / "book_state.json").write_text(
+        json.dumps({"schema_version": 1, "chapters": {}}), encoding="utf-8")
+
+    # Simulate converter processing 02_01_intro.pdf
+    (ws / "logs").mkdir(parents=True, exist_ok=True)
+    processing_status = {"current_file": "/some/path/02_01_intro.pdf"}
+    (ws / "logs" / "processing_status.json").write_text(
+        json.dumps(processing_status), encoding="utf-8")
+
+    out = book_svc.list_book_processing()
+    assert len(out) == 1
+    book = out[0]
+    assert book["slug"] == "TestBook"
+
+    statuses = {c["chapter_id"]: c["status"] for c in book["chapters"]}
+    # With the BUGGY substring code:
+    #   '01' in '/some/path/02_01_intro.pdf' -> True (FALSE POSITIVE, marks '01' as processing)
+    # With the fixed stem code:
+    #   '01' != '02_01_intro' -> False (CORRECT, keeps '01' as queued)
+    assert statuses["01"] == "queued", f"01 should NOT be marked processing (substring false positive), got {statuses['01']}"
+    assert statuses["02_01_intro"] == "processing", f"02_01_intro should be marked processing (exact stem match), got {statuses['02_01_intro']}"
+    # pending = queued + processing = 1 queued + 1 processing = 2
+    assert book["pending"] == 2

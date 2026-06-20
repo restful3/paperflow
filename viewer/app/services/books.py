@@ -213,7 +213,7 @@ def list_book_processing() -> list[dict]:
             elif ps in ("converted", "translating", "error", "needs_review"):
                 st_label = ps
                 all_complete = False
-            elif current and cid in str(current):   # best-effort shared-status hint
+            elif current and Path(str(current)).stem == cid:   # best-effort shared-status hint
                 st_label = "processing"
                 all_complete = False
             else:
