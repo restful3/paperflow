@@ -111,4 +111,19 @@ def test_books_page_has_upload_modal(client):
     body = resp.text
     assert "submitUpload" in body          # upload method present
     assert "/api/books/upload" in body     # posts to the upload endpoint
-    assert "새 책" in body                  # New Book trigger label
+    assert "switchTab('upload')" in body   # Upload tab entry point
+
+
+def test_books_page_has_upload_tab_not_modal(client):
+    resp = client.get("/books")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "switchTab('upload')" in body          # Upload tab button
+    assert "tab === 'upload'" in body             # Upload tab body gated
+    assert "handleDrop" in body                   # drag-drop handler
+    assert "drop-active" in body                  # dropzone highlight style
+    assert "processingBooks" in body              # processing panel state
+    assert "/api/books/processing" in body        # processing poll
+    # modal + floating button removed
+    assert "openUpload()" not in body
+    assert "New Book upload modal" not in body
