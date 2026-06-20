@@ -182,3 +182,27 @@ def test_list_book_processing_processing_status_stem_match_only(ws):
     assert statuses["02_01_intro"] == "processing", f"02_01_intro should be marked processing (exact stem match), got {statuses['02_01_intro']}"
     # pending = queued + processing = 1 queued + 1 processing = 2
     assert book["pending"] == 2
+
+
+def test_processing_endpoint(client, ws):
+    _put(ws / "newbooks" / "A" / "01_intro.pdf")
+    (ws / "newbooks" / "A" / "book.json").write_text(json.dumps({"title": "Book A"}), encoding="utf-8")
+    resp = client.get("/api/books/processing")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    assert data and data[0]["slug"] == "A" and data[0]["title"] == "Book A"
+
+
+def test_processing_endpoint_requires_auth(ws):
+    # build an app WITHOUT the auth override
+    import app.main as _main
+    from app import config as _cfg
+    import pytest  # noqa
+    _main_settings = _main.settings
+    _main_settings.JWT_SECRET_KEY  # touch
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+    c = TestClient(create_app())
+    resp = c.get("/api/books/processing")
+    assert resp.status_code == 401

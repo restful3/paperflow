@@ -63,6 +63,11 @@ async def upload_book(
     return {"ok": True, "message": msg, "slug": slug, "chapters": len(payload)}
 
 
+@router.get("/processing")
+async def books_processing(_user: str = Depends(get_current_user_api)):
+    return book_svc.list_book_processing()
+
+
 @router.get("/{book}/info")
 async def book_info(book: str, _user: str = Depends(get_current_user_api)):
     info = book_svc.get_book(unquote(book))
