@@ -709,7 +709,7 @@
 
     <!-- Paper list view -->
     <div x-show="!loading && viewMode === 'list'" class="space-y-1">
-      <template x-for="paper in filtered" :key="paper.name">
+      <template x-for="paper in visiblePapers" :key="paper.name">
         <div class="card-enter rounded-lg border overflow-hidden transition-all duration-200"
              :class="$store.darkMode.on ? 'bg-gray-800 border-gray-700 hover:border-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-200'">
           <!-- Main row -->
@@ -941,6 +941,10 @@
       </svg>
       <p class="text-sm" :class="$store.darkMode.on ? 'text-gray-500' : 'text-gray-400'" x-text="(searchText || searchTags.length) ? 'No papers match your search.' : 'No papers yet. Upload a PDF to get started.'"></p>
     </div>
+
+    <!-- Infinite-scroll sentinel: grows the render window as it nears the viewport.
+         Inside the papers-content region so it is never observed on upload/audio tabs. -->
+    <div x-ref="scrollSentinel" class="h-1"></div>
 
     </div><!-- /Papers content -->
 
@@ -1449,6 +1453,8 @@ function papersApp() {
     modal: { show: false, action: '', paper: null, title: '', message: '' },
     dupModal: { show: false, filename: '', size_mb: '', papers: [], resolve: null },
     colCount: window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1,
+    renderLimit: 60,
+    renderStep: 60,
     searchFocused: false,
     selectedSuggestionIdx: -1,
 
@@ -1543,11 +1549,31 @@ function papersApp() {
     },
     // Distribute cards into independent columns (row-first order: 0→col1, 1→col2, 2→col3, 3→col1...)
     get cardColumns() {
-      const papers = this.filtered;
+      const papers = this.visiblePapers;
       const n = this.colCount;
       const cols = Array.from({length: n}, () => []);
       papers.forEach((p, i) => cols[i % n].push(p));
       return cols;
+    },
+
+    // DOM windowing: search/sort/counts still run over the full `filtered`
+    // array; only rendering is capped at renderLimit and grown on scroll.
+    get visiblePapers() {
+      return this.filtered.slice(0, this.renderLimit);
+    },
+
+    resetWindow() {
+      this.renderLimit = this.renderStep;
+      this.$nextTick(() => {
+        const sc = document.getElementById('papersScroll');
+        if (sc) sc.scrollTop = 0; else window.scrollTo(0, 0);
+      });
+    },
+
+    loadMoreCards() {
+      if (this.renderLimit < this.filtered.length) {
+        this.renderLimit += this.renderStep;
+      }
     },
 
     // Search suggestions: aggregate from tag-filtered papers, exclude already-selected tags
@@ -1613,6 +1639,7 @@ function papersApp() {
       this.searchTags.push({ text: item.text, type: item.type });
       this.searchText = '';
       this.selectedSuggestionIdx = -1;
+      this.resetWindow();
       // Keep focus on the input after adding tag
       this.$nextTick(() => {
         const input = this.$refs.searchInput || this.$refs.searchInputMobile;
@@ -1622,12 +1649,14 @@ function papersApp() {
 
     removeTag(idx) {
       this.searchTags.splice(idx, 1);
+      this.resetWindow();
     },
 
     handleSearchKeydown(e) {
       const list = this.suggestions;
       if (e.key === 'Backspace' && this.searchText === '' && this.searchTags.length > 0) {
         this.searchTags.pop();
+        this.resetWindow();
         return;
       }
       if (!list.length) return;
@@ -1716,6 +1745,22 @@ function papersApp() {
       window.addEventListener('resize', () => {
         this.colCount = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1;
       });
+      // Infinite scroll: grow the render window as the bottom sentinel nears the viewport.
+      this.$nextTick(() => {
+        if (this.$refs.scrollSentinel) {
+          const io = new IntersectionObserver((es) => {
+            if (es.some(e => e.isIntersecting)) this.loadMoreCards();
+          }, { rootMargin: '600px' });
+          io.observe(this.$refs.scrollSentinel);
+        }
+      });
+      // Reset the render window on any result-set change (backstop; direct calls
+      // exist at fetchPapers/switchTab/reshuffle/tag mutations too).
+      this.$watch('searchText', () => this.resetWindow());
+      this.$watch('searchTags', () => this.resetWindow());
+      this.$watch('sortBy', () => this.resetWindow());
+      this.$watch('sortOrder', () => this.resetWindow());
+      this.$watch('filterDocType', () => this.resetWindow());
     },
 
     get filtered() {
@@ -1799,6 +1844,7 @@ function papersApp() {
       const keys = {};
       for (const p of this.papers) keys[p.name] = Math.random();
       this.shuffleKeys = keys;
+      this.resetWindow();   // random reorder doesn't change sortBy/sortOrder -> watchers miss it
     },
 
     // Assign keys to any papers that don't have one yet (first load, tab switch, new upload),
@@ -1810,6 +1856,7 @@ function papersApp() {
     },
 
     async switchTab(t) {
+      this.resetWindow();
       this.tab = t;
       if (t === 'upload') {
         this.refreshStatus();
@@ -1829,6 +1876,7 @@ function papersApp() {
           const expandedSet = new Set(this.papers.filter(p => p._expanded).map(p => p.name));
           papers.forEach(p => { p._expanded = expandedSet.has(p.name); });
           this.papers = papers;
+          this.resetWindow();
           // Random sort: ensure every currently-shown paper has a stable key (covers first load,
           // localStorage-restored 'random' on reload, and tab switches to a different paper set).
           if (this.sortBy === 'random') this.ensureShuffleKeys();

@@ -39,3 +39,23 @@ def test_main_row_fixed_width_columns():
     html = TPL.read_text(encoding="utf-8")
     assert 'class="hidden sm:flex w-16 justify-end shrink-0"' in html  # doc_type 열
     assert 'class="w-14 flex justify-end items-center gap-1 shrink-0"' in html  # 파일점 열
+
+
+def test_card_and_list_use_visible_window():
+    html = TPL.read_text(encoding="utf-8")
+    assert "this.visiblePapers" in html              # cardColumns source
+    assert 'x-for="paper in visiblePapers"' in html  # list loop source
+    assert "renderLimit" in html
+    assert "resetWindow" in html
+    assert "loadMoreCards" in html
+    assert ("x-intersect" in html) or ("IntersectionObserver" in html)
+
+
+def test_reshuffle_resets_window():
+    import re
+    html = TPL.read_text(encoding="utf-8")
+    # reshuffle() must reset the render window (watchers miss random reorder).
+    # Capture the whole method body up to its closing `},` — a naive `.*?\}`
+    # would stop at the inner `const keys = {}` empty-object literal.
+    m = re.search(r"reshuffle\(\)\s*\{(.*?)\n    \},", html, re.S)
+    assert m and "resetWindow()" in m.group(1)
