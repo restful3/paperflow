@@ -552,6 +552,122 @@ def _dir_size_mb(path: Path) -> float:
         return 0.0
 
 
+import copy as _copy
+import hashlib as _hashlib
+
+# Per-process cache for list_papers: str(paper_dir) -> (fingerprint, base_info).
+# base_info is the sidecar-FREE info (apply_source_fallback=False); the sidecar
+# fallback runs fresh on the deep copy each request (Codex round-2 #1).
+# One uvicorn process; multi-worker would warm each independently (still correct).
+_PAPER_INFO_CACHE: dict[str, tuple[tuple, dict]] = {}
+
+
+def _stat_sig(p: Path) -> tuple[int, int]:
+    try:
+        st = p.stat()
+        return (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return (0, 0)
+
+
+def _content_sig(p: Path) -> tuple:
+    """(size, sha256) of a small file — content-true change signal.
+
+    For correctness-critical small JSON (paper_meta.json) where a stale
+    title/tags/source is a bug: a same-size, mtime-preserved in-place rewrite
+    must still be caught, which (mtime, size) alone can miss on a coarse FS
+    (Codex round-3 #2). Returns (0, "") if absent.
+    """
+    try:
+        b = p.read_bytes()
+        return (len(b), _hashlib.sha256(b).hexdigest())
+    except OSError:
+        return (0, "")
+
+
+def _manifest_sig(mf: Path) -> tuple:
+    """(name, content-hash) for an audio manifest.
+
+    Hashes the bytes so an IN-PLACE same-size `status` rewrite still changes
+    the signature (Codex round-2 #3 — audio_mp3 staleness is a bug). Manifests
+    are a few hundred bytes; falls back to stat on read error.
+    """
+    try:
+        h = _hashlib.sha256(mf.read_bytes()).hexdigest()
+        return (mf.name, h)
+    except OSError:
+        return (mf.name, _stat_sig(mf))
+
+
+def _paper_info_fingerprint(paper_dir: Path) -> tuple:
+    """Cheap change-signal for a paper folder (no recursive walk).
+
+    Covers every in-folder input _paper_info reads:
+      - folder mtime (top-level add/remove/rename -> formats)
+      - paper_meta.json (size, content-hash): title/tags/source/cover etc. are
+        correctness-critical (stale = bug), and enrich/rename can rewrite it
+        in place; a content hash catches even a same-size/mtime-preserved
+        rewrite that (mtime, size) would miss (Codex round-3 #2).
+      - chat_history.json (mtime, size): the only list-visible signals are
+        has_history + message_count. save_chat_history() rewrites the whole
+        JSON (and trims at 100 msgs), but a normal save/clear changes the
+        message count -> file size, and clear deletes the file; a content-only
+        rewrite that keeps the same message_count is not a list-visible change.
+        So (mtime, size) is sufficient here (documented tolerance, not hashed
+        — chat files can be large; hashing every request would cost more than
+        it's worth).
+      - each audio/*_ko_audio.manifest.json (name, content-hash): the
+        processing->complete status flip is an IN-PLACE rewrite that does not
+        move the audio/ dir mtime and may keep the same size, so the manifest
+        CONTENTS must be in the key.
+    NOT covered (recomputed fresh per request): last_read_at, source sidecar
+    (both live outside the folder). Tolerance: in-place overwrite of an
+    existing top-level NON-meta file (e.g. a .md/image) with a size change may
+    leave size_mb stale; see Phase 1.5 if cold-load size accuracy matters.
+    """
+    try:
+        dir_mtime = paper_dir.stat().st_mtime_ns
+    except OSError:
+        dir_mtime = 0
+    manifests = []
+    audio_dir = paper_dir / "audio"
+    if audio_dir.is_dir():
+        for mf in sorted(audio_dir.glob("*_ko_audio.manifest.json")):
+            manifests.append(_manifest_sig(mf))
+    return (
+        dir_mtime,
+        _content_sig(paper_dir / "paper_meta.json"),   # content hash (round-3 #2)
+        _stat_sig(paper_dir / "chat_history.json"),
+        tuple(manifests),
+    )
+
+
+def _apply_source_fallback(info: dict) -> None:
+    """Fill source_url/source_domain from the external sidecar when missing.
+
+    The sidecar lives outside the paper folder (newones/.meta/...), so it is
+    NOT part of the folder fingerprint — run this fresh on every request,
+    on the deep-copied dict, NOT on the cached base info (Codex round-2 #1).
+    No-op when source_url is already present (from meta).
+    """
+    if not info.get("source_url") and info.get("original_filename"):
+        try:
+            info["source_url"] = _read_source_sidecar(info["original_filename"])
+        except Exception:
+            pass
+    src = info.get("source_url")
+    if src:
+        try:
+            host = urlparse(src).hostname or ""
+            if host.startswith("www."):
+                host = host[4:]
+            info["source_domain"] = host
+        except Exception:
+            info["source_domain"] = None
+    else:
+        info["source_domain"] = None
+
+
 def _load_paper_metadata(paper_dir: Path) -> dict | None:
     """Load paper_meta.json from a paper directory if it exists."""
     meta_path = paper_dir / "paper_meta.json"
@@ -623,8 +739,14 @@ def paper_info_from_dir(paper_dir: Path, location: str) -> dict:
     return _paper_info(paper_dir, location)
 
 
-def _paper_info(paper_dir: Path, location: str) -> dict:
-    """Build info dict for a single paper directory."""
+def _paper_info(paper_dir: Path, location: str, *, apply_source_fallback: bool = True) -> dict:
+    """Build info dict for a single paper directory.
+
+    apply_source_fallback (keyword-only): when True (default, used by
+    get_paper_info) the external source sidecar fallback is applied inline.
+    list_papers passes False to cache the sidecar-FREE base info, then applies
+    _apply_source_fallback() fresh on the deep copy each request (round-2 #1).
+    """
     files: dict[str, bool] = {
         "pdf": False,
         "md_ko": False,
@@ -732,26 +854,15 @@ def _paper_info(paper_dir: Path, location: str) -> dict:
         info["issue_url"] = None
         info["cover"] = None
 
-    # Sidecar fallback: if source_url still missing, check source sidecar in .meta then legacy path
-    if not info.get("source_url") and info.get("original_filename"):
-        try:
-            info["source_url"] = _read_source_sidecar(info["original_filename"])
-        except Exception:
-            pass
-
-    # Derive source_domain for display when venue is missing
-    src = info.get("source_url")
-    if src:
-        try:
-            from urllib.parse import urlparse
-            host = urlparse(src).hostname or ""
-            if host.startswith("www."):
-                host = host[4:]
-            info["source_domain"] = host
-        except Exception:
-            info["source_domain"] = None
+    # Source sidecar fallback + source_domain derivation. For get_paper_info this
+    # runs inline (default); list_papers caches the sidecar-FREE base info and
+    # applies _apply_source_fallback() fresh on the deep copy (Codex round-2 #1).
+    if apply_source_fallback:
+        _apply_source_fallback(info)
     else:
-        info["source_domain"] = None
+        # Base info for the list cache: leave source untouched so the sidecar
+        # is never frozen into the cache. source_domain is set fresh later.
+        info.setdefault("source_domain", None)
 
     # Check for chat history
     chat_history_file = paper_dir / "chat_history.json"
@@ -790,7 +901,17 @@ def list_papers(tab: str = "unread") -> list[dict]:
     for item in sorted(base.iterdir(), key=lambda p: p.name):
         if not _safe_child_dir(base, item):
             continue
-        info = _paper_info(item, location)
+        key = str(item)
+        fp = _paper_info_fingerprint(item)
+        cached = _PAPER_INFO_CACHE.get(key)
+        if cached and cached[0] == fp:
+            info = _copy.deepcopy(cached[1])   # deep: nested formats/chat/tags
+        else:
+            # Cache the sidecar-FREE base info (Codex round-2 #1).
+            info = _paper_info(item, location, apply_source_fallback=False)
+            _PAPER_INFO_CACHE[key] = (fp, _copy.deepcopy(info))
+        # Fresh per request on the deep copy (both live outside the fingerprint):
+        _apply_source_fallback(info)
         info["last_read_at"] = last_read.get(item.name)
         papers.append(info)
     return papers
