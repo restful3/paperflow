@@ -11,6 +11,7 @@ from datetime import datetime
 import shutil
 import sys
 import urllib.request
+from urllib.parse import urlparse
 from html.parser import HTMLParser
 import fcntl
 from contextlib import contextmanager
@@ -247,6 +248,37 @@ def _md_is_landing_page(md_path: str) -> bool:
         return False
 
 
+# 알려진 논문 랜딩/원문 route. 이 URL 들은 스크랩해 봤자 초록 랜딩페이지라
+# URL-first 를 태우지 않고 큐의 실제 PDF 를 변환한다. host 단위가 아니라
+# route 단위로 제한한다 — 예: huggingface.co/papers 는 논문, /blog 는 아티클.
+_PAPER_LANDING_ROUTES = (
+    ("arxiv.org", ("/abs/", "/pdf/")),
+    ("doi.org", ("/",)),
+    ("dx.doi.org", ("/",)),
+    ("openreview.net", ("/forum", "/pdf")),
+    ("biorxiv.org", ("/content/",)),
+    ("medrxiv.org", ("/content/",)),
+    ("alphaxiv.org", ("/abs/", "/paper/", "/papers/")),
+    ("huggingface.co", ("/papers/",)),
+)
+
+
+def _is_paper_landing_url(url: str) -> bool:
+    """True iff url 이 알려진 논문 랜딩/원문 route 에 해당."""
+    try:
+        p = urlparse((url or "").strip())
+    except ValueError:
+        return False
+    host = (p.netloc or "").lower().split(":")[0]
+    if host.startswith("www."):
+        host = host[4:]
+    path = p.path or "/"
+    for h, prefixes in _PAPER_LANDING_ROUTES:
+        if host == h and any(path.startswith(pre) for pre in prefixes):
+            return True
+    return False
+
+
 def _url_to_markdown_html_first(source_url, output_dir, base_name, timeout=20):
     """Try URL-first extraction and write markdown.
 
@@ -336,6 +368,57 @@ def _url_to_markdown_browser_fallback(source_url, output_dir, base_name, timeout
     except Exception as e:
         info["reason"] = str(e)
         return None, info
+
+
+def _discard_landing_md(md_path, stage_label):
+    """랜딩페이지로 판정된 md 를 삭제. 삭제 성공/실패와 무관하게 경고만 남긴다."""
+    print_warning(f"{stage_label} result looks like an arXiv abstract landing-page scrape — discarding to convert the real PDF instead")
+    try:
+        os.remove(md_path)
+    except OSError:
+        pass
+
+
+def _try_url_first_extraction(source_url, output_dir, base_name, pipeline):
+    """URL-first(HTML → browser fallback) 추출 시도.
+
+    성공 시 md_path, 실패(=PDF 변환으로 폴백해야 함) 시 None 반환.
+
+    가드 2중:
+    - Fix B: 알려진 논문 랜딩 URL 이면 스크랩해 봤자 초록이므로 전체 스킵
+    - Fix A: 1차 추출이 랜딩페이지로 판정되어 폐기됐으면 같은 URL 을
+      browser fallback 으로 재시도하지 않는다 (판정 대상은 URL 자체이므로;
+      r.jina.ai 출력은 마커가 제거돼 내용 가드를 비결정적으로 통과했었다)
+    """
+    if _is_paper_landing_url(source_url):
+        print_info(f"Paper landing URL detected — skipping URL-first, converting the queued PDF: {source_url}")
+        return None
+
+    md_path, html_info = _url_to_markdown_html_first(source_url, output_dir, base_name)
+    if md_path and _md_is_landing_page(md_path):
+        _discard_landing_md(md_path, "URL-first")
+        md_path = None
+        html_info["reason"] = "discarded_paper_landing_page"
+        print_warning("Skipping browser fallback for the same landing URL -> fallback to PDF converter")
+        return None
+    if md_path:
+        print_success(f"URL-first extraction complete ({html_info.get('chars', 0)} chars): {md_path}")
+        return md_path
+    print_warning(f"URL-first extraction failed: {html_info.get('reason', 'unknown')}")
+
+    if not pipeline.get("browser_fallback", True):
+        return None
+    print_info("Trying browser fallback extraction...")
+    md_path, binfo = _url_to_markdown_browser_fallback(source_url, output_dir, base_name)
+    if md_path and _md_is_landing_page(md_path):
+        _discard_landing_md(md_path, "Browser fallback")
+        md_path = None
+        binfo["reason"] = "discarded_paper_landing_page"
+    if md_path:
+        print_success(f"Browser fallback extraction complete ({binfo.get('chars', 0)} chars): {md_path}")
+        return md_path
+    print_warning(f"Browser fallback failed: {binfo.get('reason', 'unknown')} -> fallback to PDF converter")
+    return None
 
 
 def write_processing_status(filename, stage, stage_num, total_stages, stage_label, error=None, detail=None, sub_progress=None):
@@ -3372,37 +3455,10 @@ def process_pdf_to_output_dir(pdf_path, output_dir, base_name, config, prompt, m
                 used_url_first = False
                 source_url = _find_source_url_sidecar(pdf_path)
                 if pipeline.get("url_html_first", False) and source_url:
-                    print_info(f"URL-first enabled, trying HTML extraction: {source_url}")
-                    md_path, html_info = _url_to_markdown_html_first(source_url, output_dir, base_name)
-                    if md_path and _md_is_landing_page(md_path):
-                        print_warning("URL-first result looks like an arXiv abstract landing-page scrape — discarding to convert the real PDF instead")
-                        try:
-                            os.remove(md_path)
-                        except OSError:
-                            pass
-                        md_path = None
+                    print_info(f"URL-first enabled: {source_url}")
+                    md_path = _try_url_first_extraction(source_url, output_dir, base_name, pipeline)
                     if md_path:
                         used_url_first = True
-                        print_success(f"URL-first extraction complete ({html_info.get('chars', 0)} chars): {md_path}")
-                    else:
-                        print_warning(f"URL-first extraction failed: {html_info.get('reason', 'unknown')}")
-
-                        # Stage B fallback for JS-heavy pages
-                        if pipeline.get("browser_fallback", True):
-                            print_info("Trying browser fallback extraction...")
-                            md_path, binfo = _url_to_markdown_browser_fallback(source_url, output_dir, base_name)
-                            if md_path and _md_is_landing_page(md_path):
-                                print_warning("Browser fallback result looks like an arXiv abstract landing-page scrape — discarding to convert the real PDF instead")
-                                try:
-                                    os.remove(md_path)
-                                except OSError:
-                                    pass
-                                md_path = None
-                            if md_path:
-                                used_url_first = True
-                                print_success(f"Browser fallback extraction complete ({binfo.get('chars', 0)} chars): {md_path}")
-                            else:
-                                print_warning(f"Browser fallback failed: {binfo.get('reason', 'unknown')} -> fallback to PDF converter")
 
                 if not used_url_first:
                     with _gpu_lock():   # converter↔TTS GPU 상호배제(공유 flock)
