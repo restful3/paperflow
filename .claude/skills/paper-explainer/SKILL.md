@@ -187,6 +187,18 @@ Transform academic passive voice into conversational, engaging Korean.
 - Add personal opinions not in the original paper
 - Use excessive memes, slang, or translationese (번역투)
 
+**🚫 문체 전환 강제 (해라체 상속 금지 — 신규 게이트):**
+```
+소스 `_ko.md` 가 뉴스·사설 번역 관례상 해라체("~다/~했다/~한다" 평서형)로
+되어 있어도, 해설판 본문 서술은 반드시 대화체 합니다체로 전환한다.
+소스의 해라체 어미를 그대로 상속하지 마라 — 이는 문체 위반이다.
+
+- 본문 해설 문장: 합니다체 (예: "…드러났습니다", "…라는 뜻입니다")
+- 예외(해라체·원문 그대로 허용): 인물의 직접인용("…라고 말했다"의 인용 내부),
+  상단 배너 blockquote, 표 셀, 코드/수식.
+- 소스가 한국어여도 "이미 쉬우니 그대로" 두지 말고, 어조는 합니다체로 재작성한다.
+```
+
 ### Rule 3: Analogies and Metaphors (비유/은유) — 절제해서, 자연스럽게
 
 비유는 **정말로 직관이 안 잡히는 핵심 개념에만** 쓴다. 소양 있는 독자(위 "독자 수준 가정" 참조)에게는 비유 없이 정확한 설명이 더 빠를 때가 많다 — **비유가 없어도 된다.**
@@ -569,6 +581,7 @@ After completing the full rewrite, verify **in this priority order**:
 - [ ] **중복 없음**: 같은 개념·맥락·비유를 여러 곳에서 처음부터 다시 설명하지 않았다 (두 번째부터는 짧게 참조)
 - [ ] **출처 절제**: 매체/출처가 무엇인지 설명하지 않았고, 출처 언급은 많아야 1회다
 - [ ] **Glossary completeness**: All technical terms defined inline appear in the glossary
+- [ ] **문체 합니다체 (신규 게이트)**: 본문 해설 서술이 전부 합니다체다. 소스가 해라체(뉴스/사설 번역본)여도 어미를 상속하지 않았다 — 해라체 평서형("~다/~했다")으로 끝나는 본문 문단이 없다(직접인용 내부·배너·표·수식 예외). 스캐너 지표로는 `hae_p`(해라체 문단 수)가 0에 가까워야 하며, 0이 아니면 그 문단이 직접인용/제목 예외인지 근거를 확인한다
 - [ ] **Natural Korean flow**: No awkward phrasing or translationese
 - [ ] **Image references**: All `![](images/...)` paths preserved from original
 - [ ] **Citations**: All `[1]`, `(Author et al., 2023)` formats unchanged
