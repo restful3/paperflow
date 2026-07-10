@@ -14,6 +14,12 @@ format:
       body {
         margin-top: 0 !important;
         padding-top: 0 !important;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+      }
+      h1, h2, h3, h4, h5, h6, li, th, td, figcaption, blockquote {
+        word-break: keep-all;
+        overflow-wrap: break-word;
       }
       #quarto-header {
         display: none !important;
@@ -42,7 +48,7 @@ format:
 
 # Example YAML Header for PaperFlow
 
-This is the standard YAML header used in the PaperFlow project for rendering Korean translated papers to HTML.
+This is the standard YAML header used in the PaperFlow project for rendering Korean markdown (translations, explainers, audio narrations) to HTML.
 
 ## Key Configuration Options
 
@@ -51,8 +57,12 @@ This is the standard YAML header used in the PaperFlow project for rendering Kor
 - **`toc-location: left`**: Places TOC in left sidebar
 - **`embed-resources: true`**: **CRITICAL** - Embeds all images as base64 in HTML for self-contained output
 - **`theme: cosmo`**: Uses Cosmo Bootstrap theme
+- **CJK word-break CSS**: **CRITICAL for Korean** - `word-break: keep-all` keeps 한글 어절 intact at line breaks; always paired with `overflow-wrap: break-word` so long English tokens/URLs still wrap. Applied to `body` AND width-constrained elements (headings, list items, table cells) where the rule is easily lost
 - **Custom CSS**: Hides Quarto header/title block and centers content with equal padding
 
 ## Usage in PaperFlow
 
-This header should be prepended to all Korean translated markdown files (`*_ko.md`) before rendering with Quarto. The `embed-resources: true` option is essential for ensuring images are displayed correctly in the final HTML output.
+Prepend this header to Korean markdown before rendering with Quarto:
+
+- `*_ko.md` / `*_ko_explained.md`: these normally already carry a header — verify it has `embed-resources: true` and the word-break pair, and patch the header if missing.
+- `*_ko_audio.md` / `*_ko_audio_brief.md`: **YAML-less by design** (raw-TTS). Never edit the original — prepend this header to a same-directory temp copy (`<name>.render.md`), render with `--output <name>.html`, then delete the copy.

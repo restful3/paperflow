@@ -139,6 +139,10 @@ RIGHT (통합):  [원문 내용 + 풀이 + 맥락을 한 번에 녹인 한 문�
   plus a restated twin. There is nothing to "expand" — do not invent a twin.
 ```
 
+**수치 재진술 금지 (같은 결함의 변형):** 원문 수치를 옮긴 직후 별도 문단으로 "이 숫자를 음미해 봅시다", "이 숫자들은 충격적입니다" 류의 환산·감탄을 붙이지 않는다. 환산·해석이 필요하면 수치를 제시한 **같은 문장/문단 안에** 짧게 흡수한다 (예: "6.8%포인트 — 월소득 100만 원당 7만 원꼴"). 수치마다 재진술 문단이 따라붙는 패턴은 전수 감사에서 반복 확인된 실측 결함이다.
+
+**해석성 마감 에코 절제:** 문단 끝을 "정리하면/쉽게 말해/즉 … 셈입니다/뜻입니다/것입니다"로 마감하며 직전 내용을 재요약하는 습관을 금지한다. 이런 재요약형 마감은 문서 전체 **합계 5회 이하**로 유지하고, 쓸 때는 반드시 새 해석·인과를 더해야 한다 (순수 반복 마감은 0회).
+
 **Paragraph-level mapping rule (문단 대응 원칙):**
 ```
 Original paragraph → Explained paragraph(s)
@@ -170,6 +174,8 @@ Enrichment must never distort the original.
 - Do NOT exaggerate or speculate — only explain what the authors actually wrote
 - "Why this matters" context and analogies must faithfully represent the original content
 - If uncertain about a technical detail, explain what the paper states rather than interpreting beyond it
+- **저자 소개는 사실만**: 이름·소속·직함 등 원문/`paper_meta.json` 에 있는 정보만 쓴다. "세계적 석학", "~분야의 대가" 같은 소스 밖 평가·예찬을 덧붙이지 않는다 (실측 감사에서 해설판→축약판까지 전파된 결함)
+- **원문 밖 비교·인과·최상급 금지**: 원문에 없는 수치 비교("일본 인구와 맞먹는"), 인과 부연("직관적으로 납득됩니다 — ~니까요"), 최상급 수식("최초로") 을 추가하지 않는다. 이해를 돕는 환산이 꼭 필요하면 원문 수치의 산술적 재표현(단위 환산)까지만 허용된다
 
 ### Rule 2: Tone Shift (어조 전환)
 Transform academic passive voice into conversational, engaging Korean.
@@ -197,19 +203,33 @@ Transform academic passive voice into conversational, engaging Korean.
 - 예외(해라체·원문 그대로 허용): 인물의 직접인용("…라고 말했다"의 인용 내부),
   상단 배너 blockquote, 표 셀, 코드/수식.
 - 소스가 한국어여도 "이미 쉬우니 그대로" 두지 말고, 어조는 합니다체로 재작성한다.
+- 문서 말미의 저자 소개·에디터 크레딧 등 소스에서 통째로 복사되기 쉬운 블록도
+  본문 서술이다 — 합니다체로 전환한다 (실측: 낭독판은 고쳤는데 해설판만 해라체 잔존).
 ```
+
+### 한국어 평이 소스 모드 — 재진술 금지, 부가가치로 승부
+
+소스 `_ko.md` 가 이미 전문 에디터가 다듬은 평이한 한국어 기사(HBR 코리아 등 국내 매체)라면 문장을 "쉽게 풀어쓸" 여지가 거의 없다. 이때 소스 문장에 볼드만 얹어 1:1 로 옮겨 쓰면 해설판은 원문의 복사본이 된다 (실측: 1.14x 재진술 감사 사례 — "원문을 읽는 편이 낫다"는 판정). 이 모드에서 해설판의 부가가치는 재진술이 아니라 다음에서 나온다:
+
+1. **구조화**: 흩어진 사례·수치·개념을 매핑 표/목록으로 재조직 (예: 프레임워크 차원 × 대표 사례 × 성과 수치 표)
+2. **개념의 배경 보강**: 글이 한 줄로 스친 학술 개념(자기결정성 이론 등)을 한두 문장 깊이로 보강 — 단 Rule 1 범위(일반적으로 확립된 정의 수준) 안에서
+3. **이미지로만 존재하는 표·도표의 전사** (Special Considerations 의 이미지 전사 규칙)
+4. **문체 통일**: 해라체 소스는 합니다체로 전환 (Rule 2)
+5. **소스 내부의 긴장·함의 짚기**: 서로 긴장하는 대목이나 함의를 드러내되, 근거는 소스 안에서만
+
+소스 문장을 그대로(또는 어미만 바꿔) 옮기는 것은 이 모드의 coverage 달성 수단이 아니다 — 내용은 전부 보존하되 **압축·재구성·해설 주석**으로 커버한다. 결과물이 소스보다 짧아져도 된다 (한국어 소스는 분량 하한 없음, Rule 0/Quality Checks 참조). 단 거의 모든 문장이 고유 사실(사례·수치)인 기사에서는 완전 커버 요구 때문에 자연 착지점이 0.9\~1.1x다 — **이 모드의 차별점은 길이가 아니라 부가가치 산출물(구조화 표·전사·배경 보강)의 존재**다.
 
 ### Rule 3: Analogies and Metaphors (비유/은유) — 절제해서, 자연스럽게
 
 비유는 **정말로 직관이 안 잡히는 핵심 개념에만** 쓴다. 소양 있는 독자(위 "독자 수준 가정" 참조)에게는 비유 없이 정확한 설명이 더 빠를 때가 많다 — **비유가 없어도 된다.**
 
-**개수:** 한 편당 **0\~3개** 의 핵심 비유면 충분하다. 문단마다 비유를 넣지 않는다. 기본값은 "비유할 거리가 마땅치 않으면 넣지 않는다."
+**개수:** 한 편당 **0\~3개** 의 핵심 비유면 충분하다. 문단마다 비유를 넣지 않는다. 기본값은 "비유할 거리가 마땅치 않으면 넣지 않는다." **작성 후 서로 다른 비유 소재를 실제로 세어라** — 4개 이상이면 실패이며, 가장 덜 중요한 것부터 삭제하거나 기존 비유로 통합한다 (실측 감사에서 6\~8개 남발이 반복 확인됨).
 
 **좋은 비유 만들기:**
 - 개념의 KEY PROPERTY를 포착한다
 - 한번 세운 비유는 그 개념이 다시 나올 때 일관되게 이어간다 (새 비유를 난발하지 않는다)
 
-**기계적 마커 금지 (중요).** "**비유로 설명하면 이렇습니다:**" 같은 **정형 도입 문구를 매번 붙이지 않는다.** 이 패턴이 반복되면 글이 기계적으로 읽히고 듣기판에서 특히 거슬린다. 비유는 별도 머리표 없이 문장 안에 자연스럽게 녹인다 (예: "…인데, 이는 X 와 같은 원리다"). 도입 표현이 필요하면 매번 다르게 쓰고, 한 해설판 안에서 같은 도입구를 반복하지 않는다.
+**기계적 마커 금지 (중요).** "**비유로 설명하면 이렇습니다:**" 같은 **정형 도입 문구를 매번 붙이지 않는다.** 이 패턴이 반복되면 글이 기계적으로 읽히고 듣기판에서 특히 거슬린다. 비유는 별도 머리표 없이 문장 안에 자연스럽게 녹인다 (예: "…인데, 이는 X 와 같은 원리다"). 도입 표현이 필요하면 매번 다르게 쓰고, 한 해설판 안에서 같은 도입구를 반복하지 않는다. **"비유:"·"비유로 정리하면:" 같은 볼드 라벨, 비유 전용 blockquote 박스, "첫 번째/두 번째 핵심 비유"·"(개혁 1)/(개혁 2)" 류 번호형 스캐폴딩도 같은 위반이다 — 전부 금지.**
 
 **비유 시스템 설계(쓸 때만).** 비유를 쓰기로 했다면 핵심 개념 몇 개에 일관된 비유를 미리 배정해 끝까지 같은 비유로 이어간다. 예: 계층적 메모리 → 단기=책상 위, 중기=서랍장, 장기=금고. 같은 개념에는 늘 같은 비유를 쓴다.
 
@@ -227,6 +247,8 @@ Structure each section with a clear narrative arc.
 - Open with "why this matters" context (even if original lacks it)
 - Present the core content in accessible language
 - Close with key takeaway or transition to next section
+
+**소제목이 없는 평문 기사(칼럼·에세이)에는 논지 흐름을 따라 `##` 헤딩을 새로 달아도 된다** — 이는 Rule 0(원문 구조 유지)의 위반이 아니라 구조화 부가가치다 (원문에 있는 소제목은 물론 보존).
 
 **Section headings should include a descriptive Korean subtitle:**
 - `## 3장. MemoryOS의 구조 — 핵심 설계를 파헤치기`
@@ -337,8 +359,8 @@ Before writing, decide whether analogies are even warranted (Rule 3: **0–3 per
   > 이 글은 "논문 제목" 논문의 전체 내용을 빠짐없이 담되, 전문 용어와 개념을
   > 일상적인 비유와 풀어쓴 설명으로 재구성한 해설판입니다.
   ```
-- 출처·저자 소개는 **최소화하고 많아야 1회** 만 한다 (배너나 첫 문단). 논문이면 저자·소속을 한 줄로 짧게 언급하는 정도면 충분하다.
-- **매체·출처가 무엇인지 설명하지 않는다 (중요).** "The Economist 는 영국의 시사주간지로…", "이 매체는 …" 같은 매체 소개·출처 부연을 넣지 않는다. 소양 있는 독자는 매체를 안다. 출처를 밝힐 필요가 있으면 이름만 한 번 적고 (예: "이코노미스트 기사") 곧장 내용으로 들어간다. 특히 이코노미스트 주간호처럼 여러 기사를 잇따라 해설할 때 매 기사마다 매체 설명을 반복하면 듣기판에서 매우 거슬린다.
+- 출처·저자 소개는 **최소화하고 많아야 1회** 만 한다 (배너나 첫 문단). **논문·기사는 배너 직후에 메타 한 줄을 둔다**: 저자·소속·발표처(학회/저널/매체명)·발표일 중 **원문이나 `paper_meta.json` 에서 확인되는 사실만** 한 줄로 (확인 안 되는 항목은 조용히 생략 — 지어내지 않는다; 파일명·이미지명에서 추정한 발행호 등은 "확인된 사실"이 아니다). 경력 예찬·"세계적 석학" 류 평가는 금지 (Rule 1).
+- **매체·출처가 무엇인지 설명하지 않는다 (중요).** "The Economist 는 영국의 시사주간지로…", "이 매체는 …" 같은 매체 소개·출처 부연을 넣지 않는다. 소양 있는 독자는 매체를 안다. 출처를 밝힐 필요가 있으면 이름만 한 번 적고 (예: "이코노미스트 기사") 곧장 내용으로 들어간다. 단 **원문 본문 자체의 귀속 문장**("The Economist calculates" → "이코노미스트가 계산한 바로는")은 콘텐츠이므로 이 1회 카운트에 포함하지 않는다. 특히 이코노미스트 주간호처럼 여러 기사를 잇따라 해설할 때 매 기사마다 매체 설명을 반복하면 듣기판에서 매우 거슬린다.
 - **도입부 상투구 자제**: 출처·저자·글의 성격을 소개할 때 **"학술 논문이라기보다는 ~에 가깝습니다"** 류의 정형 대비 문구를 쓰지 않는다 (여러 해설판에서 똑같이 반복되어 거슬리고, 듣기판으로도 그대로 옮겨진다). 글의 성격을 밝힐 필요가 있으면 "논문이 아니라 ~"로 대비시키지 말고, 그것이 무엇인지(블로그·에세이·기술 보고서 등)만 한 번 자연스럽게 언급하거나 곧장 내용으로 들어간다. 저자 소개도 매번 같은 틀로 시작하지 않는다.
 
 ### Step 4: Rewrite Each Section (with per-section verification)
@@ -369,7 +391,8 @@ After all content sections are complete:
 - Collect every technical term that was defined inline
 - Create the glossary table at the end of the document
 - Format: `| 용어 | 쉬운 설명 |`
-- Include 10-20 key terms (more for longer/more technical papers)
+- **이 글 고유의 개념만 5\~15개** — 소양 독자(이공계 학부 이상)에게 자명한 일반 용어(IP·게임화·GDP·스팀펑크 류)는 싣지 않는다
+- 인라인 정의 문구를 그대로 복사하지 말고 더 짧게 재정리한다 (인라인과 표의 문구 중복 금지)
 
 ### Step 7: Handle References, Acknowledgements, and Appendices
 
@@ -454,7 +477,11 @@ Final: "전체 논문 해설이 완료되었습니다. deep_learning_survey_ko_e
 - **Citations**: Keep citation format unchanged: `[1]`, `(Smith et al., 2023)`, etc.
 - **Code blocks**: Preserve as-is. Add a brief explanation before/after if the code illustrates a concept.
 - **Tables**: Preserve data tables. May add interpretation rows or commentary after the table.
-- **Figures**: Translate figure captions to Korean if in another language. Add explanation of what the figure shows.
+- **Figures**: Translate figure captions to Korean if in another language. Add explanation of what the figure shows. **캡션 라벨 표기는 문서 전체에서 "그림 N:" 으로 통일한다** (앞은 "Figure 1:", 뒤는 "그림 3:" 식의 혼용 금지).
+- **이미지로만 존재하는 표·차트 (전사 의무)**: 본문 텍스트로 접근할 수 없는 정보 덩어리(표가 이미지로만 수록된 경우 등)는 **이미지 파일을 직접 열어(vision) 내용을 확인하고 텍스트로 전사·해설한다.** "세부 항목은 그림 안에만 담겨 있습니다" 같은 포기 문구는 금지. 이미지가 깨져 읽을 수 없으면 그 사실만 짧게 밝힌다. 수치가 육안으로 불명확한 차트는 지어내지 말고 추세만 서술한다 (Rule 1).
+- **깨진 OCR 표**: 소스의 표가 OCR 로 깨져 있으면(`<table>` 태그 잔해, 오인식 변수명) 그대로 싣지 말고 원문 맥락으로 복원한 정상 표로 재구성하고, 원문 표기가 OCR 오류였음을 한 줄로 밝힌다.
+- **원문 캡션 자체가 틀린 경우** (앞 그림 캡션의 복사-붙여넣기 등 명백한 소스 오류): 본문 맥락에 맞는 캡션을 달고, 원문 캡션이 오류였음을 한 줄로 밝힌다. 캡션 번호 통일("그림 N:")은 **번호가 있는 캡션에만** 적용하고, 무번호 캡션은 무번호로 둔다.
+- **동아시아 인명 로마자**: 성-이름 순서가 모호하면 참고문헌·차트 출처의 이니셜 표기("Z. Chen et al.")와 교차 확인해 성을 판별한 뒤 표기한다.
 
 ## Domain-Specific Analogy Guidelines
 
@@ -567,7 +594,7 @@ After completing the full rewrite, verify **in this priority order**:
 **CRITICAL (must pass — if any fails, go back and fix):**
 - [ ] **Content coverage (PRIMARY — not a length quota)**: every original section, subsection, paragraph, **claim, number, causal link, and exception/caveat** appears in the output **at least once**. This is the real bar — verify it section by section, not by character count.
 - [ ] **No paraphrased duplication (이번 결함의 핵심 게이트)**: read consecutive paragraphs — **no adjacent pair states the same claim with only different wording.** In particular there is NO "[충실 번역 문단] → [같은 내용 재설명 문단]" pair anywhere. If found, merge into one integrated paragraph, preserving unique details. (Spot-check at least 3 sections.)
-- [ ] **분량은 보조 지표일 뿐 (자수 기준, `wc -m`; rtk 훅 환경 `rtk proxy wc -m`)**: 줄 수로 재지 않는다. 기준 = **웹 잡동사니 제거한 소스 본문** 자수.
+- [ ] **분량은 보조 지표일 뿐 (자수 기준, `wc -m`; rtk 훅 환경 `rtk proxy wc -m`)**: 줄 수로 재지 않는다. 기준 = **웹 잡동사니 제거한 소스 본문** 자수. 참고문헌은 **소스·출력 양쪽 모두 포함**한 동일 기준으로 잰다 (한쪽만 빼면 비율이 수 %p 흔들린다).
   - **목표가 아니라 진단 신호다.** 외국어 소스 → 한글 출력이 **0.6x 미만이면** 누락을 의심해 섹션별 coverage를 대조한다(그 이상이면 비율로 트집잡지 않는다). 한국어 소스 → 하한 없음, coverage만 본다.
   - 0.6x 미만이어도 **새 주제를 지어내거나 재서술로 채우지 않는다** — 누락·과압축된 문단만 복원한다. 분량을 늘리려 같은 말을 반복하면 그게 바로 이 결함이다.
 - [ ] **Section completeness**: Every section AND subsection heading in the original appears in the output (compare heading counts)
@@ -579,7 +606,13 @@ After completing the full rewrite, verify **in this priority order**:
 - [ ] **Analogy consistency**: Same concept uses the same metaphor throughout
 - [ ] **비유 절제**: 정형 도입구("비유로 설명하면 이렇습니다:")를 반복하지 않았고, 비유는 0\~3개 핵심에만, 자명한 기초를 비유로 풀지 않았다
 - [ ] **중복 없음**: 같은 개념·맥락·비유를 여러 곳에서 처음부터 다시 설명하지 않았다 (두 번째부터는 짧게 참조)
-- [ ] **출처 절제**: 매체/출처가 무엇인지 설명하지 않았고, 출처 언급은 많아야 1회다
+- [ ] **출처 절제**: 매체/출처가 무엇인지 설명하지 않았고, 출처 언급은 많아야 1회다 (소개 blockquote 가 2개 연속으로 중복되지 않았다)
+- [ ] **수치 재진술 0건**: 수치 제시 직후 같은 수치를 환산·감탄으로 되풀이하는 별도 문단이 없다
+- [ ] **마감 에코 ≤5**: "정리하면/쉽게 말해/즉 …셈입니다/뜻입니다" 류 재요약 마감이 문서 합계 5회 이하이고, 순수 반복 마감은 0회다
+- [ ] **비유 소재 ≤3 · 라벨 0**: 서로 다른 비유 소재가 3개 이하, "**비유:**" 볼드 라벨·비유 blockquote·번호형 스캐폴딩 0건
+- [ ] **소스 외 주장 0**: 저자 예찬·원문 밖 수치 비교/인과 부연/최상급 수식이 없다 (표본 3개 섹션 대조)
+- [ ] **메타 한 줄**: 저자·발표처·발표일 중 확인 가능한 사실이 도입부에 있다 (지어낸 항목 없음)
+- [ ] **이미지 전사**: 이미지로만 존재하는 표·도표가 텍스트로 전사·해설됐다 (포기 문구 0건)
 - [ ] **Glossary completeness**: All technical terms defined inline appear in the glossary
 - [ ] **문체 합니다체 (신규 게이트)**: 본문 해설 서술이 전부 합니다체다. 소스가 해라체(뉴스/사설 번역본)여도 어미를 상속하지 않았다 — 해라체 평서형("~다/~했다")으로 끝나는 본문 문단이 없다(직접인용 내부·배너·표·수식 예외). 스캐너 지표로는 `hae_p`(해라체 문단 수)가 0에 가까워야 하며, 0이 아니면 그 문단이 직접인용/제목 예외인지 근거를 확인한다
 - [ ] **Natural Korean flow**: No awkward phrasing or translationese
