@@ -1,0 +1,6 @@
+# 런타임 상태/산출물 (코드만 버전관리)
+state.json
+state.json.bak
+pending.json
+resolved.json
+review_queue.jsonl
