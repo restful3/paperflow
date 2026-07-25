@@ -190,3 +190,21 @@ America's mayors join the scrabble / A posh and peculiar British magazine / Brit
 - `paper-audio-korean/SKILL.md`: 변환규칙 #10 "소스 해설판 연속 패러프레이즈 중복 병합(둘 다 낭독 금지, 고유정보 보존)" + Important 체크 "연속 중복 0건"(분량게이트 70%는 고유내용 기준, 병합분 제외).
 
 → 향후 생성물은 두 층 모두 차단. **기존 라이브러리(보정 전 ~520 해설판 + 340 듣기판) 재생성은 별개 작업.**
+
+---
+
+# 백로그 소급 재생성 — 듣기판(DUP 83) 완료 (2026-06-25)
+
+위 "별개 작업"의 1차분 = **확정 DUP 83편의 낭독판(`_ko_audio.md`)** 을 현행(보정 후) `paper-audio-korean` 스킬로 소급 재생성. **해설판이 아니라 낭독판만** 대상(규칙 #10이 소스 해설판의 [번역]+[재설명] 중복 쌍을 낭독 단계에서 병합). 데모 1편 수동 + 나머지 병렬 서브에이전트(웨이브 6~11편씩) 처리.
+
+**결과 (83편):**
+- **76편 재생성**(중복 병합 후 atomic 덮어쓰기) + **6편 검수 후 "이미 깨끗"으로 유지**(소스가 단일패스 학술 해설판이라 [번역]+[재설명] 중복 없음, 게이트 통과: SCALING LLM Multi-Agent / Latent Agents / Dissociative Identity / Learning to Act under Noise / Prompt Repetition / WEBAGENT-R1) + **1편 스킵**(`[20260601~07] AIML 논문 모음` — 해설판 소스 없음).
+- 착수 전 덮어쓸 낭독판+sidecar **162개 백업**(세션 scratchpad).
+- **리졸버 오매칭 2건 교정**: frac 스캔 제목→폴더 퍼지매칭이 `Iran has lost its fear of war`→`Equinor`, `How artificial intelligence...`→`No, AI Is Not Conscious`로 잘못 붙던 것을 엄격매칭으로 바로잡아 올바른 폴더만 처리(데모 `How AI...`는 세션 중 archives로 이동됨).
+
+**최종 자동 게이트(전 폴더):** CRITICAL grep 위반 0 · 인접 문단 패러프레이즈 중복 0 · sidecar status=complete 0 누락.
+
+**남은 일(미완):**
+1. **해설판(`_ko_explained.md`) 자체의 중복은 그대로** — 듣기판만 고침. 뷰어 Easy 모드로 해설판을 읽으면 여전히 중복. 해설판 소급 재생성(post-fix `paper-explainer`)은 별도.
+2. BORDER 41편 + 정독 BAD/MILD의 듣기판/해설판은 미처리.
+3. 사소: 위 "이미 깨끗" 학술 4편(WEBAGENT-R1·Learning to Act under Noise·Prompt Repetition·Dissociative Identity)은 현행 스킬의 마무리 한 줄 누락(기존 산출물 잔존, 재생성 안 함). `Learning to Act under Noise`는 sidecar fingerprint stale(소스 6/07 수정).
