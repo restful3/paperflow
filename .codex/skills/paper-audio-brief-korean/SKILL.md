@@ -1,6 +1,6 @@
 ---
 name: paper-audio-brief-korean
-description: Convert a Korean paper explainer (_ko_explained.md) into an ABRIDGED listen-optimized Korean narration (<basename>_ko_audio_brief.md) — 해설판 2만자 이상이면 약 7,000자(~20분), 더 짧은 소스는 비례 밴드(§분량 정책 tier). Keeps only the core: problem motivation, key contributions, method intuition, main results, and limitations. Use when the user asks "축약 낭독판 만들어줘", "짧은 낭독판", "brief audio 만들어줘", "20분짜리 듣기판", or wants a condensed iPhone-listenable version of a paper.
+description: Convert a Korean paper explainer (_ko_explained.md) into an ABRIDGED listen-optimized Korean narration (*_ko_audio_brief.md) — 해설판 2만자 이상이면 약 7,000자(~20분), 더 짧은 소스는 비례 밴드(§분량 정책 tier). Keeps only the core — problem motivation, key contributions, method intuition, main results, and limitations. Use when the user asks "축약 낭독판 만들어줘", "짧은 낭독판", "brief audio 만들어줘", "20분짜리 듣기판", or wants a condensed iPhone-listenable version of a paper.
 ---
 
 # Paper Audio Brief (Korean Explainer → Abridged Listen-Optimized Narration)
@@ -30,14 +30,14 @@ Other principles:
 
 ## Codex 환경 (플랫폼 노트)
 
-이 스킬은 Codex(gpt-5.6-sol)에서 구동된다. **품질 규칙(변환 규칙표·변환 예시·숫자 읽기·분량 정책·나열 금지)은 Claude 판과 동일**하며, 아래 플랫폼 항목만 Codex 에 맞춘다 (2026-07-26 Codex 자가검증 반영).
+이 스킬은 Codex(현재 배치 기본 모델 gpt-5.6-sol; `codex exec -m` 으로 바뀔 수 있다)에서 구동된다. **품질 규칙(변환 규칙표·변환 예시·숫자 읽기·분량 정책·나열 금지)은 Claude 판과 동일**하며, 아래 플랫폼 항목만 Codex 에 맞춘다 (2026-07-26 Codex 자가검증 반영).
 
 - **자수 측정**: `wc -m < "$file"` (공백 포함) — Codex 는 `/usr/bin/wc` 이고 rtk 훅이 없다. **`LC_ALL=C` 로 실행 금지**(바이트 수가 되어 자수가 틀어진다; locale 은 `C.UTF-8` 유지).
 - **그림 판독(vision)**: Codex 는 `view_image` 로 로컬 그림 파일을 판독할 수 있다. **포함하는 핵심 그림은 실물 파일을 여는 것이 기본**이다(캡션·파일명 대응이 틀릴 수 있으므로 — 파일명만 믿지 마라). vision 도구가 실패할 때만 캡션+본문의 **공통 확정사항만** 서술하고 완료 보고에 "미확인 그림"으로 플래그한다. 어느 경우에도 날조 금지(규칙#3·Verification 참조).
 - **파일 쓰기**: 섹션 쓰기는 `apply_patch` 로 `.part` 에 기록하고, 전체 완료·검증 후 `mv` 로 최종본에 atomic publish 한다(셸 redirection 통짜 덮어쓰기 지양).
-- **완료 신호**: Codex 에는 `Actioning…` 같은 진행 상태 문자열이 없다. 진행/완료 판정은 상태 문자열이 아니라 **프로세스 생존 · `--json` JSONL 이벤트 · 종료 코드 · 최종 sidecar** 로 한다.
+- **완료 신호**: Codex 에는 `Actioning…` 같은 진행 상태 문자열이 없다. **진행**은 프로세스 생존·`--json` JSONL 이벤트로 관찰하고, **완료**는 `codex exec` 정상 종료(코드 0) + 검증 통과 + complete sidecar 로 판정한다 — 프로세스 생존 자체는 완료 근거가 아니다.
 - **스킬 발견/호출**: 신규 심링크는 **새 세션에서만** 발견된다(hot reload 없음). 배치는 이 스킬을 `$paper-audio-brief-korean` 으로 명시 호출한다(description 추론에 의존하지 않는다).
-- **검증기**: 아래 CRITICAL grep·구조 게이트는 `scripts/verify_audio.sh <basename>_ko_audio_brief.md brief` 로 실행한다 — "0건=통과"를 exit code 로 안전하게 판정하고(0건일 때 GNU grep 은 exit 1 = 정상) `## 헤더 ≥4` 골격도 함께 검사한다. 결과를 보고에 첨부한다.
+- **검증기**: 아래 정적 검사(금지 마크업·alt 이미지·`## 헤더 ≥4` 골격)는 리포 루트의 `scripts/verify_audio.sh` 로 실행한다 — 배치는 `-C <repo>` 이므로 `scripts/verify_audio.sh <파일> brief` 상대경로, 다른 cwd 에서는 `"$(git -C <paper_dir> rev-parse --show-toplevel)"/scripts/verify_audio.sh` 로 호출한다. "0건=통과"를 exit code 로 안전 판정(0건=exit 1=정상). 분량 tier·나열 금지·coverage·마무리·그림 실물 일치는 아래 Verification 에서 별도 확인. 결과를 보고에 첨부한다.
 
 ## 분량 정책 (요약)
 
@@ -130,7 +130,7 @@ If it fails this: 배치는 skip + 보고한다(해설판 생성은 Claude 몫).
 
 ### Batch mode (대상 미지정 시)
 
-Inherit the `paper-explainer` batch rules and add audio conditions:
+Batch rules (self-contained) — 다음을 적용한다:
 - Scan `outputs/` and `archives/` non-recursively. A directory is an **eligible paper folder** only if: name does NOT start with `.`, it contains a source MD, it is not empty/config/symlink.
 - **`paper_meta.json`의 `doc_type` 가 `"video"` 인 폴더는 후보에서 제외** — 동영상(HBR Premium 등)은 축약 낭독판 대상이 아니다(해설판 자체를 만들지 않으므로). 폴백 `*_ko.md` 가 있어도 무조건 건너뛴다.
 - Exclusions: `_backup_`, `.bak`, `_mdlint_report.json`, and audio artifacts `*_ko_audio_brief.md`, `*.part`.
@@ -240,8 +240,8 @@ Inherit the `paper-explainer` batch rules and add audio conditions:
 운영 정책:
 - **Auto 모드**: 전체 자동 변환, 섹션 순차 처리.
 - **Section-safe 모드**: 긴 논문은 `.part` 에 섹션별 `apply_patch` 로 기록하고, **완료 섹션 목록 + `source_sha256` + run/session ID 를 진행 체크포인트**로 남긴다. 소스가 바뀐 stale `.part` 에 맹목 append 하지 않는다. 전체 완료·검증 후에만 `mv` 로 최종본 atomic rename.
-- **승인/샌드박스**: 비대화형은 `-s workspace-write -a never`(또는 `approval_policy="never"`). `--dangerously-bypass-approvals-and-sandbox` 는 외부 격리가 확실할 때만.
-- **완료 판정**: 상태 문자열이 아니라 프로세스 생존·`--json` 이벤트·종료 코드·최종 sidecar 로 판정한다(§Codex 환경). 성급히 stall 로 단정하지 않는다.
+- **승인/샌드박스**: 비대화형은 `-s workspace-write -c 'approval_policy="never"'` (`codex exec` 에는 `-a/--ask-for-approval` 플래그가 없다). `--dangerously-bypass-approvals-and-sandbox` 는 외부 격리가 확실할 때만.
+- **완료 판정**: 프로세스 생존·`--json` 이벤트는 "진행 중" 관찰용이고, **완료**는 정상 종료(코드 0) + 검증 통과 + complete sidecar 로만 판정한다(§Codex 환경). 성급히 stall 로 단정하지 않는다.
 
 ## Verification
 
@@ -256,7 +256,7 @@ Inherit the `paper-explainer` batch rules and add audio conditions:
 
 ### CRITICAL (반드시 통과)
 
-> 아래 grep·구조 검사는 `scripts/verify_audio.sh <basename>_ko_audio_brief.md brief` 로 실행한다 — "0건=통과"를 exit code 로 안전하게 판정하고(0건일 때 GNU grep 은 exit 1 = 정상) `## 헤더 ≥4` 골격도 검사한다. 결과를 보고에 첨부한다. 수동 grep 시 참조 패턴은 아래와 같다.
+> 아래 grep·구조(정적) 검사는 리포 루트의 `scripts/verify_audio.sh <파일> brief` 로 실행한다(§Codex 환경 — cwd 주의) — "0건=통과"를 exit code 로 안전하게 판정하고(0건일 때 GNU grep 은 exit 1 = 정상) `## 헤더 ≥4` 골격도 검사한다. **분량 tier·나열 금지·coverage·마무리·그림 실물 일치는 아래 체크리스트로 직접 확인한다.** 결과를 보고에 첨부한다. 수동 grep 시 참조 패턴은 아래와 같다.
 
 - [ ] 출력에 다음이 **0건** (grep):
 
