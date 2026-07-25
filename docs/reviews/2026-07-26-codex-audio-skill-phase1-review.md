@@ -24,3 +24,29 @@
 
 ## 반영 결정 (Claude 종합)
 Codex 교정 전부 타당 → 스펙에 반영 완료. 특히 **결정 B(interpretive-panel 무조건 skip)** 는 *해설판=Claude 유지* 목표를 지키는 핵심. 배치 모델은 **논문별 fresh `codex exec`** 로, 검증은 **`scripts/verify_audio.sh` validator** 로, 파리티는 **allowlist diff** 로 확정. `agents/openai.yaml` 은 기존 설치 스킬이 SKILL.md 단독이라 일단 생략(후속 보강 여지).
+
+---
+
+## 2차 리뷰 — 저작 결과 (331초, 판정: 저작 시점엔 미완료 → 수정 후 완료)
+
+Codex 가 실제 명령을 돌려 6개 결함 지적:
+1. frontmatter 가 `quick_validate.py` 실패 — 두 description 의 `<basename>` 꺾쇠, 축약판 `core:` 콜론(YAML).
+2. `codex exec -a never` 무효(`-a/--ask-for-approval` 는 `codex exec` 에 없음) → `-c 'approval_policy="never"'`.
+3. `verify_audio.sh` 라벨 과장("모든 CRITICAL")·`brlef` 오타 mode 통과·`cut -c` 한글 깨짐.
+4. `Inherit the paper-explainer batch rules` 교차참조 → self-contained.
+5. 완전판 "상위 감독 세션" 잔향 → fresh remediation 세션.
+6. 완료 신호에서 liveness(진행)와 completion(완료) 분리.
++ validator 경로 cwd 의존.
+
+**Codex 가 확인해준 긍정**: validator 의 0건=exit1=PASS·brief H2 게이트 정확(실파일 PASS, fixture FAIL). 품질 본체 무손실, 그림 실물대조 강화. Claude 잔재(rtk·Sonnet·Agent·TUI 자동실행) 없음.
+
+## 2차 수정 결과 (Claude, 객관 검증)
+- frontmatter: `<basename>`→`*_ko_audio*.md`, 축약판 `core:`→`core —` → **`quick_validate.py` 둘 다 "Skill is valid!"**
+- `-a never` 제거(`grep` 0건), `codex exec` 예시는 `-s workspace-write -c 'approval_policy="never"'`.
+- `verify_audio.sh`: mode 검증(`brlef`→exit 2), `STATIC CHECKS` 라벨 + 범위 주석, `cut`→`awk substr`(멀티바이트 안전). 실파일 PASS/fixture FAIL/`bash -n` 통과.
+- `Inherit …` → `Batch rules (self-contained)`, 완전판 실행모델 fresh remediation 세션.
+- 완료 신호/판정: liveness 관찰 vs completion(정상종료+검증+sidecar) 분리.
+- validator 경로: `"$(git -C <paper_dir> rev-parse --show-toplevel)"/scripts/verify_audio.sh`.
+- **새 Codex 세션 discovery**: `codex exec`(fresh, session 019f9bb4…) → `paper-audio-korean: yes`, `paper-audio-brief-korean: yes`.
+
+→ Codex 완료 조건 6개 전부 충족. 커밋 `43b9c49`.
