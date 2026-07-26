@@ -27,3 +27,32 @@
 6. **프롬프트 Codex화**: `$skill` 호출·검증(scripts/verify_audio.sh)·완료 판정(정상종료+sidecar) 문구 — 빠뜨린 것?
 
 구체적으로. 이 설계로 바로 구현할 거라 실전 함정 위주로.
+
+---
+
+## Codex 합의 결과 (2026-07-26)
+
+**Path 2 + 2-lane 승인.** 단 4개 구현 게이트 + P0 10개 제시. 핵심 수정:
+1. **detached 금지 → flock 잡은 foreground runner**(크론 틱이 lock 쥐고 codex exec 종료까지 대기, 다음 틱 `flock -n` skip).
+2. **full·brief 별도 fresh exec**(체이닝 금지, 스케줄러가 full 성공→brief follow-up).
+3. **TTL 아닌 durable 상태머신 + host postflight**(exit 0 ≠ 성공; rc0+output+verify+sidecar+SHA일치 AND).
+4. **bypass-sandbox 보완 = 전용 OS 계정/ACL**(외부 논문=신뢰불가 입력; 상시 크론 최대 잔여 위험).
+- 정제: `--ephemeral --ignore-user-config`, mode timeout(full 120m/brief 60m; `timeout 150` 재사용 금지), work_id에 source_sha256+skill_rev, per-run 디렉터리, cron PATH에 NVM codex 명시, `LC_ALL=C` 금지, agent-writes-staging→host-finalizer 권장, source-race SHA 재검, finder stale-freshness 미감지 수정.
+
+전문: `council minutes` / task 로그. 회의록성 원문은 세션 스크래치패드.
+
+## 구현 진행 (canary 단계 — 프로덕션 미접촉)
+
+**빌드·검증 완료:**
+- `_common/paperflow_batch_choose_next_type.py`: `--allowed-types`(P0 #1)+`--strict`(P0 #7) 추가. **테스트 14/14 통과**(기존 8 하위호환+신규 6). Claude lane=explainer, Codex lane=audio,brief.
+- `paperflow-codex-batch-audio/scripts/codex_audio_lane.sh`: foreground+flock runner(게이트 1,2,3 반영: 별도 exec·mode timeout·host postflight[rc/output/verify_audio/sidecar/source-SHA 재검]·durable state[claimed→running→succeeded/failed_retryable/permanent, backoff 5m→2h, 4회 dead-letter]·per-run dir·기존출력 백업+실패복원·env/PATH/locale 고정). **dry-run 전 구간 통과.**
+- `paperflow-codex-batch-audio/scripts/build_codex_audio_prompt.py`: 단일 artifact Codex 프롬프트(`$skill` 명시·scope-lock·source-SHA 가드·verify 지시·structured JSON 보고).
+- **스모크 테스트**: `--ephemeral --ignore-user-config --dangerously-bypass`에서도 두 스킬 정상 발견(Codex 플래그한 위험 해소).
+- **라이브 canary**: brief 1건 실제 runner end-to-end 실행(결과 별도 기록).
+
+**남은 작업 (사람 게이트 / 후속 하드닝):**
+- **[사람 게이트] 보안 격리**(Codex 게이트 4): 전용 OS 계정/ACL로 bypass-sandbox 피해범위 축소 — 상시 크론 전 필수. 인프라·정책 결정.
+- **[사람 게이트] 프로덕션 컷오버**: 크론에 Codex lane 추가 + Claude lane을 explainer 전용으로 제한 + 구 audio/brief Claude route disable. 되돌리기 어려운 프로덕션 변경.
+- 후속 하드닝: host finalizer(agent staging→host publish), find_missing_audio stale-freshness 감지, full finder outputs+archives·video 제외 정합, 실패주입 테스트 스위트(두 틱 동시·abandoned·rc0 output없음·verify fail·source 변경·auth 실패·timeout), 24h canary 지표.
+
+**백업**: 수정 대상 openclaw 스크립트 원본은 세션 스크래치패드 `phase3_backup_*/`. openclaw 리포(shared master)에는 자동 커밋하지 않음 — 사용자 워크플로우로 커밋.
