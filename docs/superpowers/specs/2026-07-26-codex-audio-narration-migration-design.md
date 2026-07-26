@@ -59,8 +59,14 @@
 
 `agents/openai.yaml`(display_name/short_description/default_prompt)은 Codex 권장이나, 현재 설치된 Codex 스킬들이 SKILL.md 단독이므로 **기존 패턴을 따라 생략**(필요 시 후속 보강).
 
+## 환경 발견 (Phase 2 파일럿 중, 2026-07-26)
+
+- **`codex exec -s workspace-write` 가 이 호스트에서 불가**: bwrap 샌드박스 초기화 실패(`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted` — 컨테이너에 user namespace 없음). 셸·파일쓰기·`view_image` 전부 차단되어 Codex 가 안전 중단(프로덕션 파일 무변경). **읽기전용 `codex exec -s read-only` 는 정상**(discovery 성공).
+- **해결**: `codex exec --dangerously-bypass-approvals-and-sandbox` 는 bwrap 을 건너뛰어 쓰기 정상 동작(호스트가 신뢰 환경이므로 허용). Phase 2 생성은 이 플래그로 수행.
+- **Phase 3 영향**: 배치가 `codex exec -s workspace-write` 를 쓰면 이 호스트에서 실패한다. 배치 Codex 는 (a) `--dangerously-bypass-approvals-and-sandbox` 또는 (b) **인터랙티브 `codex --yolo` 창**(현 claude 배치 창과 동형, council 이 쓰는 검증된 경로)으로 가야 한다. → 두 낭독판 스킬 운영 정책의 sandbox 문구에 이 호스트 caveat 반영 필요(파일럿 후 일괄).
+
 ## 비고
 
-- **Codex 리뷰 기록**: `docs/reviews/2026-07-26-codex-audio-skill-phase1-review.md` (Phase 1 설계 조건부 승인 + 환경 사실 교정).
+- **Codex 리뷰 기록**: `docs/reviews/2026-07-26-codex-audio-skill-phase1-review.md` (Phase 1 설계 조건부 승인 + 환경 사실 교정). Phase 2 rubric: `docs/reviews/2026-07-26-codex-audio-phase2-eval-rubric.md`.
 - 작업 시작 시 DSBA 폴링 크론(crontab line 43)을 일시중지(백업: scratchpad). 전체 완료 후 원복.
 - Phase 1 리포 변경은 `paperflow` 리포 브랜치 `codex-audio-narration-skills`. Phase 3 는 `~/.openclaw/workspace/` (별도 위치).
