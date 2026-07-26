@@ -38,8 +38,8 @@ if [[ "$mode" != "audio" && "$mode" != "brief" ]]; then
   exit 2
 fi
 
-# 멀티바이트 안전 truncation (cut -c 는 바이트 단위라 한글을 깨뜨림)
-clip() { awk -v n="${2:-70}" 'BEGIN{FS="\n"} {print substr($0,1,n); exit}'; }
+# 멀티바이트 안전 truncation (cut -c·mawk substr 는 바이트 단위라 한글을 깨뜨림 → python3 코드포인트 슬라이스)
+clip() { python3 -c 'import sys; w=int(sys.argv[1]); print(sys.stdin.readline().rstrip("\n")[:w])' "${1:-70}"; }
 
 fail=0
 pass_line() { printf '  PASS  %-38s %s\n' "$1" "$2"; }
