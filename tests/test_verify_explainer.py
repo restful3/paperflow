@@ -227,22 +227,76 @@ def test_web_clutter_is_review(tmp_path):
 # --- 소스 대조 게이트 -------------------------------------------------------
 
 
-def test_ratio_far_below_floor_is_review(tmp_path):
-    """외국어 소스 대비 0.6x 미만 = 누락 의심 신호."""
-    src = w(tmp_path, "p.md", "English source. " * 900)
-    paras = [hap_para(i) for i in range(3)]
-    f = w(tmp_path, "p_ko_explained.md", doc(paras))
+def test_ratio_below_floor_is_review(tmp_path):
+    """외국어 소스 0.4~0.6x = 누락 의심(REVIEW) — 배치를 막지는 않는다."""
+    paras = [hap_para(i) for i in range(5)]
+    body = doc(paras)
+    src = w(tmp_path, "p.md", "English source text. " * (int(len(body) / 0.5) // 21))
+    f = w(tmp_path, "p_ko_explained.md", body)
     res = ve.check(f, src)
+    assert res.metrics["ratio"] < ve.RATIO_FLOOR
+    assert res.metrics["ratio"] >= ve.RATIO_FAIL
     assert res.verdict == "REVIEW"
     assert "ratio" in res.reason
 
 
-def test_missing_image_reference_is_review(tmp_path):
-    src = w(tmp_path, "p.md", "본문입니다.\n\n![](images/fig1.jpg)\n\n더 있습니다.")
+def test_ratio_far_below_floor_is_fail(tmp_path):
+    """외국어 소스 0.4x 미만 = 의심이 아니라 내용 소실."""
+    src = w(tmp_path, "p.md", "English source. " * 900)
+    paras = [hap_para(i) for i in range(3)]
+    f = w(tmp_path, "p_ko_explained.md", doc(paras))
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "ratio" in res.reason
+
+
+def test_single_image_dropped_is_review_not_fail(tmp_path):
+    """1/1 누락을 100% 로 반려하지 않는다 — 절대 개수 하한이 있다."""
+    src = w(tmp_path, "p.md", "본문입니다.\n\n![](images/fig1.jpg)\n\n더 있습니다. " * 20)
     paras = [hap_para(i) for i in range(5)]
     f = w(tmp_path, "p_ko_explained.md", doc(paras))
     res = ve.check(f, src)
-    assert any(c.name == "image-refs" and c.status != "PASS" for c in res.checks)
+    assert any(c.name == "image-refs" and c.status == "REVIEW" for c in res.checks)
+
+
+def test_missing_image_reference_is_review(tmp_path):
+    """소수 누락은 REVIEW — 배치를 막지 않는다."""
+    imgs = "\n\n".join(f"![](images/fig{i}.jpg)" for i in range(5))
+    src = w(tmp_path, "p.md", "본문입니다.\n\n" + imgs + "\n\n더 있습니다.")
+    kept = "\n\n".join(f"![](images/fig{i}.jpg)" for i in range(4))
+    paras = [hap_para(i) for i in range(5)]
+    f = w(tmp_path, "p_ko_explained.md", doc(paras) + "\n\n" + kept)
+    res = ve.check(f, src)
+    assert any(c.name == "image-refs" and c.status == "REVIEW" for c in res.checks)
+    assert res.verdict != "FAIL"
+
+
+def test_most_images_dropped_is_fail(tmp_path):
+    """대량 누락은 FAIL — 스킬은 이미지 참조 보존을 하드룰로 요구한다.
+
+    실측(2026-08-03 Phase 2): Codex viz 산출물이 23개 중 21개(91%)를 버렸다.
+    실데이터 보정: 기존 해설판 109편의 이미지 손실률 중앙값·p90 모두 0.00.
+    """
+    imgs = "\n\n".join(f"![](images/fig{i}.jpg)" for i in range(10))
+    src = w(tmp_path, "p.md", "본문입니다.\n\n" + imgs + "\n\n더 있습니다.")
+    paras = [hap_para(i) for i in range(5)]
+    f = w(tmp_path, "p_ko_explained.md", doc(paras) + "\n\n![](images/fig0.jpg)\n")
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "이미지" in res.reason
+
+
+def test_korean_source_far_below_floor_is_fail(tmp_path):
+    """한국어 소스라도 절반 이하로 줄면 내용 소실이다.
+
+    실데이터 보정: 한국어 소스 ratio 중앙값 1.93, p05 0.76 — 0.5 미만은 119편 중 4편뿐.
+    """
+    src = w(tmp_path, "p_ko.md", "한국어 소스 본문이 이어집니다. " * 400)
+    paras = [hap_para(i) for i in range(3)]
+    f = w(tmp_path, "p_ko_explained.md", doc(paras))
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "ratio" in res.reason
 
 
 def test_preserved_image_reference_passes(tmp_path):
@@ -252,6 +306,51 @@ def test_preserved_image_reference_passes(tmp_path):
     f = w(tmp_path, "p_ko_explained.md", body)
     res = ve.check(f, src)
     assert any(c.name == "image-refs" and c.status == "PASS" for c in res.checks)
+
+
+def test_verbatim_source_copy_is_fail(tmp_path):
+    """해설판이 소스를 그대로 옮긴 복사본이면 FAIL.
+
+    실측(2026-08-03 Phase 2): Codex 첫 산출물이 소스 산문 문단의 100% 를 한 글자도
+    바꾸지 않고 옮겼다. 자수비는 1.02x 라 ratio 게이트를 그냥 통과했다 — 별도 게이트가 필요하다.
+    """
+    body_paras = [hap_para(i) for i in range(5)]
+    src = w(tmp_path, "p_ko.md", "\n\n".join(body_paras))
+    f = w(tmp_path, "p_ko_explained.md", doc(body_paras))
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "복사" in res.reason
+
+
+def test_references_section_not_counted_as_copy(tmp_path):
+    """회귀: 참고문헌 항목·그림 캡션은 원문 유지가 규칙 — 복사로 세면 안 된다.
+
+    실측 오탐 — outputs/Agent Laboratory… 가 저자 명단 253문단 때문에 83% 로 잡혔다.
+    """
+    refs = "\n\n".join(
+        "Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, "
+        f"Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman {i}."
+        for i in range(6)
+    )
+    caption = "그림 1. NeurIPS 점수 비교(인간 검토자 대 자동화된 검토자)\n![](images/fig1.jpg)"
+    src = w(tmp_path, "p_ko.md",
+            "\n\n".join([hae_para(0), caption]) + "\n\n## 참고문헌 (References)\n\n" + refs)
+    body = (YAML + "\n\n".join([hap_para(i) for i in range(5)] + [caption])
+            + GLOSSARY + "\n\n## 참고문헌 (References)\n\n" + refs)
+    f = w(tmp_path, "p_ko_explained.md", body)
+    res = ve.check(f, src)
+    assert res.metrics.get("copy_ratio", 0) == 0, res.metrics
+    assert res.verdict != "FAIL", res.reason
+
+
+def test_partial_source_overlap_passes(tmp_path):
+    """참고문헌·수식·직접인용은 원문 그대로 두는 것이 정상 — 일부 겹침으로 반려하지 않는다."""
+    shared = [hap_para(0), hap_para(1)]                 # 그대로 옮긴 2문단
+    rewritten = [hap_para(i) for i in range(2, 7)]      # 새로 쓴 5문단
+    src = w(tmp_path, "p_ko.md", "\n\n".join(shared + [hae_para(3), hae_para(4)]))
+    f = w(tmp_path, "p_ko_explained.md", doc(shared + rewritten))
+    res = ve.check(f, src)
+    assert res.verdict != "FAIL", res.reason
 
 
 def test_source_autodetected_from_folder(tmp_path):

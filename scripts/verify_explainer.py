@@ -41,6 +41,18 @@ CLICHE_REVIEW = 3     # 정형 비유마커 3회+ → REVIEW
 MEDIA_REVIEW = 2      # 매체 과잉설명 2회+ → REVIEW
 RATIO_FLOOR = 0.6     # 외국어 소스 대비 하한 (미만이면 누락 의심)
 RATIO_RESTATE = 2.5   # 비논문 소스에서 이 이상이면 재진술 의심
+# 아래는 "의심"이 아니라 내용 소실로 보는 선. 실데이터 보정(2026-08-03, 119편):
+# 한국어 소스 ratio 중앙값 1.93 · p05 0.76 — 0.5 미만은 4편(전부 실제 결함)뿐.
+RATIO_FAIL = 0.4      # 외국어 소스가 이 미만이면 FAIL
+KO_RATIO_REVIEW = 0.75
+KO_RATIO_FAIL = 0.5   # 한국어 소스가 이 미만이면 FAIL
+# 이미지 손실 실데이터 보정(109편): 중앙값·p90 모두 0.00 — 대량 손실은 이상치다.
+IMG_LOSS_FAIL = 0.5   # 소스 이미지의 이 비율 이상을 버리면 FAIL …
+IMG_LOSS_MIN_N = 3    # … 단 절대 개수도 이 이상일 때만 (1/1 누락을 100% 로 반려하지 않도록)
+# 소스를 그대로 옮긴 복사본 탐지. 참고문헌·수식·직접인용은 원문 유지가 정상이라
+# 일부 겹침은 허용하고, 산문 문단 대부분이 그대로면 해설판이 아니다.
+COPY_FAIL = 0.70      # 산문 문단 중 소스와 동일한 비율이 이 이상이면 FAIL
+COPY_REVIEW = 0.45    # 이 이상이면 REVIEW
 
 CLICHE_MARKERS = [
     r"비유로 설명하면",
@@ -154,8 +166,18 @@ def register_paras(body: str):
     return hap_p, hae_p
 
 
+REF_HEAD = re.compile(r"^#{1,4}\s*(참고문헌|References|Bibliography|감사의 글|Acknowledge)", re.M | re.I)
+
+
+def _before_references(t: str) -> str:
+    """참고문헌 이후를 잘라낸다 — 스킬이 원문 유지를 요구하는 구간이라 중복·복사로 세면 안 된다."""
+    m = REF_HEAD.search(t)
+    return t[:m.start()] if m else t
+
+
 def adj_dup_count(body: str) -> int:
-    paras = paragraphs(body)
+    # 참고문헌 항목들은 저자 명단이 겹쳐 서로 비슷해 보인다 — 본문 중복과 구분해 제외한다.
+    paras = paragraphs(_before_references(body))
     prose = [(i, b) for i, b in enumerate(paras) if is_prose(b)]
     n = 0
     for k in range(len(prose) - 1):
@@ -202,6 +224,42 @@ def find_source(folder: str) -> Optional[str]:
 
 def image_refs(text: str):
     return set(re.findall(r"!\[[^\]]*\]\(([^)\s]+)", text))
+
+
+def _copy_key(p: str) -> str:
+    """복사 비교용 정규화 — 공백/강조 마크업 차이는 무시한다.
+
+    볼드만 몇 개 씌우고 그대로 옮긴 것도 복사로 잡기 위함.
+    """
+    p = re.sub(r"\*\*|__|\*|_|`", "", p)
+    return re.sub(r"\s+", " ", p).strip()
+
+
+def copy_ratio(out_body: str, src_body: str):
+    """출력 산문 문단 중 소스에 그대로 있는 비율. (비율, 동일수, 전체수)
+
+    제외: 참고문헌·감사의 글 이후 전체(원문 유지가 규칙), 이미지 참조를 포함한 블록
+    (`![](...)` 이 붙은 캡션 줄은 경로가 같아 항상 일치한다).
+    """
+    def prose_paras(t):
+        t = _before_references(t)
+        t = re.sub(r"```.*?```", "", t, flags=re.S)
+        out = []
+        for b in re.split(r"\n\s*\n", t):
+            b = b.strip()
+            if len(b) < 80 or b.startswith(("#", "|", ">", "!", "-", "*", "$")):
+                continue
+            if "![" in b:          # 캡션+이미지 블록
+                continue
+            out.append(b)
+        return out
+
+    op = prose_paras(out_body)
+    if not op:
+        return None, 0, 0
+    sp = {_copy_key(p) for p in prose_paras(src_body)}
+    same = sum(1 for p in op if _copy_key(p) in sp)
+    return same / len(op), same, len(op)
 
 
 # --- 결과 모델 --------------------------------------------------------------
@@ -338,14 +396,39 @@ def check(path: str, source: Optional[str] = None) -> Result:
 
         if ratio is None:
             add("ratio", "INFO", "소스 본문 없음")
+        elif not ko_src and ratio < RATIO_FAIL:
+            add("ratio", "FAIL", f"{ratio}x (<{RATIO_FAIL}) — 외국어 소스 내용 소실")
+            fails.append(f"ratio {ratio}x(내용 소실)")
+        elif ko_src and ratio < KO_RATIO_FAIL:
+            add("ratio", "FAIL", f"{ratio}x (<{KO_RATIO_FAIL}) — 한국어 소스 내용 소실")
+            fails.append(f"ratio {ratio}x(내용 소실)")
         elif not ko_src and ratio < RATIO_FLOOR:
             add("ratio", "REVIEW", f"{ratio}x (<{RATIO_FLOOR}) — 외국어 소스 누락 의심")
+            reviews.append(f"ratio {ratio}x(누락 의심)")
+        elif ko_src and ratio < KO_RATIO_REVIEW:
+            add("ratio", "REVIEW", f"{ratio}x (<{KO_RATIO_REVIEW}) — 한국어 소스 누락 의심")
             reviews.append(f"ratio {ratio}x(누락 의심)")
         elif not paperish and ratio >= RATIO_RESTATE:
             add("ratio", "REVIEW", f"{ratio}x (≥{RATIO_RESTATE}) — 비논문 재진술 의심")
             reviews.append(f"비논문 ratio {ratio}x(재진술 의심)")
         else:
             add("ratio", "PASS", f"{ratio}x ({'한국어' if ko_src else '외국어'} 소스)")
+
+        # 소스 그대로 복사 (해설이 아니라 사본인 경우)
+        cr, same, total = copy_ratio(body, src_body)
+        if cr is None:
+            add("source-copy", "INFO", "비교할 산문 문단 없음")
+        else:
+            res.metrics["copy_ratio"] = round(cr, 3)
+            detail = f"산문 {same}/{total} 문단이 소스와 동일 ({cr:.0%})"
+            if cr >= COPY_FAIL:
+                add("source-copy", "FAIL", detail + " — 해설이 아니라 사본")
+                fails.append(f"소스 복사 {cr:.0%}")
+            elif cr >= COPY_REVIEW:
+                add("source-copy", "REVIEW", detail + " — 재작성 부족 의심")
+                reviews.append(f"소스 복사 {cr:.0%}")
+            else:
+                add("source-copy", "PASS", detail)
 
         # 이미지 참조 보존
         src_imgs = image_refs(src_body)
@@ -356,9 +439,14 @@ def check(path: str, source: Optional[str] = None) -> Result:
         if not src_imgs:
             add("image-refs", "PASS", "소스에 이미지 없음")
         elif missing:
-            add("image-refs", "REVIEW",
-                f"{len(missing)}/{len(src_imgs)} 누락 (예: {missing[0]})")
-            reviews.append(f"이미지 참조 {len(missing)}건 누락")
+            loss = len(missing) / len(src_imgs)
+            detail = f"{len(missing)}/{len(src_imgs)} 누락 ({loss:.0%}, 예: {missing[0]})"
+            if loss >= IMG_LOSS_FAIL and len(missing) >= IMG_LOSS_MIN_N:
+                add("image-refs", "FAIL", detail + " — 이미지 보존은 하드룰")
+                fails.append(f"이미지 참조 {len(missing)}건 누락({loss:.0%})")
+            else:
+                add("image-refs", "REVIEW", detail)
+                reviews.append(f"이미지 참조 {len(missing)}건 누락")
         else:
             add("image-refs", "PASS", f"{len(src_imgs)}건 전부 보존")
     else:
