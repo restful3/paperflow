@@ -460,5 +460,137 @@ def test_strict_flag_makes_review_fail(tmp_path):
     assert rc == 1
 
 
+# --- 본문 수치 coverage (피어 리뷰 2026-08-03 조건) -------------------------
+
+
+def test_body_numbers_excludes_noise():
+    """수치 추출은 YAML·URL/DOI·이미지 파일명·참고문헌·인용번호·그림표번호를 제외한다."""
+    t = (
+        "---\nlang: ko\nversion: 3\n---\n\n"
+        "본문 정확도는 0.923 입니다.\n\n"
+        "![](images/6ae127b08c7e012adc7d8713397ce4b676d06d08.jpg)\n\n"
+        "자세한 건 https://arxiv.org/abs/2504.20073 과 doi:10.1145/3292500 참조 [12].\n\n"
+        "그림 3 과 표 2 에 정리했습니다. 표본은 330개입니다.\n\n"
+        "## 참고문헌 (References)\n\n[1] Kim et al., 2023, pp.145-147.\n"
+    )
+    got = ve.body_numbers(t)
+    assert "0.923" in got
+    assert "330" in got
+    for noise in ("2504.20073", "10.1145", "3292500", "12", "3", "2", "2023", "145", "147"):
+        assert noise not in got, f"{noise} 가 본문 수치로 잡혔다: {sorted(got)}"
+
+
+def test_number_coverage_missing_values_is_fail(tmp_path):
+    """소스 본문 수치가 여러 개 사라지면 FAIL — ratio 로는 못 잡는 누락이다."""
+    vals = " ".join(f"지표{i} 는 0.{100+i} 입니다." for i in range(20))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(0), vals, hae_para(1)]))
+    kept = " ".join(f"지표{i} 는 0.{100+i} 입니다." for i in range(12))
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)] + [kept]))
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "수치" in res.reason
+
+
+def test_number_coverage_full_passes(tmp_path):
+    vals = " ".join(f"지표{i} 는 0.{100+i} 입니다." for i in range(20))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(0), vals, hae_para(1)]))
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)] + [vals]))
+    res = ve.check(f, src)
+    assert any(c.name == "number-coverage" and c.status == "PASS" for c in res.checks)
+
+
+def test_numbers_dumped_into_glossary_do_not_count(tmp_path):
+    """게이트 통과용 수치 덤프 방지 — 용어집/수치 인덱스에 몰아넣은 값은 coverage 로 안 친다."""
+    vals = " ".join(f"지표{i} 는 0.{100+i} 입니다." for i in range(20))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(0), vals, hae_para(1)]))
+    body = (YAML + "\n\n".join(hap_para(i) for i in range(5))
+            + "\n\n## 핵심 용어 해설\n\n| 용어 | 쉬운 설명 |\n|---|---|\n| 임베딩 | 뜻을 숫자로 |\n"
+            + "\n\n## 수치 인덱스\n\n" + vals + "\n")
+    f = w(tmp_path, "p_ko_explained.md", body)
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "수치" in res.reason
+
+
+# --- 표 행 시그니처 coverage -------------------------------------------------
+
+
+def test_table_row_coverage_missing_row_is_fail(tmp_path):
+    rows = "".join(
+        f"<tr><td>지표{i}</td><td>0.{200+i}</td><td>0.{300+i}</td></tr>" for i in range(6))
+    src = w(tmp_path, "p_ko.md", hae_para(0) + f"\n\n<table>{rows}</table>\n")
+    kept = "\n".join(f"| 지표{i} | 0.{200+i} | 0.{300+i} |" for i in range(2))
+    body = (YAML + "\n\n".join(hap_para(i) for i in range(5))
+            + "\n\n| 항목 | A | B |\n|---|---|---|\n" + kept + "\n" + GLOSSARY)
+    f = w(tmp_path, "p_ko_explained.md", body)
+    res = ve.check(f, src)
+    assert any(c.name == "table-row-coverage" and c.status == "FAIL" for c in res.checks)
+
+
+def test_table_row_coverage_all_rows_kept_passes(tmp_path):
+    rows = "".join(
+        f"<tr><td>지표{i}</td><td>0.{200+i}</td><td>0.{300+i}</td></tr>" for i in range(6))
+    src = w(tmp_path, "p_ko.md", hae_para(0) + f"\n\n<table>{rows}</table>\n")
+    kept = "\n".join(f"| 지표{i} | 0.{200+i} | 0.{300+i} |" for i in range(6))
+    body = (YAML + "\n\n".join(hap_para(i) for i in range(5))
+            + "\n\n| 항목 | A | B |\n|---|---|---|\n" + kept + "\n" + GLOSSARY)
+    f = w(tmp_path, "p_ko_explained.md", body)
+    res = ve.check(f, src)
+    assert any(c.name == "table-row-coverage" and c.status == "PASS" for c in res.checks)
+
+
+# --- 위험도별 ratio ----------------------------------------------------------
+
+
+def test_high_risk_korean_ratio_stricter(tmp_path):
+    """high-risk 문서(수식·표 밀집)는 0.65x 미만이 FAIL — 저위험 기준(0.5)으로는 못 잡는다."""
+    math = " ".join(f"$x_{{{i}}}={i}$" for i in range(30))
+    src = w(tmp_path, "p_ko.md",
+            "\n\n".join([hae_para(i % 7) for i in range(14)]) + "\n\n" + math)
+    body = doc([hap_para(i) for i in range(5)]) + "\n\n" + math
+    f = w(tmp_path, "p_ko_explained.md", body)
+    res = ve.check(f, src)
+    assert res.metrics["high_risk"] is True
+    assert 0.5 <= res.metrics["ratio"] < 0.65, res.metrics["ratio"]
+    assert res.verdict == "FAIL"
+
+
+def test_low_risk_prose_ratio_not_blocking(tmp_path):
+    """저위험 산문 0.63x 는 자동 반려하지 않는다 — Phase 2 산문이 실제로 충실했다."""
+    src = w(tmp_path, "p_ko.md", "\n\n".join(hae_para(i % 7) for i in range(9)))
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)]))
+    res = ve.check(f, src)
+    assert res.metrics["high_risk"] is False
+    assert res.verdict != "FAIL"
+    assert not res.blocking, res.reason
+
+
+# --- BLOCKING / ADVISORY 분리 ------------------------------------------------
+
+
+def test_advisory_review_does_not_block_production(tmp_path):
+    """편집 품질 신호(용어집 없음·비유마커)는 publish 를 막지 않는다."""
+    paras = [hap_para(i) for i in range(5)]
+    f = w(tmp_path, "p_ko_explained.md", doc(paras, glossary=False))
+    res = ve.check(f)
+    assert res.verdict == "REVIEW"
+    assert not res.blocking, res.reason
+    rc, _ = ve.main([f, "--production"])
+    assert rc == 0
+
+
+def test_blocking_review_fails_production(tmp_path):
+    """coverage 계열 불확실성은 --production 에서 반려된다."""
+    imgs = "\n\n".join(f"![](images/fig{i}.jpg)" for i in range(5))
+    src = w(tmp_path, "p.md", "본문입니다.\n\n" + imgs + "\n\n더 있습니다.")
+    kept = "\n\n".join(f"![](images/fig{i}.jpg)" for i in range(4))
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)]) + "\n\n" + kept)
+    res = ve.check(f, src)
+    assert res.verdict == "REVIEW"
+    assert res.blocking
+    rc, _ = ve.main([f, src, "--production"])
+    assert rc == 1
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
