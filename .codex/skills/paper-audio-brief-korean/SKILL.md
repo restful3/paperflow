@@ -82,9 +82,9 @@ Phase 1 — 해설판 확보 (Codex):
   _ko_explained.md 없음 OR legacy completion validation 실패
     → 배치: 이 폴더를 skip 하고 완료 보고에 기록한다.
       해설판 생성은 Claude explainer 배치의 몫이다 (해설판=Claude 유지 목표).
-      Codex 의 interpretive-panel(해설판 생성)을 배치에서 호출하지 않는다.
+      Codex 의 paper-explainer(해설판 생성)를 배치에서 호출하지 않는다.
     → 대화형 단건에서 사용자가 "해설판까지 만들어" 라고 명시 요청한 경우에만
-      $interpretive-panel 로 해설판을 먼저 생성한 뒤 진행한다.
+      $paper-explainer 로 해설판을 먼저 생성한 뒤 진행한다.
   legacy completion validation 통과해야만 Phase 2 진입
 Phase 2 — 축약 듣기 변환:
   검증된 _ko_explained.md 를 소스로 <basename>_ko_audio_brief.md.part 에 섹션별 작성
@@ -102,7 +102,7 @@ Phase 2 — 축약 듣기 변환:
 - heading coverage vs the upstream source is reasonable (no large truncation)
 - major sections present (References / 감사의 글 etc. may be absent — that's fine)
 
-If it fails this: 배치는 skip + 보고한다(해설판 생성은 Claude 몫). 대화형에서 사용자가 명시 요청한 경우에만 `$interpretive-panel` 로 먼저 해설판을 만든다.
+If it fails this: 배치는 skip + 보고한다(해설판 생성은 Claude 몫). 대화형에서 사용자가 명시 요청한 경우에만 `$paper-explainer` 로 먼저 해설판을 만든다.
 
 ### Skip / regeneration
 
