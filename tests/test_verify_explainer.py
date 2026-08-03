@@ -353,6 +353,71 @@ def test_partial_source_overlap_passes(tmp_path):
     assert res.verdict != "FAIL", res.reason
 
 
+def _html_table(n_rows=3):
+    rows = "".join(f"<tr><td>행{i}</td><td>0.{i}23</td></tr>" for i in range(n_rows))
+    return f"<table>{rows}</table>"
+
+
+def test_most_tables_dropped_is_fail(tmp_path):
+    """결과 표를 버리면 FAIL — 표 안의 수치가 통째로 사라진다.
+
+    실측(2026-08-03 Phase 2 r2): Codex 가 tech 논문의 HTML 표 4개 중 3개를 버려
+    소스 수치 328개 중 36개(11%)가 사라졌다. 자수비 0.50x 는 FAIL 문턱 바로 위라
+    ratio 게이트로는 못 잡았다.
+    실데이터 보정(19편): 표 보존율 중앙 1.20 · p25 1.07 — 0.5 미만은 1편(기존 결함)뿐.
+    """
+    tables = "\n\n".join(_html_table() for _ in range(8))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(i) for i in range(3)]) + "\n\n" + tables)
+    # doc() 의 용어집이 마크다운 표 1개를 포함하므로 출력 표는 HTML 1 + 용어집 1 = 2/8
+    body = doc([hap_para(i) for i in range(5)]) + "\n\n" + _html_table()
+    f = w(tmp_path, "p_ko_explained.md", body)
+    res = ve.check(f, src)
+    assert res.verdict == "FAIL"
+    assert "표" in res.reason
+
+
+def test_html_table_converted_to_markdown_still_counts(tmp_path):
+    """HTML 표를 마크다운 표로 바꾼 것은 유실이 아니다 — 형식 변환은 스킬이 권장한다(Rule 7).
+
+    실측 정정: Codex tech 산출물을 `<table` 태그만 세면 1/4 로 보이지만,
+    마크다운 표까지 세면 3/4 다.
+    """
+    tables = "\n\n".join(_html_table() for _ in range(3))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(i) for i in range(3)]) + "\n\n" + tables)
+    md_tables = "\n\n".join(
+        f"| 항목{i} | 값 |\n|---|---|\n| a | 0.{i} |" for i in range(3))
+    f = w(tmp_path, "p_ko_explained.md",
+          doc([hap_para(i) for i in range(5)], glossary=False) + "\n\n" + md_tables)
+    res = ve.check(f, src)
+    assert any(c.name == "table-coverage" and c.status == "PASS" for c in res.checks)
+
+
+def test_tables_preserved_passes(tmp_path):
+    tables = "\n\n".join(_html_table() for _ in range(3))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(i) for i in range(3)]) + "\n\n" + tables)
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)]) + "\n\n" + tables)
+    res = ve.check(f, src)
+    assert any(c.name == "table-coverage" and c.status == "PASS" for c in res.checks)
+
+
+def test_single_table_dropped_is_not_fail(tmp_path):
+    """소스 표가 1개뿐이면 판정하지 않는다 — 표본이 작아 신호가 못 된다."""
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(i) for i in range(3)]) + "\n\n" + _html_table())
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)]))
+    res = ve.check(f, src)
+    assert res.verdict != "FAIL", res.reason
+
+
+def test_math_loss_is_review_not_fail(tmp_path):
+    """수식 유실은 REVIEW — 실데이터 분포가 넓어 자동 반려 근거가 못 된다(p25 0.31)."""
+    math = " ".join(f"$x_{{{i}}} = {i}$" for i in range(40))
+    src = w(tmp_path, "p_ko.md", "\n\n".join([hae_para(i) for i in range(3)]) + "\n\n" + math)
+    f = w(tmp_path, "p_ko_explained.md", doc([hap_para(i) for i in range(5)]))
+    res = ve.check(f, src)
+    assert any(c.name == "math-coverage" and c.status == "REVIEW" for c in res.checks)
+    assert res.verdict != "FAIL", res.reason
+
+
 def test_source_autodetected_from_folder(tmp_path):
     w(tmp_path, "p_ko.md", "한국어 소스 본문입니다. " * 50)
     paras = [hap_para(i) for i in range(5)]

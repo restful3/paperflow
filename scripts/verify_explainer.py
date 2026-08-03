@@ -49,6 +49,12 @@ KO_RATIO_FAIL = 0.5   # 한국어 소스가 이 미만이면 FAIL
 # 이미지 손실 실데이터 보정(109편): 중앙값·p90 모두 0.00 — 대량 손실은 이상치다.
 IMG_LOSS_FAIL = 0.5   # 소스 이미지의 이 비율 이상을 버리면 FAIL …
 IMG_LOSS_MIN_N = 3    # … 단 절대 개수도 이 이상일 때만 (1/1 누락을 100% 로 반려하지 않도록)
+# 표 보존 실데이터 보정(19편, 소스 표 2개 이상): 중앙 1.20 · p25 1.07 — 0.5 미만은 1편(기존 결함).
+TBL_MIN_N = 2         # 소스 표가 이 개수 이상일 때만 판정
+TBL_KEEP_FAIL = 0.5   # 표 보존율이 이 미만이면 FAIL
+# 수식은 분포가 넓다(p25 0.31) — 자동 반려 근거가 못 되어 REVIEW 까지만.
+MATH_MIN_N = 20
+MATH_KEEP_REVIEW = 0.5
 # 소스를 그대로 옮긴 복사본 탐지. 참고문헌·수식·직접인용은 원문 유지가 정상이라
 # 일부 겹침은 허용하고, 산문 문단 대부분이 그대로면 해설판이 아니다.
 COPY_FAIL = 0.70      # 산문 문단 중 소스와 동일한 비율이 이 이상이면 FAIL
@@ -224,6 +230,17 @@ def find_source(folder: str) -> Optional[str]:
 
 def image_refs(text: str):
     return set(re.findall(r"!\[[^\]]*\]\(([^)\s]+)", text))
+
+
+def table_count(text: str) -> int:
+    """HTML 표 + 마크다운 표 블록 수."""
+    return (len(re.findall(r"<table", text))
+            + len(re.findall(r"^\s*\|[^\n]*\n\s*\|[\s:\-|]+\|", text, re.M)))
+
+
+def math_count(text: str) -> int:
+    """블록 수식 + 인라인 수식 개수."""
+    return text.count("$$") // 2 + len(re.findall(r"(?<!\$)\$[^$\n]{1,80}\$(?!\$)", text))
 
 
 def _copy_key(p: str) -> str:
@@ -429,6 +446,33 @@ def check(path: str, source: Optional[str] = None) -> Result:
                 reviews.append(f"소스 복사 {cr:.0%}")
             else:
                 add("source-copy", "PASS", detail)
+
+        # 결과 표 보존 — 표를 버리면 그 안의 수치가 통째로 사라진다
+        st, ot = table_count(src_body), table_count(body)
+        res.metrics.update(tbl_src=st, tbl_out=ot)
+        if st < TBL_MIN_N:
+            add("table-coverage", "INFO", f"소스 표 {st}개 — 판정 안 함(표본 부족)")
+        else:
+            keep = ot / st
+            detail = f"{ot}/{st} 표 ({keep:.0%})"
+            if keep < TBL_KEEP_FAIL:
+                add("table-coverage", "FAIL", detail + " — 표 안의 수치가 통째로 소실")
+                fails.append(f"표 {st-ot}개 소실({keep:.0%} 보존)")
+            else:
+                add("table-coverage", "PASS", detail)
+
+        # 수식 보존 — 실데이터 분포가 넓어 REVIEW 까지만
+        sm, om = math_count(src_body), math_count(body)
+        res.metrics.update(math_src=sm, math_out=om)
+        if sm < MATH_MIN_N:
+            add("math-coverage", "INFO", f"소스 수식 {sm}개 — 판정 안 함")
+        else:
+            keep = om / sm
+            if keep < MATH_KEEP_REVIEW:
+                add("math-coverage", "REVIEW", f"{om}/{sm} 수식 ({keep:.0%}) — 유실 확인")
+                reviews.append(f"수식 {keep:.0%} 보존")
+            else:
+                add("math-coverage", "PASS", f"{om}/{sm} 수식 ({keep:.0%})")
 
         # 이미지 참조 보존
         src_imgs = image_refs(src_body)
