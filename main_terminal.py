@@ -1309,6 +1309,39 @@ Rules:
 - If you cannot determine a field, use null for strings or [] for arrays. For doc_type, always choose the closest match — never omit it."""
 
 
+METADATA_FAILURE_MARKER = "paper_meta.failed.json"
+
+
+def _write_metadata_failure_marker(output_dir, reason, md_path, model):
+    """Record a permanent metadata-extraction failure next to the document.
+
+    scripts/backfill_metadata.py sweeps for these (and for folders with no
+    paper_meta.json at all) so a failure is recoverable instead of invisible.
+    """
+    try:
+        with open(os.path.join(output_dir, METADATA_FAILURE_MARKER), 'w', encoding='utf-8') as f:
+            json.dump({
+                "stage": "extract_metadata",
+                "reason": reason,
+                "source_md": os.path.basename(md_path) if md_path else None,
+                "model": model,
+                "failed_at": datetime.now().isoformat(),
+            }, f, ensure_ascii=False, indent=2)
+        print_warning(f"Failure marker written: {METADATA_FAILURE_MARKER}")
+    except Exception as e:
+        print_warning(f"Could not write metadata failure marker: {e}")
+
+
+def _clear_metadata_failure_marker(output_dir):
+    """Remove a stale failure marker after a successful (re)extraction."""
+    try:
+        marker = os.path.join(output_dir, METADATA_FAILURE_MARKER)
+        if os.path.exists(marker):
+            os.remove(marker)
+    except Exception:
+        pass
+
+
 def extract_paper_metadata(md_path, output_dir, config):
     """Extract paper metadata (title, authors, abstract, categories) using AI.
 
@@ -1353,6 +1386,14 @@ def extract_paper_metadata(md_path, output_dir, config):
 
     client = OpenAI(base_url=api_base, api_key=api_key)
 
+    # Reasoning models (gpt-5.x) can spend the whole completion budget on reasoning
+    # tokens and return content=None with finish_reason="length". That used to raise
+    # AttributeError on .strip(), which the generic handler below treated as a
+    # transient API error — so both attempts failed identically and the document was
+    # left with no paper_meta.json (16 occurrences in logs/). Escalate the budget.
+    current_max_tokens = max_tokens
+    last_error = None
+
     for attempt in range(max_retries):
         try:
             import time
@@ -1366,11 +1407,25 @@ def extract_paper_metadata(md_path, output_dir, config):
                     {"role": "user", "content": md_content}
                 ],
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=current_max_tokens,
                 timeout=timeout
             )
 
-            result_text = response.choices[0].message.content.strip()
+            choice = response.choices[0]
+            raw_content = getattr(choice.message, "content", None)
+            if raw_content is None or not raw_content.strip():
+                finish = getattr(choice, "finish_reason", None)
+                last_error = f"empty content from model (finish_reason={finish})"
+                if finish == "length":
+                    current_max_tokens = min(current_max_tokens * 2, 16384)
+                    print_warning(f"Empty content (budget exhausted) — retrying with max_tokens={current_max_tokens}")
+                else:
+                    print_warning(f"Empty content from model (finish_reason={finish})")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                continue
+
+            result_text = raw_content.strip()
             elapsed = time.time() - start_time
             print_info(f"API response received in {elapsed:.1f}s")
 
@@ -1473,14 +1528,19 @@ def extract_paper_metadata(md_path, output_dir, config):
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
             print_success(f"Metadata saved to: {meta_path}")
 
+            # Reprocessing succeeded — drop any stale failure marker
+            _clear_metadata_failure_marker(output_dir)
+
             return metadata
 
         except json.JSONDecodeError as e:
+            last_error = f"JSON parse error: {e}"
             print_warning(f"JSON parse error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 import time
                 time.sleep(retry_delay)
         except Exception as e:
+            last_error = f"API error: {e}"
             print_warning(f"Metadata extraction API error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 import time
@@ -1488,6 +1548,10 @@ def extract_paper_metadata(md_path, output_dir, config):
                 time.sleep(wait_time)
 
     print_error("Metadata extraction failed after all retries")
+    # Leave a durable, greppable trace. Without this the pipeline continues and the
+    # document ends up as a permanently blank card in the viewer with nothing on
+    # disk to indicate why — the exact failure mode behind the 66-folder backlog.
+    _write_metadata_failure_marker(output_dir, last_error or "unknown", md_path, model)
     return None
 
 
