@@ -27,13 +27,38 @@ fi
 } >> "$LOG"
 
 # 결함 있을 때만 통지 (없으면 침묵 — 알림 피로 방지)
+#
+# 2026-08-18 교훈: 전송 결과를 >/dev/null 2>&1 || true 로 버렸더니, 08-16~18 통지
+# 3건이 hub.db 에 status='queued' 로 쌓인 채 Tori 가 집어가지 않았고 3일간 아무도
+# 몰랐다. 감지 공백은 메웠지만 전달 공백이 남아 있었다 → 전송 결과도 로그에 남긴다.
 if [[ -x "$COUNCIL" ]]; then
   SUMMARY="$(printf '%s\n' "$REPORT" | head -20)"
-  "$COUNCIL" send tori "PaperFlow 건전성 점검에서 결함이 발견됐습니다. 태영님께 텔레그램으로 알려주세요.
+  SEND_OUT="$("$COUNCIL" send tori "PaperFlow 건전성 점검에서 결함이 발견됐습니다. 태영님께 텔레그램으로 알려주세요.
 
 $SUMMARY
 
 복구: cd $REPO && python3 scripts/backfill_metadata.py --apply
-전체 리포트: python3 scripts/check_outputs_health.py" >/dev/null 2>&1 || true
+전체 리포트: python3 scripts/check_outputs_health.py" 2>&1)"
+  SEND_RC=$?
+  if (( SEND_RC == 0 )); then
+    echo "$STAMP  notify enqueued (council send tori rc=0): $(printf '%s' "$SEND_OUT" | head -1)" >> "$LOG"
+  else
+    echo "$STAMP  notify FAILED rc=$SEND_RC: $(printf '%s' "$SEND_OUT" | head -3 | tr '\n' ' ')" >> "$LOG"
+  fi
+
+  # rc=0 은 "큐에 넣었다" 뿐이다 — Tori 가 집어가지 않으면 전달은 안 된다.
+  # 이번 사고가 정확히 그것이었으므로(3건 queued 방치), 적체를 직접 센다.
+  # hub.db·sqlite3 가 없으면 조용히 건너뛴다(통지 경로를 막지 않는다).
+  HUB="${PEER_COUNCIL_DB:-$HOME/.peer-council/hub.db}"
+  if [[ -r "$HUB" ]] && command -v sqlite3 >/dev/null 2>&1; then
+    STUCK="$(sqlite3 "file:$HUB?mode=ro" \
+      "select count(*) from requests where to_agent='tori' and status='queued' and payload like '%건전성%';" \
+      2>/dev/null)"
+    if [[ "${STUCK:-0}" =~ ^[0-9]+$ ]] && (( STUCK > 1 )); then
+      echo "$STAMP  notify STUCK — 건전성 통지 ${STUCK}건이 queued 상태로 적체(Tori 드레인 정지 의심)" >> "$LOG"
+    fi
+  fi
+else
+  echo "$STAMP  notify SKIPPED — council not executable: $COUNCIL" >> "$LOG"
 fi
 exit "$RC"
