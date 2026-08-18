@@ -266,3 +266,49 @@ def test_vision_picks_subdir_image_stores_relative_path(tmp_path):
 def test_select_cover_handles_none_metadata(tmp_path):
     out = mt.select_cover_image(str(tmp_path), None, _default_config_for_test(), client=MagicMock())
     assert out is None
+
+
+def _capture_messages(monkeypatch):
+    """print_warning / print_info 를 가로채 (level, text) 목록으로 모은다."""
+    msgs = []
+    monkeypatch.setattr(mt, "print_warning", lambda m: msgs.append(("warn", str(m))))
+    monkeypatch.setattr(mt, "print_info", lambda m: msgs.append(("info", str(m))))
+    return msgs
+
+
+def test_api_failure_is_reported_distinctly_from_declining(tmp_path, monkeypatch):
+    """모든 시도가 예외로 끝나면 '적합한 커버 없음'이 아니라 API 실패로 보고해야 한다.
+
+    두 경우가 같은 문장으로 로깅되면, 모델이 거절한 것인지 프로바이더가
+    죽은 것인지 로그만으로 구분할 수 없다(2026-08-18 진단 지연의 원인).
+    """
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a.jpg"), 900, 700)
+    meta = {"doc_type": "paper"}
+    _write_meta(d, meta)
+    client = MagicMock()
+    client.chat.completions.create.side_effect = RuntimeError("429 model_cooldown")
+    msgs = _capture_messages(monkeypatch)
+
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+
+    assert out.get("cover") is None
+    texts = [t for _, t in msgs]
+    assert any("Cover selection FAILED" in t for t in texts), texts
+    assert not any("no suitable cover chosen" in t for t in texts), texts
+
+
+def test_model_declining_still_reports_no_suitable_cover(tmp_path, monkeypatch):
+    d = str(tmp_path)
+    _make_img(os.path.join(d, "a.jpg"), 900, 700)
+    meta = {"doc_type": "paper"}
+    _write_meta(d, meta)
+    client = _mock_client_returning('{"choice": null}')
+    msgs = _capture_messages(monkeypatch)
+
+    out = mt.select_cover_image(d, meta, _default_config_for_test(), client=client)
+
+    assert out.get("cover") is None
+    texts = [t for _, t in msgs]
+    assert any("no suitable cover chosen" in t for t in texts), texts
+    assert not any("Cover selection FAILED" in t for t in texts), texts

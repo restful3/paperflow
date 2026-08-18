@@ -3398,6 +3398,8 @@ def select_cover_image(output_dir, metadata, config, client=None):
             content.append({"type": "image_url", "image_url": {"url": data_url}})
 
         choice = None
+        last_error = None
+        answered = False
         for attempt in range(max_retries):
             try:
                 resp = client.chat.completions.create(
@@ -3408,9 +3410,20 @@ def select_cover_image(output_dir, metadata, config, client=None):
                 )
                 raw = (resp.choices[0].message.content or "").strip()
                 choice = _parse_cover_choice(raw, len(candidates))
+                answered = True
                 break
             except Exception as e:
+                last_error = e
                 print_warning(f"Cover selection attempt {attempt+1} failed: {e}")
+
+        # 모델이 "커버 없음"으로 판단한 것과 프로바이더가 죽어서 못 물어본 것은
+        # 결과(cover 미설정)가 같아 로그로 구분되지 않았다. 이제 구분해 남긴다.
+        if not answered:
+            print_warning(
+                f"Cover selection FAILED (model={model} unreachable after "
+                f"{max_retries} attempts): {last_error} — cover left unset"
+            )
+            return metadata
 
         if choice is None:
             print_info("Cover selection: no suitable cover chosen")
