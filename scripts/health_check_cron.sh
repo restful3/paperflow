@@ -20,6 +20,22 @@ if (( RC == 0 )); then
   exit 0
 fi
 
+# 자동 복구 — missing_meta 는 twin 복사만으로 결정적으로 고쳐진다(LLM 호출 없음).
+#
+# 2026-08-18 교훈: 08-16 에 감지된 빈 카드 53건이 08-18 까지 그대로 남아 있었다.
+# "감지 → 사람이 복구 명령을 실행" 사이가 끊기면 감지는 무의미하다. 고칠 수
+# 있는 결함은 스스로 고치고, 그 결과를 리포트에 반영한다.
+if printf '%s' "$REPORT" | grep -q '\[missing_meta\]'; then
+  REPAIR="$(python3 scripts/backfill_metadata.py --twin-only --apply 2>&1)"
+  echo "$STAMP  AUTO-REPAIR (missing_meta, twin-only): $(printf '%s' "$REPAIR" | tail -1)" >> "$LOG"
+  REPORT="$(python3 scripts/check_outputs_health.py --max-list 8 2>&1)"
+  RC=$?
+  if (( RC == 0 )); then
+    echo "$STAMP  OK (자동 복구로 해소)" >> "$LOG"
+    exit 0
+  fi
+fi
+
 {
   echo "$STAMP  DEFECTS FOUND"
   echo "$REPORT"

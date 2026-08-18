@@ -113,6 +113,8 @@ def main():
     ap.add_argument("--location", action="append", choices=LOCATIONS,
                     help="restrict to a location (repeatable)")
     ap.add_argument("--limit", type=int, help="process at most N folders")
+    ap.add_argument("--twin-only", action="store_true",
+                    help="twin 복사만 수행하고 extract(LLM 호출)는 건너뛴다 — 무인 cron 용")
     args = ap.parse_args()
 
     locations = args.location or list(LOCATIONS)
@@ -124,7 +126,8 @@ def main():
         counts[action] = counts.get(action, 0) + 1
     print(f"검사 대상 {len(targets)}건: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
 
-    todo = [t for t in targets if t[3] in ("twin", "extract")]
+    allowed = ("twin",) if args.twin_only else ("twin", "extract")
+    todo = [t for t in targets if t[3] in allowed]
     if args.limit:
         todo = todo[:args.limit]
 
