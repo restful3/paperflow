@@ -3284,19 +3284,50 @@ def translate_md_to_korean_openai(md_path, output_dir, config, system_prompt, pr
 
 _COVER_IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _COVER_SUBDIRS = ("", "images", "figures", "assets")
+# 채도 점수를 매기려 실제로 디코딩할 최대 장수(면적 상위부터). 수백 장 폴더에서
+# 전량 디코딩하는 것을 막는 비용 상한 — 이 창 밖의 그림은 구제되지 않는다.
+_COVER_AREA_SCAN = 24
+
+
+def _cover_saturation(abs_path):
+    """이미지의 평균 채도(0~255). 실패하면 0.0 — 정렬에서 뒤로 밀린다.
+
+    표·본문 스캔은 회색조라 0에 가깝고, 색면이 있는 개념도는 뚜렷히 높다.
+    커버 적합성 판정용 게이트가 **아니다**(실측에서 분리력이 없었다). 후보 목록에
+    그림 계열이 최소 몇 장은 섞이게 하는 다양성 축으로만 쓴다.
+    """
+    try:
+        from PIL import Image, ImageStat
+
+        with Image.open(abs_path) as im:
+            try:
+                im.draft("RGB", (96, 96))   # JPEG 고속 디코드(다른 포맷은 무연산)
+            except Exception:
+                pass
+            im = im.convert("RGB")
+            im.thumbnail((96, 96))
+            sat = im.convert("HSV").split()[1]
+        return float(ImageStat.Stat(sat).mean[0])
+    except Exception:
+        return 0.0
 
 
 def _gather_cover_candidates(output_dir, min_dimension, max_candidates):
     """폴더에서 커버 후보 이미지의 폴더 상대경로 리스트를 반환.
 
     루트 + images/figures/assets 서브디렉토리에서 알려진 확장자 이미지를 모으고,
-    긴 변이 min_dimension 미만인 것은 제외(아이콘/로고/수식조각). 면적 내림차순,
-    동률은 상대경로 문자열 순으로 정렬해 상위 max_candidates개를 반환한다.
-    AI 호출 없음 — 순수 함수.
+    긴 변이 min_dimension 미만인 것은 제외(아이콘/로고/수식조각).
+
+    순위는 **면적 순서와 채도 순서를 번갈아** 뽑는다. 면적만 쓰면 논문에서 면적이
+    가장 큰 이미지가 대개 표라서 후보를 독식하고, 개념도는 비전 모델이 볼 기회조차
+    없다(2026-08-18 실측: OSWORLD 이미지 64장 중 후보 6장, 그중 3장이 완전 흑백 표
+    → '적합한 커버 없음'). 1번 후보는 여전히 가장 큰 이미지다.
+
+    결정적(동률은 상대경로 순)이고 AI 호출이 없다.
     """
     from PIL import Image
 
-    scored = []  # (-area, relpath)
+    items = []  # (area, relpath)
     for sub in _COVER_SUBDIRS:
         dir_path = os.path.join(output_dir, sub) if sub else output_dir
         if not os.path.isdir(dir_path):
@@ -3315,10 +3346,41 @@ def _gather_cover_candidates(output_dir, min_dimension, max_candidates):
             if max(w, h) < min_dimension:
                 continue
             rel = os.path.join(sub, fname) if sub else fname
-            scored.append((-(w * h), rel))
+            items.append((w * h, rel))
 
-    scored.sort(key=lambda t: (t[0], t[1]))
-    return [rel for _, rel in scored[:max_candidates]]
+    by_area = sorted(items, key=lambda t: (-t[0], t[1]))
+    if len(by_area) <= max_candidates:
+        return [rel for _, rel in by_area]
+
+    scan = by_area[:_COVER_AREA_SCAN]
+    sat = {rel: _cover_saturation(os.path.join(output_dir, rel)) for _, rel in scan}
+    by_sat = sorted(scan, key=lambda t: (-sat[t[1]], -t[0], t[1]))
+
+    area_rels = [rel for _, rel in by_area]
+    sat_rels = [rel for _, rel in by_sat]
+    out, seen = [], set()
+    ai = si = 0
+    while len(out) < max_candidates:
+        progressed = False
+        while ai < len(area_rels) and len(out) < max_candidates:
+            rel = area_rels[ai]
+            ai += 1
+            if rel not in seen:
+                seen.add(rel)
+                out.append(rel)
+                progressed = True
+                break
+        while si < len(sat_rels) and len(out) < max_candidates:
+            rel = sat_rels[si]
+            si += 1
+            if rel not in seen:
+                seen.add(rel)
+                out.append(rel)
+                progressed = True
+                break
+        if not progressed:
+            break
+    return out
 
 
 def _downscale_to_data_url(abs_path, downscale_px):

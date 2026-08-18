@@ -4,7 +4,7 @@ import os
 from unittest.mock import MagicMock
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import main_terminal as mt
 
@@ -312,3 +312,67 @@ def test_model_declining_still_reports_no_suitable_cover(tmp_path, monkeypatch):
     texts = [t for _, t in msgs]
     assert any("no suitable cover chosen" in t for t in texts), texts
     assert not any("Cover selection FAILED" in t for t in texts), texts
+
+
+def _make_table_like(path, w, h):
+    """표·본문처럼 회색조 잉크만 있는 이미지 — 논문에서 면적이 가장 큰 부류."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    im = Image.new("RGB", (w, h), (255, 255, 255))
+    for y in range(10, h - 10, 12):
+        for x in range(10, w - 10):
+            im.putpixel((x, y), (30, 30, 30))
+    im.save(path)
+
+
+def _make_diagram_like(path, w, h):
+    """개념도처럼 채도 높은 색면이 있는 이미지."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    im = Image.new("RGB", (w, h), (255, 255, 255))
+    d = ImageDraw.Draw(im)
+    for i, col in enumerate([(220, 40, 40), (40, 90, 220), (30, 170, 90)]):
+        x0 = 10 + i * (w // 3)
+        d.rectangle([x0, h // 4, x0 + w // 4, 3 * h // 4], fill=col)
+    im.save(path)
+
+
+def test_gather_rescues_colorful_figure_hidden_below_the_area_cutoff(tmp_path):
+    """면적만으로 뽑으면 표가 후보를 독식한다 — 색면이 있는 그림도 후보에 들어야 한다.
+
+    2026-08-18 실측: OSWORLD 폴더는 이미지 64장인데 면적 상위 6장만 후보가 되고
+    그중 3장이 완전 흑백 표였다. 개념도는 후보에 들지도 못해 비전 모델이 볼 기회가
+    없었고, 결과는 '적합한 커버 없음' 이었다.
+    """
+    d = str(tmp_path)
+    for i in range(6):                                    # 면적 최상위 6장을 표로 채운다
+        _make_table_like(os.path.join(d, f"table{i}.jpg"), 1200 - i, 900)
+    _make_diagram_like(os.path.join(d, "figure.jpg"), 700, 500)   # 더 작지만 그림
+
+    out = mt._gather_cover_candidates(d, min_dimension=200, max_candidates=6)
+
+    assert len(out) == 6
+    assert "figure.jpg" in out, out
+    assert out[0] == "table0.jpg", out                     # 가장 큰 것은 여전히 1번
+
+
+def test_gather_is_deterministic(tmp_path):
+    d = str(tmp_path)
+    for i in range(6):
+        _make_table_like(os.path.join(d, f"t{i}.jpg"), 1200 - i, 900)
+    _make_diagram_like(os.path.join(d, "fig.jpg"), 700, 500)
+    a = mt._gather_cover_candidates(d, min_dimension=200, max_candidates=6)
+    b = mt._gather_cover_candidates(d, min_dimension=200, max_candidates=6)
+    assert a == b
+
+
+def test_gather_work_is_bounded_far_below_area_rank_is_not_rescued(tmp_path):
+    """색채 점수 계산은 면적 상위 일부만 디코딩한다(수백 장 폴더 보호).
+
+    스캔 창 밖의 그림은 구제되지 않는다 — 의도된 비용 상한이다.
+    """
+    d = str(tmp_path)
+    n = mt._COVER_AREA_SCAN + 5
+    for i in range(n):
+        _make_table_like(os.path.join(d, f"t{i:03d}.jpg"), 1200 - i, 900)
+    _make_diagram_like(os.path.join(d, "zz_far.jpg"), 260, 210)   # 면적 최하위
+    out = mt._gather_cover_candidates(d, min_dimension=200, max_candidates=6)
+    assert "zz_far.jpg" not in out, out
