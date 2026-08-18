@@ -7,6 +7,7 @@
 import importlib.util
 import json
 import os
+import sys
 
 import pytest
 from PIL import Image
@@ -105,3 +106,21 @@ def test_targets_skip_folders_that_already_have_a_cover(tmp_path, monkeypatch):
 
     names = {name for _loc, name, _folder_path, _pdf in m._targets(["outputs"])}
     assert names == {"needs-cover"}
+
+
+def test_blank_page_is_marked_so_it_is_not_retried_forever(tmp_path, monkeypatch):
+    """백지 1페이지는 표식을 남겨 대상에서 빠진다 — 6시간마다 영원히 재렌더 금지."""
+    m = _load()
+    root = str(tmp_path)
+    monkeypatch.setattr(m, "REPO", root)
+    d = _folder(root, "outputs", "blank", {"doc_type": "paper"},
+                pdfs=[("doc.pdf", {"text_band": False})])
+
+    assert len(m._targets(["outputs"])) == 1        # 처음에는 대상
+    monkeypatch.setattr(sys, "argv", ["x", "--apply"])
+    assert m.main() == 0
+
+    meta = json.load(open(os.path.join(d, "paper_meta.json"), encoding="utf-8"))
+    assert meta.get("cover_pdf_skipped") is True
+    assert "cover" not in meta                     # 커버는 여전히 없음
+    assert m._targets(["outputs"]) == []           # 두 번째부터는 대상 아님

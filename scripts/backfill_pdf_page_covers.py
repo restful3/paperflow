@@ -111,8 +111,26 @@ def _write_cover(folder, rel):
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
+def _mark_skipped(folder):
+    """1페이지가 백지라 커버를 못 만든 폴더에 표식을 남긴다.
+
+    이 스크립트는 크론으로 상시 돈다. 표식이 없으면 백지 PDF 를 영원히 다시
+    렌더한다(6시간마다 무의미한 pdftoppm 호출).
+    """
+    meta_path = os.path.join(folder, "paper_meta.json")
+    try:
+        meta = json.load(open(meta_path, encoding="utf-8"))
+    except Exception:
+        return
+    meta["cover_pdf_skipped"] = True
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+
 def _needs_cover(folder, meta):
     if meta.get("cover"):
+        return False
+    if meta.get("cover_pdf_skipped"):
         return False
     poster = (meta.get("video") or {}).get("poster")
     if poster and os.path.isfile(os.path.join(folder, poster)):
@@ -170,7 +188,8 @@ def main():
         rel = _render_cover(folder, pdf)
         if not rel:
             blank += 1
-            print(f"  · skip  [{loc}] {name[:52]} (1페이지 렌더 실패/백지)")
+            _mark_skipped(folder)
+            print(f"  · skip  [{loc}] {name[:52]} (1페이지 렌더 실패/백지, 표식 기록)")
             continue
         _write_cover(folder, rel)
         ok += 1
