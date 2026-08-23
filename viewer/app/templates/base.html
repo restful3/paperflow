@@ -48,8 +48,13 @@
       });
 
       // Global language store (EN / KO)
+      // 저장된 선택이 없으면 **한국어가 기본**이다. 이 앱은 한국어 우선이고
+      // (html lang="ko", UI 문구가 한국어) 문서 대부분에 한국어 제목·요약이
+      // 이미 들어 있다. 예전 기본값(영어)에서는 새 브라우저에서 번역이 있어도
+      // 전부 영어로 보여 "번역이 안 됐다" 로 읽혔다(2026-08-23).
+      // 사용자가 명시적으로 고른 'en' 은 그대로 존중된다.
       Alpine.store('lang', {
-        ko: localStorage.getItem('pf-lang') === 'ko',
+        ko: (localStorage.getItem('pf-lang') || 'ko') === 'ko',
 
         toggle() {
           this.ko = !this.ko;

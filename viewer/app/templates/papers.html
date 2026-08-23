@@ -503,7 +503,7 @@
                  :class="$store.darkMode.on ? 'border-indigo-700' : 'border-indigo-200'">
               <p class="text-xs line-clamp-3 leading-relaxed transition-colors"
                  :class="$store.darkMode.on ? 'text-gray-400' : 'text-gray-500'"
-                 x-text="(() => { const abs = ($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract; return abs ? abs.substring(0, 250) + (abs.length > 250 ? '...' : '') : ''; })()"></p>
+                 x-text="(() => { const abs = ($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : (paper.abstract || paper.abstract_ko); return abs ? abs.substring(0, 250) + (abs.length > 250 ? '...' : '') : ''; })()"></p>
             </div>
             <!-- Category tags -->
             <div x-show="paper.categories && paper.categories.length > 0" class="flex flex-wrap gap-1.5">
@@ -656,7 +656,7 @@
                      :class="$store.darkMode.on ? 'border-indigo-700' : 'border-indigo-200'">
                   <p class="text-xs leading-relaxed transition-colors"
                      :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'"
-                     x-text="($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract"></p>
+                     x-text="($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : (paper.abstract || paper.abstract_ko)"></p>
                 </div>
               </div>
               <!-- All authors (when > 3) -->
@@ -848,7 +848,7 @@
                      :class="$store.darkMode.on ? 'border-indigo-700' : 'border-indigo-200'">
                   <p class="text-xs leading-relaxed transition-colors"
                      :class="$store.darkMode.on ? 'text-gray-300' : 'text-gray-600'"
-                     x-text="($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : paper.abstract"></p>
+                     x-text="($store.lang.ko && paper.abstract_ko) ? paper.abstract_ko : (paper.abstract || paper.abstract_ko)"></p>
                 </div>
               </div>
               <!-- All authors -->
