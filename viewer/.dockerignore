@@ -1,0 +1,15 @@
+# .env 를 이미지에 굽지 않는다.
+#
+# 2026-08-23: `COPY . .` 가 호스트의 viewer/.env(600, restful3 소유)를 이미지에
+# root:root 600 으로 복사했다. 컨테이너는 `user: "1000:1000"` 으로 돌기 때문에
+# 그 파일을 읽지 못하고 pydantic-settings 가 기동 시 PermissionError 로 죽는다.
+# (이미지를 재빌드하기 전까지 드러나지 않던 지뢰였다.)
+#
+# 내용상으로도 필요 없다 — LOGIN_ID / LOGIN_PASSWORD / JWT_SECRET_KEY 는
+# docker-compose 의 `env_file: .env` 가, BASE_DIR 은 `environment:` 가 주입한다.
+# 덤으로 시크릿이 이미지 레이어에 남지 않는다.
+.env
+
+__pycache__/
+*.pyc
+.pytest_cache/
