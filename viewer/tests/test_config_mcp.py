@@ -3,7 +3,7 @@ import pytest
 
 
 def test_mcp_disabled_when_key_empty(tmp_workspace, monkeypatch):
-    monkeypatch.delenv("MCP_API_KEY", raising=False)
+    monkeypatch.setenv("MCP_API_KEY", "")
     from app import config as _cfg
     _cfg.settings = _cfg.Settings()
     assert _cfg.settings.mcp_enabled is False
@@ -11,7 +11,7 @@ def test_mcp_disabled_when_key_empty(tmp_workspace, monkeypatch):
 
 def test_mcp_enabled_requires_base_url(tmp_workspace, monkeypatch):
     monkeypatch.setenv("MCP_API_KEY", "k" * 48)
-    monkeypatch.delenv("MCP_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.setenv("MCP_PUBLIC_BASE_URL", "")
     from app import config as _cfg
     _cfg.settings = _cfg.Settings()
     with pytest.raises(RuntimeError, match="MCP_PUBLIC_BASE_URL"):

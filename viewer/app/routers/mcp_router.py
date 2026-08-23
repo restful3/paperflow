@@ -15,8 +15,9 @@ from fastapi.responses import StreamingResponse
 from mcp.server.fastmcp import FastMCP
 
 from ..config import settings
-from ..services import mcp_jobs, mcp_zip
+from ..services import mcp_books, mcp_jobs, mcp_zip
 from ..services import audio as audio_svc
+from ..services import books as book_svc
 from ..services import papers as paper_svc
 
 
@@ -204,6 +205,132 @@ async def list_jobs(
     return {"jobs": [r.model_dump() for r in recs]}
 
 
+@mcp.tool()
+async def submit_book_chapters(
+    title: str,
+    chapters: list[dict],
+    author: str | None = None,
+    authors: list[str] | None = None,
+    year: int | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    """Submit an already-split book as chapter PDFs.
+
+    `chapters` is a list of objects:
+      {chapter_id, file_base64, order?, filename?, title?}
+
+    v1 is batch-only: the whole batch is validated first, then atomically
+    published for the book watcher. Full-book PDF splitting is intentionally
+    out of scope for this tool.
+    """
+    rec = await mcp_books.submit_book_chapters(
+        title=title,
+        chapters=chapters,
+        author=author,
+        authors=authors,
+        year=year,
+        metadata=metadata,
+    )
+    return {
+        "job_id": rec.job_id,
+        "book_id": rec.book_id,
+        "book_slug": rec.book_slug,
+        "status": rec.status,
+        "chapters": [c.model_dump(include={"chapter_id", "order", "source_filename", "status"})
+                     for c in rec.chapters],
+    }
+
+
+@mcp.tool()
+async def get_book_status(job_id: str) -> dict:
+    """Get current status of a submitted book batch job."""
+    rec = await mcp_books.reconcile_book_job(job_id)
+    if not rec:
+        raise ValueError(f"book job not found: {job_id}")
+    return rec.model_dump(include={
+        "job_id", "book_id", "book_slug", "title", "author", "authors", "year",
+        "status", "stage", "percent", "chapters", "error",
+        "submitted_at", "completed_at", "expires_at",
+    })
+
+
+@mcp.tool()
+async def get_book_result(
+    job_id: str,
+    include_pdf: bool = False,
+    include_md: bool = True,
+    include_translation: bool = True,
+    include_explained: bool = True,
+    include_assets: bool = True,
+) -> dict:
+    """Return result links and file availability for a completed book job."""
+    from ..config import settings as _settings
+
+    rec = await mcp_books.reconcile_book_job(job_id)
+    if not rec:
+        raise ValueError(f"book job not found: {job_id}")
+    if rec.status != "complete":
+        raise ValueError(f"book job not complete (status={rec.status})")
+
+    book_dir = paper_svc.safe_book_dir(rec.book_slug)
+    if not book_dir:
+        raise ValueError("book folder no longer exists")
+    meta = book_svc.load_book_meta(book_dir) or {}
+
+    chapters = []
+    for ch in rec.chapters:
+        cdir = book_dir / ch.chapter_id
+        formats = {}
+        if cdir.is_dir():
+            formats = paper_svc.paper_info_from_dir(cdir, "books")["formats"]
+        chapters.append({
+            "chapter_id": ch.chapter_id,
+            "order": ch.order,
+            "title": ch.title,
+            "status": ch.status,
+            "formats": formats,
+        })
+
+    base = _settings.MCP_PUBLIC_BASE_URL.rstrip("/")
+    query = (
+        f"?include_pdf={'true' if include_pdf else 'false'}"
+        f"&include_md={'true' if include_md else 'false'}"
+        f"&include_translation={'true' if include_translation else 'false'}"
+        f"&include_explained={'true' if include_explained else 'false'}"
+        f"&include_assets={'true' if include_assets else 'false'}"
+    )
+    return {
+        "job_id": rec.job_id,
+        "book_id": rec.book_id,
+        "book_slug": rec.book_slug,
+        "location": "books",
+        "book_meta": {
+            "title": meta.get("title") or rec.title,
+            "author": meta.get("author") or rec.author,
+            "authors": meta.get("authors") or rec.authors,
+            "year": meta.get("year") or rec.year,
+            "edition": meta.get("edition"),
+            "publisher": meta.get("publisher"),
+            "isbn": meta.get("isbn"),
+        },
+        "chapters": chapters,
+        "viewer_url": f"{base}/books/{quote(rec.book_slug, safe='')}",
+        "viewer_url_kind": "current_slug_convenience_link",
+        "download_url": f"{base}/api/mcp/books/jobs/{job_id}/zip{query}",
+        "expires_at": rec.expires_at,
+    }
+
+
+@mcp.tool()
+async def list_book_jobs(
+    limit: int = 20,
+    status: str | None = None,
+) -> dict:
+    """List recent book MCP jobs. Single-tenant — all jobs visible to caller."""
+    recs = await mcp_books.list_book_jobs(limit=limit, status=status)
+    return {"jobs": [r.model_dump() for r in recs]}
+
+
 # ── Audio (Korean TTS narration) ──────────────────────────────────────────────
 async def _tts_json(method: str, path: str, *, timeout: float, **kwargs) -> dict:
     """Call the tts sidecar and normalize failures into agent-facing ValueErrors
@@ -374,4 +501,36 @@ async def download_zip(
         stream,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{rec.paper_name}.zip"'},
+    )
+
+
+@mcp_zip_router.get("/books/jobs/{job_id}/zip")
+async def download_book_zip(
+    job_id: str,
+    include_pdf: bool = False,
+    include_md: bool = True,
+    include_translation: bool = True,
+    include_explained: bool = True,
+    include_assets: bool = True,
+):
+    rec = await mcp_books.reconcile_book_job(job_id)
+    if not rec or rec.status != "complete":
+        raise HTTPException(status_code=404, detail="Book job not complete or not found")
+    book_dir = paper_svc.safe_book_dir(rec.book_slug)
+    if not book_dir:
+        raise HTTPException(status_code=410, detail="Book folder no longer exists")
+    stream = mcp_zip.build_book_zip_stream(
+        book_dir,
+        include_pdf=include_pdf,
+        include_md=include_md,
+        include_translation=include_translation,
+        include_explained=include_explained,
+        include_assets=include_assets,
+        job_meta={"job_id": job_id, "book_id": rec.book_id},
+    )
+    filename = f"{rec.book_slug}.zip".replace('"', "")
+    return StreamingResponse(
+        stream,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

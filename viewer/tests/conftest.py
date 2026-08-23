@@ -17,6 +17,9 @@ def tmp_workspace(tmp_path, monkeypatch):
     monkeypatch.setenv("BASE_DIR", str(tmp_path))
     # JWT_SECRET_KEY required for config.validate_runtime in some flows
     monkeypatch.setenv("JWT_SECRET_KEY", "x" * 48)
+    monkeypatch.setenv("MCP_API_KEY", "")
+    monkeypatch.setenv("MCP_PUBLIC_BASE_URL", "")
+    monkeypatch.setenv("MCP_ALLOWED_ORIGINS", "")
 
     # Force a fresh Settings instance that reads the new env
     from app import config as _cfg

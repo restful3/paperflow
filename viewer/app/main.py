@@ -31,10 +31,12 @@ class _TokenRedactFilter(logging.Filter):
 
 async def _periodic_mcp_cleanup():
     from .services import mcp_jobs as _mcp_jobs
+    from .services import mcp_books as _mcp_books
     while True:
         try:
             await asyncio.sleep(3600)
             await _mcp_jobs.cleanup_expired_jobs()
+            await _mcp_books.cleanup_expired_book_jobs()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -47,11 +49,13 @@ async def app_lifespan(app: FastAPI):
 
     if settings.mcp_enabled:
         from .routers import mcp_router as _mcp_router
+        from .services import mcp_books as _mcp_books
         from .services import mcp_jobs as _mcp_jobs
 
         async with _mcp_router.mcp_lifespan():
             # startup cleanup pass
             await _mcp_jobs.cleanup_expired_jobs()
+            await _mcp_books.cleanup_expired_book_jobs()
             cleanup_task = asyncio.create_task(_periodic_mcp_cleanup())
             try:
                 yield

@@ -10,6 +10,7 @@ import json as _json
 import os
 import re as _re
 import shutil
+import tempfile
 import unicodedata as _unicodedata
 from pathlib import Path
 from urllib.parse import quote
@@ -370,36 +371,91 @@ def _unique_book_slug(slug: str) -> str:
     return f"{slug}-{i}"
 
 
-def save_book_upload(title, author, year, files) -> tuple[bool, str, str | None]:
-    """Write an uploaded book to newbooks/<slug>/ for the converter watch.
+def _write_bytes_fsync(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _write_json_fsync(path: Path, data: dict) -> None:
+    raw = _json.dumps(data, ensure_ascii=False).encode("utf-8")
+    _write_bytes_fsync(path, raw)
+
+
+def save_book_upload_atomic(
+    title,
+    author,
+    year,
+    files,
+    *,
+    book_id: str | None = None,
+    authors: list[str] | None = None,
+    extra_meta: dict | None = None,
+) -> tuple[bool, str, str | None, str | None]:
+    """Atomically publish a book to newbooks/<slug>/ for the converter watch.
 
     files: list of (original_filename, bytes) in chapter order.
     Writes NN_<sanitized-stem>.pdf (NN from 01) + book.json {title, author?, year?}.
-    Returns (ok, message, slug).
+    Returns (ok, message, slug, book_id).
     """
     base = _slugify_book_title(title)
     if not base:
-        return False, "Invalid or empty book title.", None
+        return False, "Invalid or empty book title.", None, None
     if not files:
-        return False, "At least one chapter PDF is required.", None
+        return False, "At least one chapter PDF is required.", None, None
     slug = _unique_book_slug(base)
     book_dir = settings.newbooks_dir / slug
     if not paper_svc._is_within(settings.newbooks_dir, book_dir):
-        return False, "Invalid book title.", None
-    book_dir.mkdir(parents=True, exist_ok=True)
-    for i, (orig, data) in enumerate(files, 1):
-        safe = paper_svc._safe_filename(orig or "") or "chapter.pdf"
-        stem = safe[:-4] if safe.lower().endswith(".pdf") else safe
-        stem = _OS_FORBIDDEN.sub("", stem).strip().strip(".") or "chapter"
-        (book_dir / f"{i:02d}_{stem}.pdf").write_bytes(data)
-    meta = {"title": title.strip()}
-    if author and author.strip():
-        meta["author"] = author.strip()
-    if year is not None:
-        meta["year"] = int(year)
-    (book_dir / "book.json").write_text(
-        _json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-    return True, f"'{slug}' uploaded ({len(files)} chapters).", slug
+        return False, "Invalid book title.", None, None
+
+    tmp_root = settings.newbooks_dir / ".mcp_tmp"
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f"{slug[:40]}.", suffix=".staging", dir=tmp_root))
+    final_book_id = book_id
+    part_paths: list[tuple[Path, Path]] = []
+    try:
+        meta = dict(extra_meta or {})
+        meta["title"] = title.strip()
+        if final_book_id:
+            meta["book_id"] = final_book_id
+        if authors:
+            meta["authors"] = [a.strip() for a in authors if a and a.strip()]
+            if meta["authors"] and not author:
+                meta["author"] = ", ".join(meta["authors"])
+        if author and author.strip():
+            meta["author"] = author.strip()
+        if year is not None:
+            meta["year"] = int(year)
+        _write_json_fsync(staging / "book.json", meta)
+
+        for i, (orig, data) in enumerate(files, 1):
+            safe = paper_svc._safe_filename(orig or "") or "chapter.pdf"
+            stem = safe[:-4] if safe.lower().endswith(".pdf") else safe
+            stem = _OS_FORBIDDEN.sub("", stem).strip().strip(".") or "chapter"
+            dest = staging / f"{i:02d}_{stem}.pdf"
+            part = dest.with_suffix(dest.suffix + ".part")
+            _write_bytes_fsync(part, data)
+            part_paths.append((part, dest))
+
+        for part, dest in part_paths:
+            os.replace(part, dest)
+
+        os.replace(staging, book_dir)
+        return True, f"'{slug}' uploaded ({len(files)} chapters).", slug, final_book_id
+    except Exception as e:
+        shutil.rmtree(staging, ignore_errors=True)
+        return False, f"Book upload failed: {e}", None, None
+
+
+def save_book_upload(title, author, year, files) -> tuple[bool, str, str | None]:
+    """Write an uploaded book to newbooks/<slug>/ for the converter watch.
+
+    Compatibility wrapper for the web upload route.
+    """
+    ok, msg, slug, _book_id = save_book_upload_atomic(title, author, year, files)
+    return ok, msg, slug
 
 
 # ── lifecycle (archive / restore / delete) ─────────────────────────────────
